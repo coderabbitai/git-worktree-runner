@@ -1,0 +1,77 @@
+#compdef gtr
+# Zsh completion for gtr
+
+_gtr() {
+  local -a commands
+  commands=(
+    'create:Create a new worktree'
+    'rm:Remove worktree(s)'
+    'remove:Remove worktree(s)'
+    'cd:Change to worktree directory'
+    'open:Open worktree in editor or file browser'
+    'ai:Start AI coding tool in worktree'
+    'list:List all worktrees'
+    'config:Manage configuration'
+    'version:Show version'
+    'help:Show help'
+  )
+
+  local -a worktree_ids
+  # Use gtr ids command for config-aware completion
+  worktree_ids=(${(f)"$(command gtr ids 2>/dev/null)"})
+
+  if (( CURRENT == 2 )); then
+    _describe 'commands' commands
+  elif (( CURRENT == 3 )); then
+    case "$words[2]" in
+      cd|open|ai|rm|remove)
+        _describe 'worktree IDs' worktree_ids
+        ;;
+      open)
+        _arguments \
+          '--editor[Editor]:editor:(cursor vscode zed)'
+        ;;
+      ai)
+        _arguments \
+          '--tool[AI tool]:tool:(aider claudecode codex cursor continue)'
+        ;;
+      create)
+        _arguments \
+          '--branch[Branch name]:branch:' \
+          '--id[Worktree ID]:id:' \
+          '--auto[Auto-assign ID]' \
+          '--from[Base ref]:ref:' \
+          '--track[Track mode]:mode:(auto remote local none)' \
+          '--open[Editor]:editor:(cursor vscode zed)' \
+          '--ai[AI tool]:tool:(aider claudecode codex cursor continue)' \
+          '--no-copy[Skip file copying]' \
+          '--yes[Non-interactive mode]'
+        ;;
+      config)
+        _values 'config action' get set unset
+        ;;
+    esac
+  elif (( CURRENT == 4 )); then
+    case "$words[2]" in
+      config)
+        case "$words[3]" in
+          get|set|unset)
+            _values 'config key' \
+              'gtr.worktrees.dir' \
+              'gtr.worktrees.prefix' \
+              'gtr.worktrees.startId' \
+              'gtr.defaultBranch' \
+              'gtr.editor.default' \
+              'gtr.ai.default' \
+              'gtr.copy.include' \
+              'gtr.copy.exclude' \
+              'gtr.hook.postCreate' \
+              'gtr.hook.postRemove'
+            ;;
+        esac
+        ;;
+    esac
+  fi
+}
+
+_gtr "$@"

@@ -1,0 +1,675 @@
+#!/bin/sh
+# gtr - Git worktree runner
+# Portable, cross-platform git worktree management
+
+set -e
+
+# Version
+GTR_VERSION="2.0.0"
+
+# Find the script directory
+GTR_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Source library files
+. "$GTR_DIR/lib/ui.sh"
+. "$GTR_DIR/lib/config.sh"
+. "$GTR_DIR/lib/platform.sh"
+. "$GTR_DIR/lib/core.sh"
+. "$GTR_DIR/lib/copy.sh"
+. "$GTR_DIR/lib/hooks.sh"
+
+# Main dispatcher
+main() {
+  local cmd="${1:-help}"
+  shift 2>/dev/null || true
+
+  case "$cmd" in
+    create)
+      cmd_create "$@"
+      ;;
+    rm|remove)
+      cmd_remove "$@"
+      ;;
+    cd)
+      cmd_cd "$@"
+      ;;
+    open)
+      cmd_open "$@"
+      ;;
+    ai)
+      cmd_ai "$@"
+      ;;
+    list|ls)
+      cmd_list "$@"
+      ;;
+    ids)
+      cmd_ids "$@"
+      ;;
+    config)
+      cmd_config "$@"
+      ;;
+    version|--version|-v)
+      echo "gtr version $GTR_VERSION"
+      ;;
+    help|--help|-h)
+      cmd_help
+      ;;
+    *)
+      log_error "Unknown command: $cmd"
+      echo "Use 'gtr help' for available commands"
+      exit 1
+      ;;
+  esac
+}
+
+# Create command
+cmd_create() {
+  local worktree_id=""
+  local branch_name=""
+  local from_ref=""
+  local track_mode="auto"
+  local editor=""
+  local ai_tool=""
+  local auto_id=0
+  local skip_copy=0
+  local yes_mode=0
+
+  # Parse flags and arguments
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --branch)
+        branch_name="$2"
+        shift 2
+        ;;
+      --id)
+        worktree_id="$2"
+        shift 2
+        ;;
+      --auto)
+        auto_id=1
+        shift
+        ;;
+      --from)
+        from_ref="$2"
+        shift 2
+        ;;
+      --track)
+        track_mode="$2"
+        shift 2
+        ;;
+      --open)
+        case "${2-}" in
+          --*|"")
+            editor="$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT none)"
+            shift 1
+            ;;
+          *)
+            editor="$2"
+            shift 2
+            ;;
+        esac
+        ;;
+      --ai)
+        case "${2-}" in
+          --*|"")
+            ai_tool="$(cfg_default gtr.ai.default GTR_AI_DEFAULT none)"
+            shift 1
+            ;;
+          *)
+            ai_tool="$2"
+            shift 2
+            ;;
+        esac
+        ;;
+      --no-copy)
+        skip_copy=1
+        shift
+        ;;
+      --yes|-y)
+        yes_mode=1
+        shift
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        # Positional arguments
+        if [ -z "$worktree_id" ] && [ -z "$branch_name" ]; then
+          if echo "$1" | grep -qE '^[0-9]+$'; then
+            worktree_id="$1"
+          else
+            branch_name="$1"
+          fi
+        elif [ -z "$branch_name" ]; then
+          branch_name="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  # Get repo info
+  local repo_root
+  repo_root=$(discover_repo_root) || exit 1
+
+  local base_dir prefix start_id
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+  start_id=$(cfg_default gtr.worktrees.startId GTR_WORKTREES_STARTID "2")
+
+  # Auto-assign ID if needed
+  if [ -z "$worktree_id" ] || [ "$auto_id" -eq 1 ]; then
+    worktree_id=$(next_available_id "$base_dir" "$prefix" "$start_id")
+  fi
+
+  # Get branch name if not provided
+  if [ -z "$branch_name" ]; then
+    if [ "$yes_mode" -eq 1 ]; then
+      log_error "Branch name required in non-interactive mode"
+      exit 1
+    fi
+    branch_name=$(prompt_input "Enter branch name for worktree ${prefix}${worktree_id}:")
+    if [ -z "$branch_name" ]; then
+      log_error "Branch name required"
+      exit 1
+    fi
+  fi
+
+  # Determine from_ref
+  if [ -z "$from_ref" ]; then
+    from_ref=$(resolve_default_branch "$repo_root")
+  fi
+
+  local worktree_path
+  worktree_path="$base_dir/${prefix}${worktree_id}"
+
+  log_step "Creating worktree: ${prefix}${worktree_id}"
+  echo "📂 Location: $worktree_path"
+  echo "🌿 Branch: $branch_name"
+
+  # Create the worktree
+  if ! create_worktree "$base_dir" "$prefix" "$worktree_id" "$branch_name" "$from_ref" "$track_mode"; then
+    exit 1
+  fi
+
+  # Copy files based on patterns
+  if [ "$skip_copy" -eq 0 ]; then
+    local includes excludes
+    includes=$(cfg_get_all gtr.copy.include)
+    excludes=$(cfg_get_all gtr.copy.exclude)
+
+    if [ -n "$includes" ]; then
+      log_step "Copying files..."
+      copy_patterns "$repo_root" "$worktree_path" "$includes" "$excludes"
+    fi
+  fi
+
+  # Run post-create hooks
+  run_hooks_in postCreate "$worktree_path" \
+    REPO_ROOT="$repo_root" \
+    WORKTREE_PATH="$worktree_path" \
+    BRANCH="$branch_name"
+
+  # Open in editor if requested
+  if [ -n "$editor" ] && [ "$editor" != "none" ]; then
+    load_editor_adapter "$editor"
+    if editor_can_open; then
+      log_step "Opening in $editor..."
+      editor_open "$worktree_path"
+    fi
+  fi
+
+  # Start AI tool if requested
+  if [ -n "$ai_tool" ] && [ "$ai_tool" != "none" ]; then
+    load_ai_adapter "$ai_tool"
+    if ai_can_start; then
+      log_step "Starting $ai_tool..."
+      ai_start "$worktree_path"
+    fi
+  fi
+
+  echo ""
+  log_info "Worktree created successfully!"
+  echo "🎯 Navigate with: cd $worktree_path"
+  echo "📂 Open with: gtr open $worktree_id"
+  echo "🤖 Start AI with: gtr ai $worktree_id"
+}
+
+# Remove command
+cmd_remove() {
+  local delete_branch=0
+  local yes_mode=0
+  local worktree_ids=""
+
+  # Parse flags
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --delete-branch)
+        delete_branch=1
+        shift
+        ;;
+      --yes|-y)
+        yes_mode=1
+        shift
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        worktree_ids="$worktree_ids $1"
+        shift
+        ;;
+    esac
+  done
+
+  if [ -z "$worktree_ids" ]; then
+    log_error "Usage: gtr rm <id> [<id>...] [--delete-branch] [--yes]"
+    exit 1
+  fi
+
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+
+  for worktree_id in $worktree_ids; do
+    local worktree_path="$base_dir/${prefix}${worktree_id}"
+
+    log_step "Removing worktree: ${prefix}${worktree_id}"
+
+    if [ ! -d "$worktree_path" ]; then
+      log_warn "Worktree not found: ${prefix}${worktree_id}"
+      continue
+    fi
+
+    # Get branch name before removal
+    local branch
+    branch=$(current_branch "$worktree_path")
+
+    # Remove the worktree
+    if ! remove_worktree "$worktree_path"; then
+      continue
+    fi
+
+    # Handle branch deletion
+    if [ -n "$branch" ]; then
+      if [ "$delete_branch" -eq 1 ]; then
+        if [ "$yes_mode" -eq 1 ] || prompt_yes_no "Also delete branch '$branch'?"; then
+          if git branch -D "$branch" 2>/dev/null; then
+            log_info "Branch deleted: $branch"
+          else
+            log_warn "Could not delete branch: $branch"
+          fi
+        fi
+      fi
+    fi
+
+    # Run post-remove hooks
+    run_hooks postRemove \
+      REPO_ROOT="$repo_root" \
+      WORKTREE_PATH="$worktree_path" \
+      BRANCH="$branch"
+  done
+}
+
+# CD command (prints path for shell integration)
+cmd_cd() {
+  if [ $# -ne 1 ]; then
+    log_error "Usage: gtr cd <id>"
+    exit 1
+  fi
+
+  local worktree_id="$1"
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+
+  local worktree_path="$base_dir/${prefix}${worktree_id}"
+
+  if [ ! -d "$worktree_path" ]; then
+    log_error "Worktree not found: ${prefix}${worktree_id}"
+    exit 1
+  fi
+
+  local branch
+  branch=$(current_branch "$worktree_path")
+
+  # Human messages to stderr so stdout can be used in command substitution
+  echo "📂 Switched to worktree: ${prefix}${worktree_id}" >&2
+  echo "🌿 Current branch: $branch" >&2
+
+  # Print path to stdout for shell integration: cd "$(gtr cd 2)"
+  printf "%s\n" "$worktree_path"
+}
+
+# Open command
+cmd_open() {
+  local editor=""
+  local worktree_id=""
+
+  # Parse arguments
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --editor)
+        editor="$2"
+        shift 2
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        worktree_id="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [ -z "$worktree_id" ]; then
+    log_error "Usage: gtr open <id> [--editor <name>]"
+    exit 1
+  fi
+
+  # Get editor from config if not specified
+  if [ -z "$editor" ]; then
+    editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
+  fi
+
+  if [ "$editor" = "none" ]; then
+    # Just open in GUI file browser
+    local repo_root base_dir prefix
+    repo_root=$(discover_repo_root) || exit 1
+    base_dir=$(resolve_base_dir "$repo_root")
+    prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+    local worktree_path="$base_dir/${prefix}${worktree_id}"
+
+    if [ ! -d "$worktree_path" ]; then
+      log_error "Worktree not found: ${prefix}${worktree_id}"
+      exit 1
+    fi
+
+    open_in_gui "$worktree_path"
+    log_info "Opened in file browser"
+  else
+    # Load editor adapter and open
+    load_editor_adapter "$editor"
+
+    local repo_root base_dir prefix
+    repo_root=$(discover_repo_root) || exit 1
+    base_dir=$(resolve_base_dir "$repo_root")
+    prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+    local worktree_path="$base_dir/${prefix}${worktree_id}"
+
+    if [ ! -d "$worktree_path" ]; then
+      log_error "Worktree not found: ${prefix}${worktree_id}"
+      exit 1
+    fi
+
+    log_step "Opening in $editor..."
+    editor_open "$worktree_path"
+  fi
+}
+
+# AI command
+cmd_ai() {
+  local ai_tool=""
+  local worktree_id=""
+  local ai_args=""
+
+  # Parse arguments
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --tool)
+        ai_tool="$2"
+        shift 2
+        ;;
+      --)
+        shift
+        ai_args="$*"
+        break
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        if [ -z "$worktree_id" ]; then
+          worktree_id="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  if [ -z "$worktree_id" ]; then
+    log_error "Usage: gtr ai <id> [--tool <name>] [-- args...]"
+    exit 1
+  fi
+
+  # Get AI tool from config if not specified
+  if [ -z "$ai_tool" ]; then
+    ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "aider")
+  fi
+
+  # Load AI adapter
+  load_ai_adapter "$ai_tool"
+
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+  local worktree_path="$base_dir/${prefix}${worktree_id}"
+
+  if [ ! -d "$worktree_path" ]; then
+    log_error "Worktree not found: ${prefix}${worktree_id}"
+    exit 1
+  fi
+
+  local branch
+  branch=$(current_branch "$worktree_path")
+
+  log_step "Starting $ai_tool in worktree: ${prefix}${worktree_id}"
+  echo "📂 Directory: $worktree_path"
+  echo "🌿 Branch: $branch"
+
+  # shellcheck disable=SC2086
+  ai_start "$worktree_path" $ai_args
+}
+
+# List command
+cmd_list() {
+  echo "📋 Git worktrees:"
+  list_worktrees
+
+  local repo_root base_dir
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+
+  echo ""
+  echo "📁 Worktree directories:"
+  if [ -d "$base_dir" ]; then
+    ls -la "$base_dir" 2>/dev/null | grep "^d" | grep -v "^d.*\\.$" || echo "   (none found)"
+  else
+    echo "   (worktrees directory doesn't exist yet)"
+  fi
+}
+
+# IDs command (machine-friendly output for completions)
+cmd_ids() {
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) 2>/dev/null || return 0
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+
+  if [ ! -d "$base_dir" ]; then
+    return 0
+  fi
+
+  # Extract IDs from worktree directories
+  for dir in "$base_dir/${prefix}"*; do
+    if [ -d "$dir" ]; then
+      local id
+      id=$(basename "$dir" | sed "s/^${prefix}//")
+      echo "$id"
+    fi
+  done
+}
+
+# Config command
+cmd_config() {
+  local action="${1:-get}"
+  local key="$2"
+  local value="$3"
+  local scope="local"
+
+  # Check for --global flag
+  if [ "$key" = "--global" ] || [ "$value" = "--global" ]; then
+    scope="global"
+    [ "$key" = "--global" ] && key="$3" && value="$4"
+    [ "$value" = "--global" ] && value="$4"
+  fi
+
+  case "$action" in
+    get)
+      if [ -z "$key" ]; then
+        log_error "Usage: gtr config get <key> [--global]"
+        exit 1
+      fi
+      cfg_get "$key" "$scope"
+      ;;
+    set)
+      if [ -z "$key" ] || [ -z "$value" ]; then
+        log_error "Usage: gtr config set <key> <value> [--global]"
+        exit 1
+      fi
+      cfg_set "$key" "$value" "$scope"
+      log_info "Config set: $key = $value"
+      ;;
+    unset)
+      if [ -z "$key" ]; then
+        log_error "Usage: gtr config unset <key> [--global]"
+        exit 1
+      fi
+      cfg_unset "$key" "$scope"
+      log_info "Config unset: $key"
+      ;;
+    *)
+      log_error "Unknown config action: $action"
+      log_error "Usage: gtr config {get|set|unset} <key> [value] [--global]"
+      exit 1
+      ;;
+  esac
+}
+
+# Load editor adapter
+load_editor_adapter() {
+  local editor="$1"
+  local adapter_file="$GTR_DIR/adapters/editor/${editor}.sh"
+
+  if [ ! -f "$adapter_file" ]; then
+    log_error "Unknown editor: $editor"
+    log_info "Available editors: cursor, vscode, zed"
+    exit 1
+  fi
+
+  . "$adapter_file"
+}
+
+# Load AI adapter
+load_ai_adapter() {
+  local ai_tool="$1"
+  local adapter_file="$GTR_DIR/adapters/ai/${ai_tool}.sh"
+
+  if [ ! -f "$adapter_file" ]; then
+    log_error "Unknown AI tool: $ai_tool"
+    log_info "Available AI tools: aider, claudecode, codex, cursor, continue"
+    exit 1
+  fi
+
+  . "$adapter_file"
+}
+
+# Help command
+cmd_help() {
+  cat <<'EOF'
+gtr - Git worktree runner
+
+USAGE:
+  gtr <command> [options]
+
+COMMANDS:
+  create [--branch <name>] [--id <n>|--auto] [--from <ref>]
+         [--track auto|remote|local|none] [--open [<editor>]]
+         [--ai [<tool>]] [--no-copy] [--yes]
+         Create a new worktree
+
+  rm <id> [--delete-branch] [--yes]
+         Remove worktree(s)
+
+  cd <id>
+         Change to worktree directory
+
+  open <id> [--editor <name>]
+         Open worktree in editor or file browser
+
+  ai <id> [--tool <name>] [-- args...]
+         Start AI coding tool in worktree
+
+  list
+         List all worktrees
+
+  config {get|set|unset} <key> [value] [--global]
+         Manage configuration
+
+  version
+         Show version
+
+  help
+         Show this help
+
+EXAMPLES:
+  # Create worktree with auto ID and branch name
+  gtr create --branch my-feature --auto
+
+  # Create worktree with specific ID
+  gtr create --id 3 --branch ui-fixes
+
+  # Create and open in Cursor
+  gtr create --branch fix --auto --open cursor
+
+  # Open existing worktree in VS Code
+  gtr open 2 --editor vscode
+
+  # Start Aider in worktree
+  gtr ai 2 --tool aider
+
+  # Configure default editor
+  gtr config set gtr.editor.default cursor --global
+
+  # Enable file copying
+  gtr config set gtr.copy.include "**/.env.example"
+
+  # Add post-create hook
+  gtr config set gtr.hook.postCreate "npm install"
+
+CONFIGURATION:
+  gtr.worktrees.dir        Worktrees base directory
+  gtr.worktrees.prefix     Worktree name prefix (default: wt-)
+  gtr.worktrees.startId    Starting ID (default: 2)
+  gtr.defaultBranch        Default branch (default: auto)
+  gtr.editor.default       Default editor (cursor, vscode, zed, none)
+  gtr.ai.default           Default AI tool (aider, claudecode, codex, cursor, continue, none)
+  gtr.copy.include         Files to copy (multi-valued)
+  gtr.copy.exclude         Files to exclude (multi-valued)
+  gtr.hook.postCreate      Post-create hooks (multi-valued)
+  gtr.hook.postRemove      Post-remove hooks (multi-valued)
+
+See https://github.com/anthropics/git-worktree-runner for more info.
+EOF
+}
+
+# Run main
+main "$@"
