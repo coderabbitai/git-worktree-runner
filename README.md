@@ -4,6 +4,26 @@
 
 `gtr` makes it simple to create, manage, and work with [git worktrees](https://git-scm.com/docs/git-worktree), enabling you to work on multiple branches simultaneously without stashing or switching contexts.
 
+## How It Works
+
+**gtr is repository-scoped** - each git repository has its own independent set of worktrees:
+
+- Run `gtr` commands from within any git repository
+- Each repo has separate worktree IDs (starting at 2, ID 1 is the main repo)
+- IDs are local to each repo - no conflicts across projects
+- Switch repos with `cd`, then run `gtr` commands for that repo
+
+**Example - Working across multiple repos:**
+```bash
+cd ~/GitHub/frontend
+gtr new auth-feature      # Creates frontend worktree (ID 2)
+gtr list                  # Shows only frontend worktrees
+
+cd ~/GitHub/backend
+gtr new auth-api          # Creates backend worktree (also ID 2 - different repo!)
+gtr list                  # Shows only backend worktrees
+```
+
 ## Why Git Worktrees?
 
 Git worktrees let you check out multiple branches at once in separate directories. This is invaluable when you need to:
@@ -21,19 +41,20 @@ While `git worktree` is powerful, it requires remembering paths and manually set
 | Task               | With `git worktree`                        | With `gtr`                         |
 | ------------------ | ------------------------------------------ | ---------------------------------- |
 | Create worktree    | `git worktree add ../repo-feature feature` | `gtr new feature`                  |
-| Open in editor     | `cd ../repo-feature && cursor .`           | `gtr open 2`             |
-| Start AI tool      | `cd ../repo-feature && aider`              | `gtr ai 2`                |
+| Open in editor     | `cd ../repo-feature && cursor .`           | `gtr open feature`             |
+| Start AI tool      | `cd ../repo-feature && aider`              | `gtr ai feature`                |
 | Copy config files  | Manual copy/paste                          | Auto-copy via `gtr.copy.include`   |
 | Run build steps    | Manual `npm install && npm run build`      | Auto-run via `gtr.hook.postCreate` |
 | List worktrees     | `git worktree list` (shows paths)          | `gtr list` (shows IDs + status)    |
-| Switch to worktree | `cd ../repo-feature`                       | `cd "$(gtr go 2)"`                 |
-| Clean up           | `git worktree remove ../repo-feature`      | `gtr rm 2`                         |
+| Switch to worktree | `cd ../repo-feature`                       | `cd "$(gtr go feature)"`                 |
+| Clean up           | `git worktree remove ../repo-feature`      | `gtr rm feature`                         |
 
 **TL;DR:** `gtr` wraps `git worktree` with quality-of-life features for modern development workflows (AI tools, editors, automation).
 
 ## Features
 
 - 🚀 **Simple commands** - Create and manage worktrees with intuitive CLI
+- 📁 **Repository-scoped** - Each repo has independent worktrees and IDs
 - 🔧 **Configurable** - Git-config based settings, no YAML/TOML parsers needed
 - 🎨 **Editor integration** - Open worktrees in Cursor, VS Code, or Zed
 - 🤖 **AI tool support** - Launch Aider or other AI coding tools
@@ -82,19 +103,24 @@ ln -s /path/to/git-worktree-runner/completions/gtr.fish ~/.config/fish/completio
 
 ## Quick Start
 
+**Prerequisites:** `cd` into a git repository first.
+
 **Basic workflow (no flags needed):**
 ```bash
-# One-time setup
+# Navigate to your git repo
+cd ~/GitHub/my-project
+
+# One-time setup (per repository)
 gtr config set gtr.editor.default cursor
 gtr config set gtr.ai.default aider
 
 # Daily use - simple, no flags
-gtr new my-feature          # Create worktree (auto-assigns ID)
-gtr list                    # See all worktrees
-gtr open my-feature         # Open in cursor (from config)
+gtr new my-feature          # Create worktree (auto-opens in cursor)
+gtr list                    # See all worktrees in this repo
+gtr open my-feature         # Open in cursor again if needed
 gtr ai my-feature           # Start aider (from config)
 cd "$(gtr go my-feature)"   # Navigate to worktree
-gtr rm 2                    # Remove when done
+gtr rm my-feature           # Remove when done
 ```
 
 **Advanced examples:**
@@ -215,10 +241,10 @@ gtr ai 2 --tool aider -- --model gpt-5
 
 ### `gtr rm`
 
-Remove worktree(s).
+Remove worktree(s). Accepts either ID or branch name.
 
 ```bash
-gtr rm <id> [<id>...] [options]
+gtr rm <id|branch> [<id|branch>...] [options]
 
 Options:
   --delete-branch  Also delete the branch
@@ -229,17 +255,20 @@ Options:
 **Examples:**
 
 ```bash
-# Remove single worktree
+# Remove by branch name
+gtr rm my-feature
+
+# Remove by ID
 gtr rm 2
 
 # Remove and delete branch
-gtr rm 2 --delete-branch
+gtr rm my-feature --delete-branch
 
 # Remove multiple worktrees
-gtr rm 2 3 4 --yes
+gtr rm feature-a feature-b hotfix --yes
 
 # Force remove with uncommitted changes
-gtr rm 2 --force
+gtr rm my-feature --force
 ```
 
 ### `gtr list`
@@ -334,9 +363,9 @@ gtr.ai.default = none
 gtr config set gtr.ai.default aider --global
 
 # Use specific tools per worktree
-gtr ai 2 --tool claudecode -- --plan "refactor auth"
-gtr ai 3 --tool aider -- --model gpt-5
-gtr ai 4 --tool continue -- --headless
+gtr ai auth-feature --tool claudecode -- --plan "refactor auth"
+gtr ai ui-redesign --tool aider -- --model gpt-5
+gtr ai performance --tool continue -- --headless
 ```
 
 ### File Copying
@@ -446,6 +475,40 @@ gtr new pr/123 --id 3 --editor cursor
 # Terminal 3: Navigate to main branch (repo root)
 cd "$(gtr go 1)"  # ID 1 is always the repo root
 ```
+
+### Working with Multiple Repositories
+
+Each repository has its own independent set of worktrees and IDs. Switch repos with `cd`:
+
+```bash
+# Frontend repo
+cd ~/GitHub/frontend
+gtr list
+# ID  BRANCH          PATH
+# 1   main            ~/GitHub/frontend
+# 2   auth-feature    ~/GitHub/frontend-worktrees/wt-2
+# 3   nav-redesign    ~/GitHub/frontend-worktrees/wt-3
+
+gtr open auth-feature        # Open frontend auth work
+gtr ai nav-redesign          # AI on frontend nav work
+
+# Backend repo (separate worktrees, separate IDs)
+cd ~/GitHub/backend
+gtr list
+# ID  BRANCH          PATH
+# 1   main            ~/GitHub/backend
+# 2   api-auth        ~/GitHub/backend-worktrees/wt-2  # Different ID 2!
+# 5   websockets      ~/GitHub/backend-worktrees/wt-5
+
+gtr open api-auth            # Open backend auth work
+gtr ai websockets            # AI on backend websockets
+
+# Switch back to frontend
+cd ~/GitHub/frontend
+gtr open auth-feature        # Opens frontend auth (use branch names!)
+```
+
+**Key point:** IDs are per-repository, not global. ID 2 in frontend ≠ ID 2 in backend.
 
 ### Custom Workflows with Hooks
 
