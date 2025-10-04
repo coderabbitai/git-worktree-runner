@@ -21,12 +21,8 @@ run_hooks() {
   local hook_count=0
   local failed=0
 
-  # Build export commands for environment variables
-  local exports=""
-  while [ $# -gt 0 ]; do
-    exports="$exports export $1;"
-    shift
-  done
+  # Capture environment variable assignments in array to preserve quoting
+  local envs=("$@")
 
   # Execute each hook in a subshell to isolate side effects
   while IFS= read -r hook; do
@@ -35,8 +31,15 @@ run_hooks() {
     hook_count=$((hook_count + 1))
     log_info "Hook $hook_count: $hook"
 
-    # Run hook in subshell with exports, capture exit code
-    if ( eval "$exports $hook" ); then
+    # Run hook in subshell with properly quoted environment exports
+    if (
+      # Export each KEY=VALUE exactly as passed, safely quoted
+      for kv in "${envs[@]}"; do
+        export "$kv"
+      done
+      # Execute the hook
+      eval "$hook"
+    ); then
       log_info "Hook $hook_count completed successfully"
     else
       local rc=$?

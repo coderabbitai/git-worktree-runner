@@ -43,10 +43,10 @@ copy_patterns() {
   while IFS= read -r pattern; do
     [ -z "$pattern" ] && continue
 
-    # Security: reject absolute paths and parent directory escapes
+    # Security: reject absolute paths and parent directory traversal
     case "$pattern" in
-      /*|*..*)
-        log_warn "Skipping unsafe pattern (absolute path or '..'): $pattern"
+      /*|*/../*|../*|*/..|..)
+        log_warn "Skipping unsafe pattern (absolute path or '..' path segment): $pattern"
         continue
         ;;
     esac
