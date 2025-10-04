@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Claude Code AI adapter
 
 # Check if Claude Code is available

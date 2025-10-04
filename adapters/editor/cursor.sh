@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Cursor editor adapter
 
 # Check if Cursor is available

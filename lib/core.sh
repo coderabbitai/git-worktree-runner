@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Core git worktree operations
 
 # Discover the root of the current git repository

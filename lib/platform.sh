@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Platform-specific utilities
 
 # Detect operating system

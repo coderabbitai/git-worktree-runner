@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Zed editor adapter
 
 # Check if Zed is available

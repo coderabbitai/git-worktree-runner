@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Hook execution system
 
 # Run hooks for a specific phase

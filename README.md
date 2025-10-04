@@ -63,6 +63,11 @@ While `git worktree` is powerful, it requires remembering paths and manually set
 - 🌍 **Cross-platform** - Works on macOS, Linux, and Windows (Git Bash)
 - 🎯 **Shell completions** - Tab completion for Bash, Zsh, and Fish
 
+## Requirements
+
+- **Git** 2.5+ (for `git worktree` support)
+- **Bash** 4.0+ (standard on macOS, Linux, and Windows Git Bash)
+
 ## Installation
 
 ### Quick Install (macOS/Linux)

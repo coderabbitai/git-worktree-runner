@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # UI utilities for logging and prompting
 
 log_info() {

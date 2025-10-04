@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Cursor AI agent adapter
 
 # Check if Cursor agent/CLI is available

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Aider AI coding assistant adapter
 
 # Check if Aider is available

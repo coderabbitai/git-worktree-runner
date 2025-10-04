@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Configuration management via git config
 # Default values are defined where they're used in lib/core.sh
 

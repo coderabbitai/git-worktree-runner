@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # VS Code editor adapter
 
 # Check if VS Code is available

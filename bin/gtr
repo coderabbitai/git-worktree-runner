@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # gtr - Git worktree runner
 # Portable, cross-platform git worktree management
 
@@ -467,7 +467,7 @@ cmd_list() {
         branch=$(current_branch "$dir")
         [ -z "$branch" ] && branch="(detached)"
         printf "%s\t%s\t%s\t%s\n" "$id" "$dir" "$branch" "ok"
-      done | sort -t$'\t' -k1 -n
+      done | LC_ALL=C sort -n -k1,1
     fi
     return 0
   fi
@@ -492,7 +492,7 @@ cmd_list() {
       branch=$(current_branch "$dir")
       [ -z "$branch" ] && branch="(detached)"
       printf "%-6s %-25s %s\n" "$id" "$branch" "$dir"
-    done | sort -t' ' -k1 -n
+    done | LC_ALL=C sort -n -k1,1
   fi
 
   echo ""
@@ -522,8 +522,10 @@ cmd_clean() {
   local cleaned=0
   find "$base_dir" -maxdepth 1 -type d -empty 2>/dev/null | while IFS= read -r dir; do
     if [ "$dir" != "$base_dir" ]; then
-      rmdir "$dir" 2>/dev/null && cleaned=$((cleaned + 1))
-      log_info "Removed empty directory: $(basename "$dir")"
+      if rmdir "$dir" 2>/dev/null; then
+        cleaned=$((cleaned + 1))
+        log_info "Removed empty directory: $(basename "$dir")"
+      fi
     fi
   done
 

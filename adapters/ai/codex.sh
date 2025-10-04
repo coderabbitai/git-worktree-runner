@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # OpenAI Codex CLI adapter
 
 # Check if Codex is available

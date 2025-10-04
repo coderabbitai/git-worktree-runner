@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # File copying utilities with pattern matching
 
 # Copy files matching patterns from source to destination
