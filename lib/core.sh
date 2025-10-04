@@ -100,9 +100,70 @@ current_branch() {
   (cd "$worktree_path" && git branch --show-current 2>/dev/null) || true
 }
 
+# Resolve a worktree target from ID or branch name
+# Usage: resolve_target identifier repo_root base_dir prefix
+# Returns: tab-separated "id\tpath\tbranch" on success
+# Exit code: 0 on success, 1 if not found
+resolve_target() {
+  local identifier="$1"
+  local repo_root="$2"
+  local base_dir="$3"
+  local prefix="$4"
+  local id path branch
+
+  # Check if identifier is numeric (ID) or a branch name
+  if echo "$identifier" | grep -qE '^[0-9]+$'; then
+    # Numeric ID
+    id="$identifier"
+
+    if [ "$id" = "1" ]; then
+      # ID 1 is always the repo root
+      path="$repo_root"
+      branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
+      printf "%s\t%s\t%s\n" "$id" "$path" "$branch"
+      return 0
+    fi
+
+    # Other IDs map to worktree directories
+    path="$base_dir/${prefix}${id}"
+    if [ ! -d "$path" ]; then
+      log_error "Worktree not found: ${prefix}${id}"
+      return 1
+    fi
+    branch=$(current_branch "$path")
+    printf "%s\t%s\t%s\n" "$id" "$path" "$branch"
+    return 0
+  else
+    # Branch name - search for matching worktree
+    # First check if it's the current branch in repo root
+    branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
+    if [ "$branch" = "$identifier" ]; then
+      printf "1\t%s\t%s\n" "$repo_root" "$identifier"
+      return 0
+    fi
+
+    # Search worktree directories for matching branch
+    if [ -d "$base_dir" ]; then
+      for dir in "$base_dir/${prefix}"*; do
+        [ -d "$dir" ] || continue
+        branch=$(current_branch "$dir")
+        if [ "$branch" = "$identifier" ]; then
+          id=$(basename "$dir" | sed "s/^${prefix}//")
+          printf "%s\t%s\t%s\n" "$id" "$dir" "$branch"
+          return 0
+        fi
+      done
+    fi
+
+    log_error "Worktree not found for branch: $identifier"
+    return 1
+  fi
+}
+
 # Create a new git worktree
-# Usage: create_worktree base_dir prefix id branch_name from_ref track_mode
+# Usage: create_worktree base_dir prefix id branch_name from_ref track_mode [skip_fetch]
 # track_mode: auto, remote, local, or none
+# skip_fetch: 0 (default, fetch) or 1 (skip)
 create_worktree() {
   local base_dir="$1"
   local prefix="$2"
@@ -110,6 +171,7 @@ create_worktree() {
   local branch_name="$4"
   local from_ref="$5"
   local track_mode="${6:-auto}"
+  local skip_fetch="${7:-0}"
   local worktree_path="$base_dir/${prefix}${id}"
 
   # Check if worktree already exists
@@ -121,9 +183,11 @@ create_worktree() {
   # Create base directory if needed
   mkdir -p "$base_dir"
 
-  # Fetch latest refs
-  log_step "Fetching remote branches..."
-  git fetch origin 2>/dev/null || log_warn "Could not fetch from origin"
+  # Fetch latest refs (unless --no-fetch)
+  if [ "$skip_fetch" -eq 0 ]; then
+    log_step "Fetching remote branches..."
+    git fetch origin 2>/dev/null || log_warn "Could not fetch from origin"
+  fi
 
   local remote_exists=0
   local local_exists=0
@@ -177,11 +241,18 @@ create_worktree() {
       ;;
 
     auto|*)
-      # Auto-detect best option
-      if [ "$remote_exists" -eq 1 ]; then
+      # Auto-detect best option with proper tracking
+      if [ "$remote_exists" -eq 1 ] && [ "$local_exists" -eq 0 ]; then
+        # Remote exists, no local branch - create local with tracking
         log_step "Branch '$branch_name' exists on remote"
-        if git worktree add "$worktree_path" -b "$branch_name" "origin/$branch_name" 2>/dev/null || \
-           git worktree add "$worktree_path" "$branch_name" 2>/dev/null; then
+
+        # Create tracking branch first for explicit upstream configuration
+        if git branch --track "$branch_name" "origin/$branch_name" 2>/dev/null; then
+          log_info "Created local branch tracking origin/$branch_name"
+        fi
+
+        # Now add worktree using the tracking branch
+        if git worktree add "$worktree_path" "$branch_name" 2>/dev/null; then
           log_info "Worktree created tracking origin/$branch_name"
           printf "%s" "$worktree_path"
           return 0
@@ -212,13 +283,19 @@ create_worktree() {
 # Usage: remove_worktree worktree_path
 remove_worktree() {
   local worktree_path="$1"
+  local force="${2:-0}"
 
   if [ ! -d "$worktree_path" ]; then
     log_error "Worktree not found at $worktree_path"
     return 1
   fi
 
-  if git worktree remove "$worktree_path" 2>/dev/null; then
+  local force_flag=""
+  if [ "$force" -eq 1 ]; then
+    force_flag="--force"
+  fi
+
+  if git worktree remove $force_flag "$worktree_path" 2>/dev/null; then
     log_info "Worktree removed: $worktree_path"
     return 0
   else

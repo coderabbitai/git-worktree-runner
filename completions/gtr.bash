@@ -9,38 +9,48 @@ _gtr_completion() {
 
   # Complete commands on first argument
   if [ "$cword" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "create rm remove cd open ai list config help version" -- "$cur"))
+    COMPREPLY=($(compgen -W "new go open ai rm ls list clean doctor adapter config help version" -- "$cur"))
     return 0
   fi
 
-  # Commands that take worktree IDs
+  # Commands that take worktree IDs or branch names
   case "$cmd" in
-    cd|open|ai|rm|remove)
+    go|open|ai|rm)
       if [ "$cword" -eq 2 ]; then
-        # Use gtr ids command for config-aware completion
-        local ids
-        ids=$(command gtr ids 2>/dev/null || true)
-        COMPREPLY=($(compgen -W "$ids" -- "$cur"))
-      fi
-      ;;
-    create)
-      # Complete flags
-      if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--branch --id --auto --from --track --open --ai --no-copy --yes" -- "$cur"))
-      fi
-      ;;
-    open)
-      if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--editor" -- "$cur"))
+        # Complete with both IDs and branch names
+        local ids branches all_options
+        ids=$(command gtr list --ids 2>/dev/null || true)
+        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
+        all_options="$ids $branches"
+        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+      elif [[ "$cur" == -* ]]; then
+        case "$cmd" in
+          rm)
+            COMPREPLY=($(compgen -W "--delete-branch --force --yes" -- "$cur"))
+            ;;
+          open)
+            COMPREPLY=($(compgen -W "--editor" -- "$cur"))
+            ;;
+          ai)
+            COMPREPLY=($(compgen -W "--tool" -- "$cur"))
+            ;;
+        esac
       elif [ "$prev" = "--editor" ]; then
         COMPREPLY=($(compgen -W "cursor vscode zed" -- "$cur"))
-      fi
-      ;;
-    ai)
-      if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--tool" -- "$cur"))
       elif [ "$prev" = "--tool" ]; then
         COMPREPLY=($(compgen -W "aider claudecode codex cursor continue" -- "$cur"))
+      fi
+      ;;
+    new)
+      # Complete flags
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--id --from --track --editor --ai --no-copy --no-fetch --yes" -- "$cur"))
+      elif [ "$prev" = "--editor" ]; then
+        COMPREPLY=($(compgen -W "cursor vscode zed" -- "$cur"))
+      elif [ "$prev" = "--ai" ]; then
+        COMPREPLY=($(compgen -W "aider claudecode codex cursor continue" -- "$cur"))
+      elif [ "$prev" = "--track" ]; then
+        COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
       fi
       ;;
     config)

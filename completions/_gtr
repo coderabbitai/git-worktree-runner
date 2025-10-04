@@ -4,29 +4,53 @@
 _gtr() {
   local -a commands
   commands=(
-    'create:Create a new worktree'
+    'new:Create a new worktree'
+    'go:Navigate to worktree'
     'rm:Remove worktree(s)'
-    'remove:Remove worktree(s)'
-    'cd:Change to worktree directory'
-    'open:Open worktree in editor or file browser'
-    'ai:Start AI coding tool in worktree'
+    'open:Open worktree in editor'
+    'ai:Start AI coding tool'
+    'ls:List all worktrees'
     'list:List all worktrees'
+    'clean:Remove stale worktrees'
+    'doctor:Health check'
+    'adapter:List available adapters'
     'config:Manage configuration'
     'version:Show version'
     'help:Show help'
   )
 
-  local -a worktree_ids
-  # Use gtr ids command for config-aware completion
-  worktree_ids=(${(f)"$(command gtr ids 2>/dev/null)"})
+  local -a worktree_ids branches all_options
+  # Use gtr list --ids for config-aware completion
+  worktree_ids=(${(f)"$(command gtr list --ids 2>/dev/null)"})
+  # Get branch names
+  branches=(${(f)"$(git branch --format='%(refname:short)' 2>/dev/null)"})
+  # Combine IDs and branches
+  all_options=("${worktree_ids[@]}" "${branches[@]}")
 
   if (( CURRENT == 2 )); then
     _describe 'commands' commands
   elif (( CURRENT == 3 )); then
     case "$words[2]" in
-      cd|open|ai|rm|remove)
-        _describe 'worktree IDs' worktree_ids
+      go|open|ai|rm)
+        _describe 'worktree IDs or branches' all_options
         ;;
+      new)
+        _arguments \
+          '--id[Worktree ID]:id:' \
+          '--from[Base ref]:ref:' \
+          '--track[Track mode]:mode:(auto remote local none)' \
+          '--editor[Editor]:editor:(cursor vscode zed)' \
+          '--ai[AI tool]:tool:(aider claudecode codex cursor continue)' \
+          '--no-copy[Skip file copying]' \
+          '--no-fetch[Skip git fetch]' \
+          '--yes[Non-interactive mode]'
+        ;;
+      config)
+        _values 'config action' get set unset
+        ;;
+    esac
+  elif (( CURRENT >= 4 )); then
+    case "$words[2]" in
       open)
         _arguments \
           '--editor[Editor]:editor:(cursor vscode zed)'
@@ -35,24 +59,12 @@ _gtr() {
         _arguments \
           '--tool[AI tool]:tool:(aider claudecode codex cursor continue)'
         ;;
-      create)
+      rm)
         _arguments \
-          '--branch[Branch name]:branch:' \
-          '--id[Worktree ID]:id:' \
-          '--auto[Auto-assign ID]' \
-          '--from[Base ref]:ref:' \
-          '--track[Track mode]:mode:(auto remote local none)' \
-          '--open[Editor]:editor:(cursor vscode zed)' \
-          '--ai[AI tool]:tool:(aider claudecode codex cursor continue)' \
-          '--no-copy[Skip file copying]' \
+          '--delete-branch[Delete branch]' \
+          '--force[Force removal even if dirty]' \
           '--yes[Non-interactive mode]'
         ;;
-      config)
-        _values 'config action' get set unset
-        ;;
-    esac
-  elif (( CURRENT == 4 )); then
-    case "$words[2]" in
       config)
         case "$words[3]" in
           get|set|unset)

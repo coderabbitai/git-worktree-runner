@@ -18,16 +18,16 @@ Git worktrees let you check out multiple branches at once in separate directorie
 
 While `git worktree` is powerful, it requires remembering paths and manually setting up each worktree. `gtr` adds:
 
-| Task | With `git worktree` | With `gtr` |
-|------|---------------------|------------|
-| Create worktree | `git worktree add ../repo-feature feature` | `gtr create --branch feature --auto` |
-| Open in editor | `cd ../repo-feature && cursor .` | `gtr open 2 --editor cursor` |
-| Start AI tool | `cd ../repo-feature && aider` | `gtr ai 2 --tool aider` |
-| Copy config files | Manual copy/paste | Auto-copy via `gtr.copy.include` |
-| Run build steps | Manual `npm install && npm run build` | Auto-run via `gtr.hook.postCreate` |
-| List worktrees | `git worktree list` (shows paths) | `gtr list` (shows IDs + status) |
-| Switch to worktree | `cd ../repo-feature` | `cd "$(gtr cd 2)"` |
-| Clean up | `git worktree remove ../repo-feature` | `gtr rm 2` |
+| Task               | With `git worktree`                        | With `gtr`                         |
+| ------------------ | ------------------------------------------ | ---------------------------------- |
+| Create worktree    | `git worktree add ../repo-feature feature` | `gtr new feature`                  |
+| Open in editor     | `cd ../repo-feature && cursor .`           | `gtr open 2`             |
+| Start AI tool      | `cd ../repo-feature && aider`              | `gtr ai 2`                |
+| Copy config files  | Manual copy/paste                          | Auto-copy via `gtr.copy.include`   |
+| Run build steps    | Manual `npm install && npm run build`      | Auto-run via `gtr.hook.postCreate` |
+| List worktrees     | `git worktree list` (shows paths)          | `gtr list` (shows IDs + status)    |
+| Switch to worktree | `cd ../repo-feature`                       | `cd "$(gtr go 2)"`                 |
+| Clean up           | `git worktree remove ../repo-feature`      | `gtr rm 2`                         |
 
 **TL;DR:** `gtr` wraps `git worktree` with quality-of-life features for modern development workflows (AI tools, editors, automation).
 
@@ -63,123 +63,154 @@ source ~/.zshrc
 ### Shell Completions (Optional)
 
 **Bash:**
+
 ```bash
 echo 'source /path/to/git-worktree-runner/completions/gtr.bash' >> ~/.bashrc
 ```
 
 **Zsh:**
+
 ```bash
 echo 'source /path/to/git-worktree-runner/completions/_gtr' >> ~/.zshrc
 ```
 
 **Fish:**
+
 ```bash
 ln -s /path/to/git-worktree-runner/completions/gtr.fish ~/.config/fish/completions/
 ```
 
 ## Quick Start
 
+**Basic workflow (no flags needed):**
 ```bash
-# Create a worktree with auto-assigned ID
-gtr create --branch my-feature --auto
+# One-time setup
+gtr config set gtr.editor.default cursor
+gtr config set gtr.ai.default aider
 
-# Create worktree with specific ID
-gtr create --id 3 --branch ui-fixes
+# Daily use - simple, no flags
+gtr new my-feature          # Create worktree (auto-assigns ID)
+gtr list                    # See all worktrees
+gtr open my-feature         # Open in cursor (from config)
+gtr ai my-feature           # Start aider (from config)
+cd "$(gtr go my-feature)"   # Navigate to worktree
+gtr rm 2                    # Remove when done
+```
 
-# List all worktrees
-gtr list
+**Advanced examples:**
+```bash
+# Override defaults
+gtr open 2 --editor vscode
+gtr new hotfix --from v1.2.3 --id 99
 
-# Open worktree in editor (if configured)
-gtr open 2 --editor cursor
-
-# Start AI tool in worktree
-gtr ai 2 --tool aider
-
-# Remove worktree
-gtr rm 2
-
-# Change to worktree directory
-gtr cd 2
+# Destructive operations
+gtr rm 2 --delete-branch --force
 ```
 
 ## Commands
 
-### `gtr create`
+### `gtr new`
 
-Create a new git worktree.
+Create a new git worktree. IDs are auto-assigned by default.
 
 ```bash
-gtr create [options] [branch-name]
+gtr new <branch> [options]
 
-Options:
-  --branch <name>     Branch name
-  --id <n>            Worktree ID (default: auto-assigned)
-  --auto              Auto-assign next available ID
-  --from <ref>        Create branch from ref (default: main/master)
-  --track <mode>      Track mode: auto|remote|local|none
-  --open [editor]     Open in editor after creation
-  --ai [tool]         Start AI tool after creation
-  --no-copy           Skip file copying
-  --yes               Non-interactive mode
+Options (all optional):
+  --id <n>             Specific worktree ID (rarely needed)
+  --from <ref>         Create from specific ref (default: main/master)
+  --track <mode>       Track mode: auto|remote|local|none
+  --editor <name>      Override default editor
+  --ai <tool>          Override default AI tool
+  --no-copy            Skip file copying
+  --no-fetch           Skip git fetch
+  --yes                Non-interactive mode
 ```
 
 **Examples:**
+
 ```bash
-# Auto-assign ID, prompt for branch
-gtr create --auto
+# Create worktree (auto-assigns ID)
+gtr new my-feature
 
 # Specific ID and branch
-gtr create --id 2 --branch feature-x
+gtr new feature-x --id 2
 
 # Create from specific ref
-gtr create --branch hotfix --from v1.2.3
+gtr new hotfix --from v1.2.3
 
 # Create and open in Cursor
-gtr create --branch ui --auto --open cursor
+gtr new ui --editor cursor
 
 # Create and start Aider
-gtr create --branch refactor --auto --ai aider
+gtr new refactor --ai aider
 ```
 
 ### `gtr open`
 
-Open a worktree in an editor or file browser.
+Open a worktree in an editor or file browser. Accepts either ID or branch name.
 
 ```bash
-gtr open <id> [--editor <name>]
+gtr open <id|branch> [options]
 
 Options:
-  --editor <name>     Editor: cursor, vscode, zed
+  --editor <name>  Editor: cursor, vscode, zed
 ```
 
 **Examples:**
+
 ```bash
-# Open in default editor
+# Open by ID (uses default editor from config)
 gtr open 2
 
-# Open in specific editor
-gtr open 2 --editor cursor
+# Open by branch name with specific editor
+gtr open my-feature --editor cursor
+
+# Override default editor
+gtr open 2 --editor zed
+```
+
+### `gtr go`
+
+Navigate to a worktree directory. Prints path to stdout for shell integration.
+
+```bash
+gtr go <id|branch>
+```
+
+**Examples:**
+
+```bash
+# Change to worktree by ID
+cd "$(gtr go 2)"
+
+# Change to worktree by branch name
+cd "$(gtr go my-feature)"
 ```
 
 ### `gtr ai`
 
-Start an AI coding tool in a worktree.
+Start an AI coding tool in a worktree. Accepts either ID or branch name.
 
 ```bash
-gtr ai <id> [--tool <name>] [-- args...]
+gtr ai <id|branch> [options] [-- args...]
 
 Options:
-  --tool <name>       AI tool: aider
-  --                  Pass remaining args to tool
+  --tool <name>  AI tool: aider, claudecode, etc.
+  --             Pass remaining args to tool
 ```
 
 **Examples:**
+
 ```bash
-# Start default AI tool
+# Start default AI tool by ID (uses gtr.ai.default)
 gtr ai 2
 
+# Start by branch name with specific tool
+gtr ai my-feature --tool aider
+
 # Start Aider with specific model
-gtr ai 2 --tool aider -- --model gpt-4o
+gtr ai 2 --tool aider -- --model gpt-5
 ```
 
 ### `gtr rm`
@@ -190,11 +221,13 @@ Remove worktree(s).
 gtr rm <id> [<id>...] [options]
 
 Options:
-  --delete-branch     Also delete the branch
-  --yes               Non-interactive mode
+  --delete-branch  Also delete the branch
+  --force          Force removal even with uncommitted changes
+  --yes            Non-interactive mode
 ```
 
 **Examples:**
+
 ```bash
 # Remove single worktree
 gtr rm 2
@@ -204,6 +237,9 @@ gtr rm 2 --delete-branch
 
 # Remove multiple worktrees
 gtr rm 2 3 4 --yes
+
+# Force remove with uncommitted changes
+gtr rm 2 --force
 ```
 
 ### `gtr list`
@@ -211,15 +247,11 @@ gtr rm 2 3 4 --yes
 List all git worktrees.
 
 ```bash
-gtr list
-```
+gtr list [--porcelain|--ids]
 
-### `gtr cd`
-
-Change to worktree directory (prints info for shell integration).
-
-```bash
-gtr cd <id>
+Options:
+  --porcelain  Machine-readable output (tab-separated)
+  --ids        Output only worktree IDs (for scripting)
 ```
 
 ### `gtr config`
@@ -233,6 +265,7 @@ gtr config unset <key> [--global]
 ```
 
 **Examples:**
+
 ```bash
 # Set default editor locally
 gtr config set gtr.editor.default cursor
@@ -272,6 +305,7 @@ gtr.editor.default = cursor
 ```
 
 **Setup editors:**
+
 - **Cursor**: Install from [cursor.com](https://cursor.com), enable shell command
 - **VS Code**: Install from [code.visualstudio.com](https://code.visualstudio.com), enable `code` command
 - **Zed**: Install from [zed.dev](https://zed.dev), `zed` command available automatically
@@ -285,22 +319,23 @@ gtr.ai.default = none
 
 **Supported AI Tools:**
 
-| Tool | Install | Use Case | Command Example |
-|------|---------|----------|-----------------|
-| **[Aider](https://aider.chat)** | `pip install aider-chat` | Pair programming, edit files with AI | `gtr ai 2 --tool aider` |
-| **[Claude Code](https://claude.com/claude-code)** | Install from claude.com | Terminal-native coding agent | `gtr ai 2 --tool claudecode` |
-| **[Codex CLI](https://github.com/openai/codex)** | `npm install -g @openai/codex` | OpenAI coding assistant | `gtr ai 2 --tool codex -- "add tests"` |
-| **[Cursor](https://cursor.com)** | Install from cursor.com | AI-powered editor with CLI agent | `gtr ai 2 --tool cursor` |
-| **[Continue](https://continue.dev)** | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent | `gtr ai 2 --tool continue` |
+| Tool                                              | Install                                           | Use Case                             | Command Example                        |
+| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------ | -------------------------------------- |
+| **[Aider](https://aider.chat)**                   | `pip install aider-chat`                          | Pair programming, edit files with AI | `gtr ai 2 --tool aider`                |
+| **[Claude Code](https://claude.com/claude-code)** | Install from claude.com                           | Terminal-native coding agent         | `gtr ai 2 --tool claudecode`           |
+| **[Codex CLI](https://github.com/openai/codex)**  | `npm install -g @openai/codex`                    | OpenAI coding assistant              | `gtr ai 2 --tool codex -- "add tests"` |
+| **[Cursor](https://cursor.com)**                  | Install from cursor.com                           | AI-powered editor with CLI agent     | `gtr ai 2 --tool cursor`               |
+| **[Continue](https://continue.dev)**              | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent             | `gtr ai 2 --tool continue`             |
 
 **Examples:**
+
 ```bash
 # Set default AI tool globally
 gtr config set gtr.ai.default aider --global
 
 # Use specific tools per worktree
 gtr ai 2 --tool claudecode -- --plan "refactor auth"
-gtr ai 3 --tool aider -- --model gpt-4o
+gtr ai 3 --tool aider -- --model gpt-5
 gtr ai 4 --tool continue -- --headless
 ```
 
@@ -335,6 +370,7 @@ git config --add gtr.hook.postRemove "echo 'Cleaned up!'"
 ```
 
 **Environment variables available in hooks:**
+
 - `REPO_ROOT` - Repository root path
 - `WORKTREE_PATH` - New worktree path
 - `BRANCH` - Branch name
@@ -402,13 +438,13 @@ git config --global gtr.worktrees.startId 2
 
 ```bash
 # Terminal 1: Work on feature
-gtr create --branch feature-a --id 2 --open
+gtr new feature-a --id 2 --editor cursor
 
 # Terminal 2: Review PR
-gtr create --branch pr/123 --id 3 --open
+gtr new pr/123 --id 3 --editor cursor
 
-# Terminal 3: Run tests on main
-gtr cd 1  # Original repo is worktree 1
+# Terminal 3: Navigate to main branch (repo root)
+cd "$(gtr go 1)"  # ID 1 is always the repo root
 ```
 
 ### Custom Workflows with Hooks
@@ -440,7 +476,7 @@ Perfect for CI/CD or scripts:
 
 ```bash
 # Create worktree without prompts
-gtr create --branch ci-test --id 99 --yes --no-copy
+gtr new ci-test --id 99 --yes --no-copy
 
 # Remove without confirmation
 gtr rm 99 --yes --delete-branch
@@ -458,7 +494,7 @@ git fetch origin
 git branch -a | grep your-branch
 
 # Manually specify tracking mode
-gtr create --branch test --track remote
+gtr new test --track remote
 ```
 
 ### Editor Not Opening
@@ -492,6 +528,7 @@ find . -path "**/.env.example"
 - ✅ **Windows** - Via Git Bash or WSL
 
 **Platform-specific notes:**
+
 - **macOS**: GUI opening uses `open`, terminal spawning uses iTerm2/Terminal.app
 - **Linux**: GUI opening uses `xdg-open`, terminal spawning uses gnome-terminal/konsole
 - **Windows**: GUI opening uses `start`, requires Git Bash or WSL
