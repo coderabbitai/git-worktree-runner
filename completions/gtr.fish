@@ -19,8 +19,6 @@ complete -c gtr -f -n "__fish_use_subcommand" -a "help" -d "Show help"
 complete -c gtr -n "__fish_seen_subcommand_from new" -l id -d "Worktree ID (rarely needed)" -r
 complete -c gtr -n "__fish_seen_subcommand_from new" -l from -d "Base ref" -r
 complete -c gtr -n "__fish_seen_subcommand_from new" -l track -d "Track mode" -r -a "auto remote local none"
-complete -c gtr -n "__fish_seen_subcommand_from new" -l editor -d "Override default editor" -r -a "cursor vscode zed"
-complete -c gtr -n "__fish_seen_subcommand_from new" -l ai -d "Override default AI tool" -r -a "aider claudecode codex cursor continue"
 complete -c gtr -n "__fish_seen_subcommand_from new" -l no-copy -d "Skip file copying"
 complete -c gtr -n "__fish_seen_subcommand_from new" -l no-fetch -d "Skip git fetch"
 complete -c gtr -n "__fish_seen_subcommand_from new" -l yes -d "Non-interactive mode"
@@ -29,12 +27,6 @@ complete -c gtr -n "__fish_seen_subcommand_from new" -l yes -d "Non-interactive 
 complete -c gtr -n "__fish_seen_subcommand_from rm" -l delete-branch -d "Delete branch"
 complete -c gtr -n "__fish_seen_subcommand_from rm" -l force -d "Force removal even if dirty"
 complete -c gtr -n "__fish_seen_subcommand_from rm" -l yes -d "Non-interactive mode"
-
-# Open command options
-complete -c gtr -n "__fish_seen_subcommand_from open" -l editor -d "Editor name" -r -a "cursor vscode zed"
-
-# AI command options
-complete -c gtr -n "__fish_seen_subcommand_from ai" -l tool -d "AI tool name" -r -a "aider claudecode codex cursor continue"
 
 # Config command
 complete -c gtr -n "__fish_seen_subcommand_from config" -f -a "get set unset"

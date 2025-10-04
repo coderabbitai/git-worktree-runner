@@ -573,10 +573,17 @@ cmd_doctor() {
   local editor
   editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
   if [ "$editor" != "none" ]; then
-    if command -v "$editor" >/dev/null 2>&1; then
-      echo "✅ Editor: $editor (found)"
+    # Check if adapter exists
+    local editor_adapter="$GTR_DIR/adapters/editor/${editor}.sh"
+    if [ -f "$editor_adapter" ]; then
+      . "$editor_adapter"
+      if editor_can_open 2>/dev/null; then
+        echo "✅ Editor: $editor (found)"
+      else
+        echo "⚠️  Editor: $editor (configured but not found in PATH)"
+      fi
     else
-      echo "⚠️  Editor: $editor (configured but not found in PATH)"
+      echo "⚠️  Editor: $editor (adapter not found)"
     fi
   else
     echo "ℹ️  Editor: none configured"
@@ -634,10 +641,10 @@ cmd_adapter() {
       adapter_name=$(basename "$adapter_file" .sh)
       . "$adapter_file"
 
-      if command -v "$adapter_name" >/dev/null 2>&1; then
+      if editor_can_open 2>/dev/null; then
         printf "%-15s %-10s %s\n" "$adapter_name" "✅ ready" ""
       else
-        printf "%-15s %-10s %s\n" "$adapter_name" "⚠️  missing" "Install from $adapter_name.com"
+        printf "%-15s %-10s %s\n" "$adapter_name" "⚠️  missing" "Not found in PATH"
       fi
     fi
   done
@@ -670,17 +677,37 @@ cmd_adapter() {
 
 # Config command
 cmd_config() {
-  local action="${1:-get}"
-  local key="$2"
-  local value="$3"
   local scope="local"
+  local action="" key="" value=""
 
-  # Check for --global flag
-  if [ "$key" = "--global" ] || [ "$value" = "--global" ]; then
-    scope="global"
-    [ "$key" = "--global" ] && key="$3" && value="$4"
-    [ "$value" = "--global" ] && value="$4"
-  fi
+  # Parse args flexibly: action, key, value, and --global anywhere
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --global|global)
+        scope="global"
+        shift
+        ;;
+      get|set|unset)
+        action="$1"
+        shift
+        ;;
+      *)
+        if [ -z "$key" ]; then
+          key="$1"
+          shift
+        elif [ -z "$value" ] && [ "$action" = "set" ]; then
+          value="$1"
+          shift
+        else
+          # Unknown extra token
+          shift
+        fi
+        ;;
+    esac
+  done
+
+  # Default action is get
+  action="${action:-get}"
 
   case "$action" in
     get)
@@ -696,7 +723,7 @@ cmd_config() {
         exit 1
       fi
       cfg_set "$key" "$value" "$scope"
-      log_info "Config set: $key = $value"
+      log_info "Config set: $key = $value ($scope)"
       ;;
     unset)
       if [ -z "$key" ]; then
@@ -704,7 +731,7 @@ cmd_config() {
         exit 1
       fi
       cfg_unset "$key" "$scope"
-      log_info "Config unset: $key"
+      log_info "Config unset: $key ($scope)"
       ;;
     *)
       log_error "Unknown config action: $action"

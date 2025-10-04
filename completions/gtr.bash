@@ -28,27 +28,13 @@ _gtr_completion() {
           rm)
             COMPREPLY=($(compgen -W "--delete-branch --force --yes" -- "$cur"))
             ;;
-          open)
-            COMPREPLY=($(compgen -W "--editor" -- "$cur"))
-            ;;
-          ai)
-            COMPREPLY=($(compgen -W "--tool" -- "$cur"))
-            ;;
         esac
-      elif [ "$prev" = "--editor" ]; then
-        COMPREPLY=($(compgen -W "cursor vscode zed" -- "$cur"))
-      elif [ "$prev" = "--tool" ]; then
-        COMPREPLY=($(compgen -W "aider claudecode codex cursor continue" -- "$cur"))
       fi
       ;;
     new)
       # Complete flags
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--id --from --track --editor --ai --no-copy --no-fetch --yes" -- "$cur"))
-      elif [ "$prev" = "--editor" ]; then
-        COMPREPLY=($(compgen -W "cursor vscode zed" -- "$cur"))
-      elif [ "$prev" = "--ai" ]; then
-        COMPREPLY=($(compgen -W "aider claudecode codex cursor continue" -- "$cur"))
+        COMPREPLY=($(compgen -W "--id --from --track --no-copy --no-fetch --yes" -- "$cur"))
       elif [ "$prev" = "--track" ]; then
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
       fi

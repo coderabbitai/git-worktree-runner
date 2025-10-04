@@ -39,8 +39,6 @@ _gtr() {
           '--id[Worktree ID]:id:' \
           '--from[Base ref]:ref:' \
           '--track[Track mode]:mode:(auto remote local none)' \
-          '--editor[Editor]:editor:(cursor vscode zed)' \
-          '--ai[AI tool]:tool:(aider claudecode codex cursor continue)' \
           '--no-copy[Skip file copying]' \
           '--no-fetch[Skip git fetch]' \
           '--yes[Non-interactive mode]'
@@ -51,14 +49,6 @@ _gtr() {
     esac
   elif (( CURRENT >= 4 )); then
     case "$words[2]" in
-      open)
-        _arguments \
-          '--editor[Editor]:editor:(cursor vscode zed)'
-        ;;
-      ai)
-        _arguments \
-          '--tool[AI tool]:tool:(aider claudecode codex cursor continue)'
-        ;;
       rm)
         _arguments \
           '--delete-branch[Delete branch]' \
