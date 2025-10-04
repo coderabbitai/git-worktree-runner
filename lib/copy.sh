@@ -23,11 +23,19 @@ copy_patterns() {
   old_pwd=$(pwd)
   cd "$src_root" || return 1
 
-  # Enable globstar for ** patterns (Bash 4.0+)
+  # Save current shell options
+  local shopt_save
+  shopt_save="$(shopt -p nullglob dotglob globstar 2>/dev/null || true)"
+
+  # Try to enable globstar for ** patterns (Bash 4.0+)
   # nullglob: patterns that don't match expand to nothing
   # dotglob: * matches hidden files
   # globstar: ** matches directories recursively
-  shopt -s nullglob dotglob globstar
+  local have_globstar=0
+  if shopt -s globstar 2>/dev/null; then
+    have_globstar=1
+  fi
+  shopt -s nullglob dotglob 2>/dev/null || true
 
   local copied_count=0
 
@@ -35,60 +43,119 @@ copy_patterns() {
   while IFS= read -r pattern; do
     [ -z "$pattern" ] && continue
 
-    # Use native Bash glob expansion (supports **)
-    for file in $pattern; do
-      # Skip if not a file
-      [ -f "$file" ] || continue
+    # Security: reject absolute paths and parent directory escapes
+    case "$pattern" in
+      /*|*..*)
+        log_warn "Skipping unsafe pattern (absolute path or '..'): $pattern"
+        continue
+        ;;
+    esac
 
-      # Remove leading ./
-      file="${file#./}"
+    # Detect if pattern uses ** (requires globstar)
+    if [ "$have_globstar" -eq 0 ] && echo "$pattern" | grep -q '\*\*'; then
+      # Fallback to find for ** patterns on Bash 3.2
+      while IFS= read -r file; do
+        # Remove leading ./
+        file="${file#./}"
 
-      # Check if file matches any exclude pattern
-      local excluded=0
-      if [ -n "$excludes" ]; then
-        while IFS= read -r exclude_pattern; do
-          [ -z "$exclude_pattern" ] && continue
-          case "$file" in
-            $exclude_pattern)
-              excluded=1
-              break
-              ;;
-          esac
-        done <<EOF
+        # Check if file matches any exclude pattern
+        local excluded=0
+        if [ -n "$excludes" ]; then
+          while IFS= read -r exclude_pattern; do
+            [ -z "$exclude_pattern" ] && continue
+            case "$file" in
+              $exclude_pattern)
+                excluded=1
+                break
+                ;;
+            esac
+          done <<EOF
 $excludes
 EOF
-      fi
+        fi
 
-      # Skip if excluded
-      [ "$excluded" -eq 1 ] && continue
+        # Skip if excluded
+        [ "$excluded" -eq 1 ] && continue
 
-      # Determine destination path
-      local dest_file
-      if [ "$preserve_paths" = "true" ]; then
-        dest_file="$dst_root/$file"
-      else
-        dest_file="$dst_root/$(basename "$file")"
-      fi
+        # Determine destination path
+        local dest_file
+        if [ "$preserve_paths" = "true" ]; then
+          dest_file="$dst_root/$file"
+        else
+          dest_file="$dst_root/$(basename "$file")"
+        fi
 
-      # Create destination directory
-      local dest_dir
-      dest_dir=$(dirname "$dest_file")
-      mkdir -p "$dest_dir"
+        # Create destination directory
+        local dest_dir
+        dest_dir=$(dirname "$dest_file")
+        mkdir -p "$dest_dir"
 
-      # Copy the file
-      if cp "$file" "$dest_file" 2>/dev/null; then
-        log_info "Copied $file"
-        copied_count=$((copied_count + 1))
-      else
-        log_warn "Failed to copy $file"
-      fi
-    done
+        # Copy the file
+        if cp "$file" "$dest_file" 2>/dev/null; then
+          log_info "Copied $file"
+          copied_count=$((copied_count + 1))
+        else
+          log_warn "Failed to copy $file"
+        fi
+      done <<EOF
+$(find . -path "./$pattern" -type f 2>/dev/null)
+EOF
+    else
+      # Use native Bash glob expansion (supports ** if available)
+      for file in $pattern; do
+        # Skip if not a file
+        [ -f "$file" ] || continue
+
+        # Remove leading ./
+        file="${file#./}"
+
+        # Check if file matches any exclude pattern
+        local excluded=0
+        if [ -n "$excludes" ]; then
+          while IFS= read -r exclude_pattern; do
+            [ -z "$exclude_pattern" ] && continue
+            case "$file" in
+              $exclude_pattern)
+                excluded=1
+                break
+                ;;
+            esac
+          done <<EOF
+$excludes
+EOF
+        fi
+
+        # Skip if excluded
+        [ "$excluded" -eq 1 ] && continue
+
+        # Determine destination path
+        local dest_file
+        if [ "$preserve_paths" = "true" ]; then
+          dest_file="$dst_root/$file"
+        else
+          dest_file="$dst_root/$(basename "$file")"
+        fi
+
+        # Create destination directory
+        local dest_dir
+        dest_dir=$(dirname "$dest_file")
+        mkdir -p "$dest_dir"
+
+        # Copy the file
+        if cp "$file" "$dest_file" 2>/dev/null; then
+          log_info "Copied $file"
+          copied_count=$((copied_count + 1))
+        else
+          log_warn "Failed to copy $file"
+        fi
+      done
+    fi
   done <<EOF
 $includes
 EOF
 
-  # Restore previous glob settings
-  shopt -u nullglob dotglob globstar
+  # Restore previous shell options
+  eval "$shopt_save" 2>/dev/null || true
 
   cd "$old_pwd" || return 1
 

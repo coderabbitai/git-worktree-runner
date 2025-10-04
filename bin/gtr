@@ -465,7 +465,9 @@ cmd_list() {
   if [ "$porcelain" -eq 1 ]; then
     # Always include ID 1 (repo root)
     local branch
+    # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
     branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
+    [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
     [ -z "$branch" ] && branch="(detached)"
     printf "%s\t%s\t%s\t%s\n" "1" "$repo_root" "$branch" "ok"
 
@@ -490,7 +492,9 @@ cmd_list() {
 
   # Always show repo root as ID 1
   local branch
+  # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
   branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
+  [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
   [ -z "$branch" ] && branch="(detached)"
   printf "%-6s %-25s %s\n" "1" "$branch" "$repo_root"
 
@@ -530,16 +534,20 @@ cmd_clean() {
 
   # Find and remove empty directories
   local cleaned=0
-  find "$base_dir" -maxdepth 1 -type d -empty 2>/dev/null | while IFS= read -r dir; do
+  while IFS= read -r dir; do
     if [ "$dir" != "$base_dir" ]; then
       if rmdir "$dir" 2>/dev/null; then
         cleaned=$((cleaned + 1))
         log_info "Removed empty directory: $(basename "$dir")"
       fi
     fi
-  done
+  done < <(find "$base_dir" -maxdepth 1 -type d -empty 2>/dev/null)
 
-  log_info "✅ Cleanup complete"
+  if [ "$cleaned" -gt 0 ]; then
+    log_info "✅ Cleanup complete ($cleaned director$([ "$cleaned" -eq 1 ] && echo 'y' || echo 'ies') removed)"
+  else
+    log_info "✅ Cleanup complete (no empty directories found)"
+  fi
 }
 
 # Doctor command (health check)

@@ -21,21 +21,22 @@ run_hooks() {
   local hook_count=0
   local failed=0
 
-  # Export provided environment variables
+  # Build export commands for environment variables
+  local exports=""
   while [ $# -gt 0 ]; do
-    export "$1"
+    exports="$exports export $1;"
     shift
   done
 
-  # Execute each hook (without subshell to preserve state)
+  # Execute each hook in a subshell to isolate side effects
   while IFS= read -r hook; do
     [ -z "$hook" ] && continue
 
     hook_count=$((hook_count + 1))
     log_info "Hook $hook_count: $hook"
 
-    # Run hook and capture exit code
-    if eval "$hook"; then
+    # Run hook in subshell with exports, capture exit code
+    if ( eval "$exports $hook" ); then
       log_info "Hook $hook_count completed successfully"
     else
       local rc=$?

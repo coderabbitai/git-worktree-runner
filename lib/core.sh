@@ -92,12 +92,19 @@ next_available_id() {
 # Usage: current_branch worktree_path
 current_branch() {
   local worktree_path="$1"
+  local branch
 
   if [ ! -d "$worktree_path" ]; then
     return 1
   fi
 
-  (cd "$worktree_path" && git branch --show-current 2>/dev/null) || true
+  # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
+  branch=$(cd "$worktree_path" && git branch --show-current 2>/dev/null)
+  if [ -z "$branch" ]; then
+    branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  fi
+
+  printf "%s" "$branch"
 }
 
 # Resolve a worktree target from ID or branch name
@@ -119,7 +126,9 @@ resolve_target() {
     if [ "$id" = "1" ]; then
       # ID 1 is always the repo root
       path="$repo_root"
+      # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
       branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
+      [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
       printf "%s\t%s\t%s\n" "$id" "$path" "$branch"
       return 0
     fi
@@ -136,7 +145,9 @@ resolve_target() {
   else
     # Branch name - search for matching worktree
     # First check if it's the current branch in repo root
+    # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
     branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
+    [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
     if [ "$branch" = "$identifier" ]; then
       printf "1\t%s\t%s\n" "$repo_root" "$identifier"
       return 0
