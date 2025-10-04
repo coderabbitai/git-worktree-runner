@@ -83,10 +83,19 @@ source ~/.zshrc
 
 ### Shell Completions (Optional)
 
-**Bash:**
+**Bash** (requires `bash-completion` v2):
 
 ```bash
+# Install bash-completion first (if not already installed)
+# macOS:
+brew install bash-completion@2
+
+# Ubuntu/Debian:
+sudo apt install bash-completion
+
+# Then enable gtr completions:
 echo 'source /path/to/git-worktree-runner/completions/gtr.bash' >> ~/.bashrc
+source ~/.bashrc
 ```
 
 **Zsh:**
