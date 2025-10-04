@@ -23,14 +23,23 @@ copy_patterns() {
   old_pwd=$(pwd)
   cd "$src_root" || return 1
 
+  # Enable globstar for ** patterns (Bash 4.0+)
+  # nullglob: patterns that don't match expand to nothing
+  # dotglob: * matches hidden files
+  # globstar: ** matches directories recursively
+  shopt -s nullglob dotglob globstar
+
   local copied_count=0
 
   # Process each include pattern (avoid pipeline subshell)
   while IFS= read -r pattern; do
     [ -z "$pattern" ] && continue
 
-    # Find files matching the pattern (avoid pipeline subshell)
-    while IFS= read -r file; do
+    # Use native Bash glob expansion (supports **)
+    for file in $pattern; do
+      # Skip if not a file
+      [ -f "$file" ] || continue
+
       # Remove leading ./
       file="${file#./}"
 
@@ -73,12 +82,13 @@ EOF
       else
         log_warn "Failed to copy $file"
       fi
-    done <<EOF
-$(find . -path "./$pattern" -type f 2>/dev/null)
-EOF
+    done
   done <<EOF
 $includes
 EOF
+
+  # Restore previous glob settings
+  shopt -u nullglob dotglob globstar
 
   cd "$old_pwd" || return 1
 

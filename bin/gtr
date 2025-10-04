@@ -7,8 +7,18 @@ set -e
 # Version
 GTR_VERSION="1.0.0"
 
-# Find the script directory
-GTR_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# Find the script directory (resolve symlinks; allow env override)
+resolve_script_dir() {
+  local src="${BASH_SOURCE[0]}"
+  while [ -h "$src" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    [[ $src != /* ]] && src="$dir/$src"
+  done
+  cd -P "$(dirname "$src")/.." && pwd
+}
+: "${GTR_DIR:=$(resolve_script_dir)}"
 
 # Source library files
 . "$GTR_DIR/lib/ui.sh"

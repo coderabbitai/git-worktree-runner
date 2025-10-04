@@ -51,12 +51,12 @@ git-worktree-runner/
 
 #### Shell Script Best Practices
 
-- **POSIX compliance**: Write POSIX-compatible shell code (use `#!/bin/sh`)
+- **Bash requirement**: All scripts use Bash (use `#!/usr/bin/env bash`)
 - **Set strict mode**: Use `set -e` to exit on errors
 - **Quote variables**: Always quote variables: `"$var"`
 - **Use local variables**: Declare function-local vars with `local`
 - **Error handling**: Check return codes and provide clear error messages
-- **No bashisms**: Avoid bash-specific features unless absolutely necessary
+- **Target Bash 3.2+**: Code runs on Bash 3.2+ (macOS default), but Bash 4.0+ features (like globstar) are allowed where appropriate
 
 #### Code Style
 
@@ -69,8 +69,8 @@ git-worktree-runner/
 
 #### Example:
 
-```sh
-#!/bin/sh
+```bash
+#!/usr/bin/env bash
 # Brief description of what this file does
 
 # Function description
@@ -94,8 +94,8 @@ do_something() {
 
 1. Create `adapters/editor/yourname.sh`:
 
-```sh
-#!/bin/sh
+```bash
+#!/usr/bin/env bash
 # YourEditor adapter
 
 editor_can_open() {
@@ -122,8 +122,8 @@ editor_open() {
 
 1. Create `adapters/ai/yourtool.sh`:
 
-```sh
-#!/bin/sh
+```bash
+#!/usr/bin/env bash
 # YourTool AI adapter
 
 ai_can_start() {
@@ -207,6 +207,7 @@ Currently, testing is manual. Please test your changes on:
 ```
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -215,6 +216,7 @@ Currently, testing is manual. Please test your changes on:
 - `chore`: Maintenance tasks
 
 **Examples:**
+
 ```
 feat: add JetBrains IDE adapter
 
