@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Repository-scoped worktrees** - Each git repo has independent worktrees and IDs
 - **Auto-ID allocation** - Worktrees auto-assigned starting from configurable `gtr.worktrees.startId` (default: 2)
 - **Branch-name-first UX** - All commands accept either numeric IDs or branch names (`gtr open my-feature`)
-- **Auto-open/Auto-AI on create** - When `gtr.editor.default` or `gtr.ai.default` are configured, `gtr new` automatically opens the editor and/or starts AI tool
+- **Explicit command design** - Each command does one thing (`new` creates, `open` opens, `ai` starts AI). No auto-behavior or override flags
+- **Config-based defaults** - Set `gtr.editor.default` and `gtr.ai.default` once, use everywhere without flags
 - **Editor adapters** - Support for Cursor, VS Code, and Zed
 - **AI tool adapters** - Support for Aider, Claude Code, Continue, Codex, and Cursor AI
 - **Smart file copying** - Selectively copy files to new worktrees via `gtr.copy.include` and `gtr.copy.exclude` globs

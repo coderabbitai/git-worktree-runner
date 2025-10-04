@@ -114,32 +114,40 @@ ln -s /path/to/git-worktree-runner/completions/gtr.fish ~/.config/fish/completio
 
 **Prerequisites:** `cd` into a git repository first.
 
-**Basic workflow (no flags needed):**
+**Basic workflow:**
 ```bash
 # Navigate to your git repo
 cd ~/GitHub/my-project
 
 # One-time setup (per repository)
 gtr config set gtr.editor.default cursor
-gtr config set gtr.ai.default aider
+gtr config set gtr.ai.default claude
 
-# Daily use - simple, no flags
-gtr new my-feature          # Create worktree (auto-opens in cursor)
-gtr list                    # See all worktrees in this repo
-gtr open my-feature         # Open in cursor again if needed
-gtr ai my-feature           # Start aider (from config)
-cd "$(gtr go my-feature)"   # Navigate to worktree
-gtr rm my-feature           # Remove when done
+# Daily workflow - explicit commands
+gtr new my-feature          # Create worktree
+gtr open my-feature         # Open in cursor (from config)
+gtr ai my-feature           # Start claude (from config)
+
+# Or chain them together
+gtr new my-feature && gtr open my-feature && gtr ai my-feature
+
+# Navigate to worktree
+cd "$(gtr go my-feature)"
+
+# List all worktrees
+gtr list
+
+# Remove when done
+gtr rm my-feature
 ```
 
-**Advanced examples:**
+**Advanced:**
 ```bash
-# Override defaults
-gtr open 2 --editor vscode
+# Create from specific ref
 gtr new hotfix --from v1.2.3 --id 99
 
-# Destructive operations
-gtr rm 2 --delete-branch --force
+# Remove with branch deletion
+gtr rm my-feature --delete-branch --force
 ```
 
 ## Commands
@@ -155,8 +163,6 @@ Options (all optional):
   --id <n>             Specific worktree ID (rarely needed)
   --from <ref>         Create from specific ref (default: main/master)
   --track <mode>       Track mode: auto|remote|local|none
-  --editor <name>      Override default editor
-  --ai <tool>          Override default AI tool
   --no-copy            Skip file copying
   --no-fetch           Skip git fetch
   --yes                Non-interactive mode
@@ -168,41 +174,30 @@ Options (all optional):
 # Create worktree (auto-assigns ID)
 gtr new my-feature
 
-# Specific ID and branch
-gtr new feature-x --id 2
-
 # Create from specific ref
 gtr new hotfix --from v1.2.3
 
-# Create and open in Cursor
-gtr new ui --editor cursor
-
-# Create and start Aider
-gtr new refactor --ai aider
+# Then open and start AI
+gtr open hotfix
+gtr ai hotfix
 ```
 
 ### `gtr open`
 
-Open a worktree in an editor or file browser. Accepts either ID or branch name.
+Open a worktree in an editor. Uses `gtr.editor.default` from config.
 
 ```bash
-gtr open <id|branch> [options]
-
-Options:
-  --editor <name>  Editor: cursor, vscode, zed
+gtr open <id|branch>
 ```
 
 **Examples:**
 
 ```bash
-# Open by ID (uses default editor from config)
+# Open by ID (uses gtr.editor.default)
 gtr open 2
 
-# Open by branch name with specific editor
-gtr open my-feature --editor cursor
-
-# Override default editor
-gtr open 2 --editor zed
+# Open by branch name
+gtr open my-feature
 ```
 
 ### `gtr go`
@@ -225,27 +220,23 @@ cd "$(gtr go my-feature)"
 
 ### `gtr ai`
 
-Start an AI coding tool in a worktree. Accepts either ID or branch name.
+Start an AI coding tool in a worktree. Uses `gtr.ai.default` from config.
 
 ```bash
-gtr ai <id|branch> [options] [-- args...]
-
-Options:
-  --tool <name>  AI tool: aider, claudecode, etc.
-  --             Pass remaining args to tool
+gtr ai <id|branch> [-- args...]
 ```
 
 **Examples:**
 
 ```bash
-# Start default AI tool by ID (uses gtr.ai.default)
+# Start AI tool by ID (uses gtr.ai.default)
 gtr ai 2
 
-# Start by branch name with specific tool
-gtr ai my-feature --tool aider
+# Start by branch name
+gtr ai my-feature
 
-# Start Aider with specific model
-gtr ai 2 --tool aider -- --model gpt-5
+# Pass arguments to the AI tool
+gtr ai my-feature -- --model gpt-4
 ```
 
 ### `gtr rm`
@@ -351,30 +342,34 @@ gtr.editor.default = cursor
 ### AI Tool Settings
 
 ```bash
-# Default AI tool: none (or aider, claudecode, codex, cursor, continue)
+# Default AI tool: none (or aider, claude, codex, cursor, continue)
 gtr.ai.default = none
 ```
 
 **Supported AI Tools:**
 
-| Tool                                              | Install                                           | Use Case                             | Command Example                        |
-| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------ | -------------------------------------- |
-| **[Aider](https://aider.chat)**                   | `pip install aider-chat`                          | Pair programming, edit files with AI | `gtr ai 2 --tool aider`                |
-| **[Claude Code](https://claude.com/claude-code)** | Install from claude.com                           | Terminal-native coding agent         | `gtr ai 2 --tool claudecode`           |
-| **[Codex CLI](https://github.com/openai/codex)**  | `npm install -g @openai/codex`                    | OpenAI coding assistant              | `gtr ai 2 --tool codex -- "add tests"` |
-| **[Cursor](https://cursor.com)**                  | Install from cursor.com                           | AI-powered editor with CLI agent     | `gtr ai 2 --tool cursor`               |
-| **[Continue](https://continue.dev)**              | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent             | `gtr ai 2 --tool continue`             |
+| Tool                                              | Install                                           | Use Case                             | Set as Default                        |
+| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------ | ------------------------------------- |
+| **[Aider](https://aider.chat)**                   | `pip install aider-chat`                          | Pair programming, edit files with AI | `gtr config set gtr.ai.default aider` |
+| **[Claude Code](https://claude.com/claude-code)** | Install from claude.com                           | Terminal-native coding agent         | `gtr config set gtr.ai.default claude` |
+| **[Codex CLI](https://github.com/openai/codex)**  | `npm install -g @openai/codex`                    | OpenAI coding assistant              | `gtr config set gtr.ai.default codex` |
+| **[Cursor](https://cursor.com)**                  | Install from cursor.com                           | AI-powered editor with CLI agent     | `gtr config set gtr.ai.default cursor` |
+| **[Continue](https://continue.dev)**              | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent             | `gtr config set gtr.ai.default continue` |
 
 **Examples:**
 
 ```bash
-# Set default AI tool globally
-gtr config set gtr.ai.default aider --global
+# Set default AI tool for this repo
+gtr config set gtr.ai.default claude
 
-# Use specific tools per worktree
-gtr ai auth-feature --tool claudecode -- --plan "refactor auth"
-gtr ai ui-redesign --tool aider -- --model gpt-5
-gtr ai performance --tool continue -- --headless
+# Or set globally for all repos
+gtr config set gtr.ai.default claude --global
+
+# Then just use gtr ai
+gtr ai my-feature
+
+# Pass arguments to the tool
+gtr ai my-feature -- --plan "refactor auth"
 ```
 
 ### File Copying
@@ -466,7 +461,7 @@ git config --local --add gtr.hook.postCreate "pnpm run build"
 ```bash
 # Set global preferences
 git config --global gtr.editor.default cursor
-git config --global gtr.ai.default aider
+git config --global gtr.ai.default claude
 git config --global gtr.worktrees.startId 2
 ```
 
@@ -476,10 +471,12 @@ git config --global gtr.worktrees.startId 2
 
 ```bash
 # Terminal 1: Work on feature
-gtr new feature-a --id 2 --editor cursor
+gtr new feature-a --id 2
+gtr open feature-a
 
 # Terminal 2: Review PR
-gtr new pr/123 --id 3 --editor cursor
+gtr new pr/123 --id 3
+gtr open pr/123
 
 # Terminal 3: Navigate to main branch (repo root)
 cd "$(gtr go 1)"  # ID 1 is always the repo root
@@ -578,8 +575,8 @@ command -v cursor  # or: code, zed
 # Check configuration
 gtr config get gtr.editor.default
 
-# Try opening manually
-gtr open 2 --editor cursor
+# Try opening again
+gtr open 2
 ```
 
 ### File Copying Issues

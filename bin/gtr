@@ -74,8 +74,6 @@ cmd_create() {
   local branch_name=""
   local from_ref=""
   local track_mode="auto"
-  local editor=""
-  local ai_tool=""
   local explicit_id=0
   local skip_copy=0
   local skip_fetch=0
@@ -96,30 +94,6 @@ cmd_create() {
       --track)
         track_mode="$2"
         shift 2
-        ;;
-      --editor)
-        case "${2-}" in
-          --*|"")
-            editor="$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT none)"
-            shift 1
-            ;;
-          *)
-            editor="$2"
-            shift 2
-            ;;
-        esac
-        ;;
-      --ai)
-        case "${2-}" in
-          --*|"")
-            ai_tool="$(cfg_default gtr.ai.default GTR_AI_DEFAULT none)"
-            shift 1
-            ;;
-          *)
-            ai_tool="$2"
-            shift 2
-            ;;
-        esac
         ;;
       --no-copy)
         skip_copy=1
@@ -209,39 +183,13 @@ cmd_create() {
     WORKTREE_PATH="$worktree_path" \
     BRANCH="$branch_name"
 
-  # Open in editor if requested or if default is configured
-  if [ -z "$editor" ]; then
-    # No explicit --editor flag, check for default
-    editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
-  fi
-
-  if [ -n "$editor" ] && [ "$editor" != "none" ]; then
-    load_editor_adapter "$editor"
-    if editor_can_open; then
-      log_step "Opening in $editor..."
-      editor_open "$worktree_path"
-    fi
-  fi
-
-  # Start AI tool if requested or if default is configured
-  if [ -z "$ai_tool" ]; then
-    # No explicit --ai flag, check for default
-    ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none")
-  fi
-
-  if [ -n "$ai_tool" ] && [ "$ai_tool" != "none" ]; then
-    load_ai_adapter "$ai_tool"
-    if ai_can_start; then
-      log_step "Starting $ai_tool..."
-      ai_start "$worktree_path"
-    fi
-  fi
-
   echo ""
-  log_info "Worktree created successfully!"
-  echo "🎯 Navigate with: cd $worktree_path"
-  echo "📂 Open with: gtr open $worktree_id"
-  echo "🤖 Start AI with: gtr ai $worktree_id"
+  log_info "Worktree created: $worktree_path"
+  echo ""
+  echo "Next steps:"
+  echo "  gtr open $branch_name    # Open in editor"
+  echo "  gtr ai $branch_name      # Start AI tool"
+  echo "  cd \"\$(gtr go $branch_name)\"  # Navigate to worktree"
 }
 
 # Remove command
@@ -363,36 +311,16 @@ cmd_go() {
 
 # Open command
 cmd_open() {
-  local editor=""
-  local identifier=""
-
-  # Parse arguments
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --editor)
-        editor="$2"
-        shift 2
-        ;;
-      -*)
-        log_error "Unknown flag: $1"
-        exit 1
-        ;;
-      *)
-        identifier="$1"
-        shift
-        ;;
-    esac
-  done
-
-  if [ -z "$identifier" ]; then
-    log_error "Usage: gtr open <id|branch> [--editor <editor>]"
+  if [ $# -ne 1 ]; then
+    log_error "Usage: gtr open <id|branch>"
     exit 1
   fi
 
-  # Get editor from config if not specified
-  if [ -z "$editor" ]; then
-    editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
-  fi
+  local identifier="$1"
+
+  # Get editor from config
+  local editor
+  editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
 
   local repo_root base_dir prefix
   repo_root=$(discover_repo_root) || exit 1
@@ -420,17 +348,12 @@ cmd_open() {
 
 # AI command
 cmd_ai() {
-  local ai_tool=""
   local identifier=""
   local ai_args=""
 
   # Parse arguments
   while [ $# -gt 0 ]; do
     case "$1" in
-      --tool)
-        ai_tool="$2"
-        shift 2
-        ;;
       --)
         shift
         ai_args="$*"
@@ -450,20 +373,18 @@ cmd_ai() {
   done
 
   if [ -z "$identifier" ]; then
-    log_error "Usage: gtr ai <id|branch> [--tool <tool>] [-- args...]"
+    log_error "Usage: gtr ai <id|branch> [-- args...]"
     exit 1
   fi
 
-  # Get AI tool from config if not specified
-  if [ -z "$ai_tool" ]; then
-    ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none")
-  fi
+  # Get AI tool from config
+  local ai_tool
+  ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none")
 
   # Check if AI tool is configured
   if [ "$ai_tool" = "none" ]; then
     log_error "No AI tool configured"
-    log_info "Set default: gtr config set gtr.ai.default aider"
-    log_info "Or use: gtr ai $identifier --tool aider"
+    log_info "Set default: gtr config set gtr.ai.default claude"
     exit 1
   fi
 
@@ -814,7 +735,7 @@ load_ai_adapter() {
 
   if [ ! -f "$adapter_file" ]; then
     log_error "Unknown AI tool: $ai_tool"
-    log_info "Available AI tools: aider, claudecode, codex, cursor, continue"
+    log_info "Available AI tools: aider, claude, codex, cursor, continue"
     exit 1
   fi
 
@@ -838,8 +759,6 @@ COMMANDS:
          --id <n>: specify exact ID (rarely needed)
          --from <ref>: create from specific ref
          --track <mode>: tracking mode (auto|remote|local|none)
-         --editor <name>: override default editor
-         --ai <tool>: override default AI tool
          --no-copy: skip file copying
          --no-fetch: skip git fetch
          --yes: non-interactive mode
@@ -848,15 +767,13 @@ COMMANDS:
          Navigate to worktree (prints path for: cd "$(gtr go 2)")
          Accepts either numeric ID or branch name
 
-  open <id|branch> [--editor <name>]
-         Open worktree in editor or file browser
-         Uses gtr.editor.default if not specified
+  open <id|branch>
+         Open worktree in editor (uses gtr.editor.default)
 
-  ai <id|branch> [--tool <name>] [-- args...]
-         Start AI coding tool in worktree
-         Uses gtr.ai.default if not specified
+  ai <id|branch> [-- args...]
+         Start AI coding tool in worktree (uses gtr.ai.default)
 
-  rm <id> [<id>...] [options]
+  rm <id|branch> [<id|branch>...] [options]
          Remove worktree(s)
          --delete-branch: also delete the branch
          --force: force removal (dirty worktree)
@@ -887,31 +804,26 @@ EXAMPLES:
   # Navigate to your git repo first
   cd ~/GitHub/my-project
 
-  # Simplest: create with branch name (auto-assigns ID)
-  gtr new my-feature
-
   # Configure defaults (one-time setup per repo)
   gtr config set gtr.editor.default cursor
-  gtr config set gtr.ai.default aider
+  gtr config set gtr.ai.default claude
 
-  # Then use without flags (uses defaults)
-  gtr open 2          # Opens in cursor (from config)
-  gtr ai 2            # Starts aider (from config)
+  # Typical workflow: create, open, start AI
+  gtr new my-feature
+  gtr open my-feature
+  gtr ai my-feature
 
-  # Or override defaults
-  gtr open my-feature --editor vscode
-  gtr ai my-feature --tool claudecode
+  # Or chain them together
+  gtr new my-feature && gtr open my-feature && gtr ai my-feature
 
-  # Navigate by ID or branch name
-  gtr go 2
-  gtr go my-feature
+  # Navigate to worktree
   cd "$(gtr go my-feature)"
 
-  # Create and open in editor
-  gtr new ui-update --editor cursor --ai aider
+  # List all worktrees
+  gtr list
 
-  # Remove with branch deletion
-  gtr rm 2 --delete-branch --yes
+  # Remove when done
+  gtr rm my-feature --delete-branch
 
   # Health check
   gtr doctor
@@ -922,7 +834,7 @@ CONFIGURATION:
   gtr.worktrees.startId    Starting ID (default: 2)
   gtr.defaultBranch        Default branch (default: auto)
   gtr.editor.default       Default editor (cursor, vscode, zed, none)
-  gtr.ai.default           Default AI tool (aider, claudecode, codex, cursor, continue, none)
+  gtr.ai.default           Default AI tool (aider, claude, codex, cursor, continue, none)
   gtr.copy.include         Files to copy (multi-valued)
   gtr.copy.exclude         Files to exclude (multi-valued)
   gtr.hook.postCreate      Post-create hooks (multi-valued)
