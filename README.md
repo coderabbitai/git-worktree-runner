@@ -74,7 +74,7 @@ While `git worktree` is powerful, it requires remembering paths and manually set
 
 ```bash
 # Clone the repository
-git clone https://github.com/anthropics/git-worktree-runner.git
+git clone https://github.com/coderabbitai/git-worktree-runner.git
 cd git-worktree-runner
 
 # Add to PATH (choose one)
@@ -656,4 +656,4 @@ Built to streamline parallel development workflows with git worktrees. Inspired 
 
 **Happy coding with worktrees! 🚀**
 
-For questions or issues, please [open an issue](https://github.com/anthropics/git-worktree-runner/issues).
+For questions or issues, please [open an issue](https://github.com/coderabbitai/git-worktree-runner/issues).

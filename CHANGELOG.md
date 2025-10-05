@@ -39,4 +39,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Adapter pattern** - Pluggable editor and AI tool integrations
 - **Stream separation** - Data to stdout, messages to stderr for composability
 
-[1.0.0]: https://github.com/anthropics/git-worktree-runner/releases/tag/v1.0.0
+[1.0.0]: https://github.com/coderabbitai/git-worktree-runner/releases/tag/v1.0.0

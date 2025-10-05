@@ -963,7 +963,7 @@ CONFIGURATION OPTIONS:
 
 ────────────────────────────────────────────────────────────────────────────────
 
-MORE INFO: https://github.com/anthropics/git-worktree-runner
+MORE INFO: https://github.com/coderabbitai/git-worktree-runner
 EOF
 }
 
