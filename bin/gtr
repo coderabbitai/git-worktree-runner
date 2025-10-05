@@ -536,14 +536,21 @@ cmd_clean() {
 
   # Find and remove empty directories
   local cleaned=0
-  while IFS= read -r dir; do
-    if [ "$dir" != "$base_dir" ]; then
-      if rmdir "$dir" 2>/dev/null; then
-        cleaned=$((cleaned + 1))
-        log_info "Removed empty directory: $(basename "$dir")"
+  local empty_dirs
+  empty_dirs=$(find "$base_dir" -maxdepth 1 -type d -empty 2>/dev/null | grep -v "^${base_dir}$" || true)
+
+  if [ -n "$empty_dirs" ]; then
+    while IFS= read -r dir; do
+      if [ -n "$dir" ]; then
+        if rmdir "$dir" 2>/dev/null; then
+          cleaned=$((cleaned + 1))
+          log_info "Removed empty directory: $(basename "$dir")"
+        fi
       fi
-    fi
-  done < <(find "$base_dir" -maxdepth 1 -type d -empty 2>/dev/null)
+    done <<EOF
+$empty_dirs
+EOF
+  fi
 
   if [ "$cleaned" -gt 0 ]; then
     log_info "✅ Cleanup complete ($cleaned director$([ "$cleaned" -eq 1 ] && echo 'y' || echo 'ies') removed)"
