@@ -66,7 +66,7 @@ While `git worktree` is powerful, it requires remembering paths and manually set
 ## Requirements
 
 - **Git** 2.5+ (for `git worktree` support)
-- **Bash** 4.0+ (standard on macOS, Linux, and Windows Git Bash)
+- **Bash** 3.2+ (macOS ships 3.2; 4.0+ recommended for advanced features)
 
 ## Installation
 

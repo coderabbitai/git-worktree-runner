@@ -167,8 +167,8 @@ cmd_create() {
   worktree_path="$base_dir/${prefix}${worktree_id}"
 
   log_step "Creating worktree: ${prefix}${worktree_id}"
-  echo "📂 Location: $worktree_path"
-  echo "🌿 Branch: $branch_name"
+  echo "Location: $worktree_path"
+  echo "Branch: $branch_name"
 
   # Create the worktree
   if ! create_worktree "$base_dir" "$prefix" "$worktree_id" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch"; then
@@ -309,11 +309,11 @@ cmd_go() {
 
   # Human messages to stderr so stdout can be used in command substitution
   if [ "$worktree_id" = "1" ]; then
-    echo "📂 Repo root (id 1)" >&2
+    echo "Repo root (id 1)" >&2
   else
-    echo "📂 Worktree ${prefix}${worktree_id}" >&2
+    echo "Worktree ${prefix}${worktree_id}" >&2
   fi
-  echo "🌿 Branch: $branch" >&2
+  echo "Branch: $branch" >&2
 
   # Print path to stdout for shell integration: cd "$(gtr go 2)"
   printf "%s\n" "$worktree_path"
@@ -359,14 +359,14 @@ cmd_open() {
 # AI command
 cmd_ai() {
   local identifier=""
-  local ai_args=""
+  local -a ai_args=()
 
   # Parse arguments
   while [ $# -gt 0 ]; do
     case "$1" in
       --)
         shift
-        ai_args="$*"
+        ai_args=("$@")
         break
         ;;
       -*)
@@ -414,11 +414,10 @@ cmd_ai() {
   branch=$(echo "$target" | cut -f3)
 
   log_step "Starting $ai_tool in worktree: ${prefix}${worktree_id}"
-  echo "📂 Directory: $worktree_path"
-  echo "🌿 Branch: $branch"
+  echo "Directory: $worktree_path"
+  echo "Branch: $branch"
 
-  # shellcheck disable=SC2086
-  ai_start "$worktree_path" $ai_args
+  ai_start "$worktree_path" "${ai_args[@]}"
 }
 
 # List command
@@ -468,7 +467,7 @@ cmd_list() {
     # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
     branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
     [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
-    [ -z "$branch" ] && branch="(detached)"
+    [ -z "$branch" ] || [ "$branch" = "HEAD" ] && branch="(detached)"
     status=$(worktree_status "$repo_root")
     printf "%s\t%s\t%s\t%s\n" "1" "$repo_root" "$branch" "$status"
 
@@ -487,7 +486,7 @@ cmd_list() {
   fi
 
   # Human-readable output - table format
-  echo "📋 Git Worktrees"
+  echo "Git Worktrees"
   echo ""
   printf "%-6s %-25s %s\n" "ID" "BRANCH" "PATH"
   printf "%-6s %-25s %s\n" "──" "──────" "────"
@@ -497,7 +496,7 @@ cmd_list() {
   # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
   branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
   [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
-  [ -z "$branch" ] && branch="(detached)"
+  [ -z "$branch" ] || [ "$branch" = "HEAD" ] && branch="(detached)"
   printf "%-6s %-25s %s\n" "1" "$branch" "$repo_root"
 
   # Show worktrees
@@ -512,7 +511,8 @@ cmd_list() {
   fi
 
   echo ""
-  echo "💡 Tip: Use 'gtr list --porcelain' for machine-readable output"
+  echo ""
+  echo "Tip: Use 'gtr list --porcelain' for machine-readable output"
 }
 
 # Clean command (remove prunable worktrees)
@@ -553,15 +553,15 @@ EOF
   fi
 
   if [ "$cleaned" -gt 0 ]; then
-    log_info "✅ Cleanup complete ($cleaned director$([ "$cleaned" -eq 1 ] && echo 'y' || echo 'ies') removed)"
+    log_info "Cleanup complete ($cleaned director$([ "$cleaned" -eq 1 ] && echo 'y' || echo 'ies') removed)"
   else
-    log_info "✅ Cleanup complete (no empty directories found)"
+    log_info "Cleanup complete (no empty directories found)"
   fi
 }
 
 # Doctor command (health check)
 cmd_doctor() {
-  echo "🏥 Running gtr health check..."
+  echo "Running gtr health check..."
   echo ""
 
   local issues=0
@@ -570,16 +570,16 @@ cmd_doctor() {
   if command -v git >/dev/null 2>&1; then
     local git_version
     git_version=$(git --version)
-    echo "✅ Git: $git_version"
+    echo "[OK] Git: $git_version"
   else
-    echo "❌ Git: not found"
+    echo "[x] Git: not found"
     issues=$((issues + 1))
   fi
 
   # Check repo
   local repo_root
   if repo_root=$(discover_repo_root 2>/dev/null); then
-    echo "✅ Repository: $repo_root"
+    echo "[OK] Repository: $repo_root"
 
     # Check worktree base dir
     local base_dir prefix
@@ -589,12 +589,12 @@ cmd_doctor() {
     if [ -d "$base_dir" ]; then
       local count
       count=$(find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | wc -l | tr -d ' ')
-      echo "✅ Worktrees directory: $base_dir ($count worktrees)"
+      echo "[OK] Worktrees directory: $base_dir ($count worktrees)"
     else
-      echo "ℹ️  Worktrees directory: $base_dir (not created yet)"
+      echo "[i] Worktrees directory: $base_dir (not created yet)"
     fi
   else
-    echo "❌ Not in a git repository"
+    echo "[x] Not in a git repository"
     issues=$((issues + 1))
   fi
 
@@ -607,15 +607,15 @@ cmd_doctor() {
     if [ -f "$editor_adapter" ]; then
       . "$editor_adapter"
       if editor_can_open 2>/dev/null; then
-        echo "✅ Editor: $editor (found)"
+        echo "[OK] Editor: $editor (found)"
       else
-        echo "⚠️  Editor: $editor (configured but not found in PATH)"
+        echo "[!] Editor: $editor (configured but not found in PATH)"
       fi
     else
-      echo "⚠️  Editor: $editor (adapter not found)"
+      echo "[!] Editor: $editor (adapter not found)"
     fi
   else
-    echo "ℹ️  Editor: none configured"
+    echo "[i] Editor: none configured"
   fi
 
   # Check configured AI tool
@@ -627,39 +627,39 @@ cmd_doctor() {
     if [ -f "$adapter_file" ]; then
       . "$adapter_file"
       if ai_can_start 2>/dev/null; then
-        echo "✅ AI tool: $ai_tool (found)"
+        echo "[OK] AI tool: $ai_tool (found)"
       else
-        echo "⚠️  AI tool: $ai_tool (configured but not found in PATH)"
+        echo "[!] AI tool: $ai_tool (configured but not found in PATH)"
       fi
     else
-      echo "⚠️  AI tool: $ai_tool (adapter not found)"
+      echo "[!] AI tool: $ai_tool (adapter not found)"
     fi
   else
-    echo "ℹ️  AI tool: none configured"
+    echo "[i] AI tool: none configured"
   fi
 
   # Check OS
   local os
   os=$(detect_os)
-  echo "✅ Platform: $os"
+  echo "[OK] Platform: $os"
 
   echo ""
   if [ "$issues" -eq 0 ]; then
-    echo "🎉 Everything looks good!"
+    echo "Everything looks good!"
     return 0
   else
-    echo "⚠️  Found $issues issue(s)"
+    echo "[!] Found $issues issue(s)"
     return 1
   fi
 }
 
 # Adapter command (list available adapters)
 cmd_adapter() {
-  echo "🔌 Available Adapters"
+  echo "Available Adapters"
   echo ""
 
   # Editor adapters
-  echo "📝 Editor Adapters:"
+  echo "Editor Adapters:"
   echo ""
   printf "%-15s %-10s %s\n" "NAME" "STATUS" "NOTES"
   printf "%-15s %-10s %s\n" "────" "──────" "─────"
@@ -671,15 +671,16 @@ cmd_adapter() {
       . "$adapter_file"
 
       if editor_can_open 2>/dev/null; then
-        printf "%-15s %-10s %s\n" "$adapter_name" "✅ ready" ""
+        printf "%-15s %-10s %s\n" "$adapter_name" "[ready]" ""
       else
-        printf "%-15s %-10s %s\n" "$adapter_name" "⚠️  missing" "Not found in PATH"
+        printf "%-15s %-10s %s\n" "$adapter_name" "[missing]" "Not found in PATH"
       fi
     fi
   done
 
   echo ""
-  echo "🤖 AI Tool Adapters:"
+  echo ""
+  echo "AI Tool Adapters:"
   echo ""
   printf "%-15s %-10s %s\n" "NAME" "STATUS" "NOTES"
   printf "%-15s %-10s %s\n" "────" "──────" "─────"
@@ -691,15 +692,16 @@ cmd_adapter() {
       . "$adapter_file"
 
       if ai_can_start 2>/dev/null; then
-        printf "%-15s %-10s %s\n" "$adapter_name" "✅ ready" ""
+        printf "%-15s %-10s %s\n" "$adapter_name" "[ready]" ""
       else
-        printf "%-15s %-10s %s\n" "$adapter_name" "⚠️  missing" "Not found in PATH"
+        printf "%-15s %-10s %s\n" "$adapter_name" "[missing]" "Not found in PATH"
       fi
     fi
   done
 
   echo ""
-  echo "💡 Tip: Set defaults with:"
+  echo ""
+  echo "Tip: Set defaults with:"
   echo "   gtr config set gtr.editor.default <name>"
   echo "   gtr config set gtr.ai.default <name>"
 }

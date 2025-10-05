@@ -104,6 +104,11 @@ current_branch() {
     branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null)
   fi
 
+  # Normalize detached HEAD
+  if [ "$branch" = "HEAD" ]; then
+    branch="(detached)"
+  fi
+
   printf "%s" "$branch"
 }
 

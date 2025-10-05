@@ -2,23 +2,23 @@
 # UI utilities for logging and prompting
 
 log_info() {
-  printf "✅ %s\n" "$*"
+  printf "[OK] %s\n" "$*"
 }
 
 log_warn() {
-  printf "⚠️  %s\n" "$*"
+  printf "[!] %s\n" "$*"
 }
 
 log_error() {
-  printf "❌ %s\n" "$*" >&2
+  printf "[x] %s\n" "$*" >&2
 }
 
 log_step() {
-  printf "🚀 %s\n" "$*"
+  printf "==> %s\n" "$*"
 }
 
 log_question() {
-  printf "❓ %s" "$*"
+  printf "[?] %s" "$*"
 }
 
 # Prompt for yes/no confirmation
