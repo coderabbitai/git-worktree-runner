@@ -777,7 +777,7 @@ load_editor_adapter() {
 
   if [ ! -f "$adapter_file" ]; then
     log_error "Unknown editor: $editor"
-    log_info "Available editors: cursor, vscode, zed"
+    log_info "Available editors: cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom"
     exit 1
   fi
 
@@ -889,7 +889,7 @@ CONFIGURATION:
   gtr.worktrees.prefix     Worktree name prefix (default: wt-)
   gtr.worktrees.startId    Starting ID (default: 2)
   gtr.defaultBranch        Default branch (default: auto)
-  gtr.editor.default       Default editor (cursor, vscode, zed, none)
+  gtr.editor.default       Default editor (cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom, none)
   gtr.ai.default           Default AI tool (aider, claude, codex, cursor, continue, none)
   gtr.copy.include         Files to copy (multi-valued)
   gtr.copy.exclude         Files to exclude (multi-valued)
