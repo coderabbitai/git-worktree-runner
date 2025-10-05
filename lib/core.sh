@@ -107,6 +107,59 @@ current_branch() {
   printf "%s" "$branch"
 }
 
+# Get the status of a worktree from git
+# Usage: worktree_status worktree_path
+# Returns: status (ok, detached, locked, prunable, or missing)
+worktree_status() {
+  local target_path="$1"
+  local porcelain_output
+  local in_section=0
+  local status="ok"
+  local found=0
+
+  # Parse git worktree list --porcelain line by line
+  porcelain_output=$(git worktree list --porcelain 2>/dev/null)
+
+  while IFS= read -r line; do
+    # Check if this is the start of our target worktree
+    if [ "$line" = "worktree $target_path" ]; then
+      in_section=1
+      found=1
+      continue
+    fi
+
+    # If we're in the target section, check for status lines
+    if [ "$in_section" -eq 1 ]; then
+      # Empty line marks end of section
+      if [ -z "$line" ]; then
+        break
+      fi
+
+      # Check for status indicators (priority: locked > prunable > detached)
+      case "$line" in
+        locked*)
+          status="locked"
+          ;;
+        prunable*)
+          [ "$status" = "ok" ] && status="prunable"
+          ;;
+        detached)
+          [ "$status" = "ok" ] && status="detached"
+          ;;
+      esac
+    fi
+  done <<EOF
+$porcelain_output
+EOF
+
+  # If worktree not found in git's list
+  if [ "$found" -eq 0 ]; then
+    status="missing"
+  fi
+
+  printf "%s" "$status"
+}
+
 # Resolve a worktree target from ID or branch name
 # Usage: resolve_target identifier repo_root base_dir prefix
 # Returns: tab-separated "id\tpath\tbranch" on success

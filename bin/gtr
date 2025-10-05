@@ -456,7 +456,7 @@ cmd_list() {
     if [ -d "$base_dir" ]; then
       find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | while IFS= read -r dir; do
         basename "$dir" | sed "s/^${prefix}//"
-      done | sort -n
+      done | grep -E '^[0-9]+$' | sort -n
     fi
     return 0
   fi
@@ -464,21 +464,23 @@ cmd_list() {
   # Machine-readable output (porcelain)
   if [ "$porcelain" -eq 1 ]; then
     # Always include ID 1 (repo root)
-    local branch
+    local branch status
     # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
     branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
     [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
     [ -z "$branch" ] && branch="(detached)"
-    printf "%s\t%s\t%s\t%s\n" "1" "$repo_root" "$branch" "ok"
+    status=$(worktree_status "$repo_root")
+    printf "%s\t%s\t%s\t%s\n" "1" "$repo_root" "$branch" "$status"
 
     if [ -d "$base_dir" ]; then
       # Find all worktree directories and output: id<tab>path<tab>branch<tab>status
       find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | while IFS= read -r dir; do
-        local id branch
+        local id branch status
         id=$(basename "$dir" | sed "s/^${prefix}//")
         branch=$(current_branch "$dir")
         [ -z "$branch" ] && branch="(detached)"
-        printf "%s\t%s\t%s\t%s\n" "$id" "$dir" "$branch" "ok"
+        status=$(worktree_status "$dir")
+        printf "%s\t%s\t%s\t%s\n" "$id" "$dir" "$branch" "$status"
       done | LC_ALL=C sort -n -k1,1
     fi
     return 0

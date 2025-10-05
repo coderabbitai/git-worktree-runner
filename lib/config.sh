@@ -4,35 +4,50 @@
 
 # Get a single config value
 # Usage: cfg_get key [scope]
-# scope: local (default), global, or system
+# scope: auto (default), local, global, or system
+# auto uses git's built-in precedence: local > global > system
 cfg_get() {
   local key="$1"
-  local scope="${2:-local}"
+  local scope="${2:-auto}"
   local flag=""
 
   case "$scope" in
+    local)  flag="--local" ;;
     global) flag="--global" ;;
     system) flag="--system" ;;
-    local|*) flag="--local" ;;
+    auto|*) flag="" ;;
   esac
 
-  git config $flag "$key" 2>/dev/null || true
+  git config $flag --get "$key" 2>/dev/null || true
 }
 
 # Get all values for a multi-valued config key
 # Usage: cfg_get_all key [scope]
+# scope: auto (default), local, global, or system
+# auto merges local + global + system and deduplicates
 cfg_get_all() {
   local key="$1"
-  local scope="${2:-local}"
-  local flag=""
+  local scope="${2:-auto}"
 
   case "$scope" in
-    global) flag="--global" ;;
-    system) flag="--system" ;;
-    local|*) flag="--local" ;;
+    local)
+      git config --local --get-all "$key" 2>/dev/null || true
+      ;;
+    global)
+      git config --global --get-all "$key" 2>/dev/null || true
+      ;;
+    system)
+      git config --system --get-all "$key" 2>/dev/null || true
+      ;;
+    auto|*)
+      # Merge all levels and deduplicate while preserving order
+      {
+        git config --local  --get-all "$key" 2>/dev/null || true
+        git config --global --get-all "$key" 2>/dev/null || true
+        git config --system --get-all "$key" 2>/dev/null || true
+      } | awk '!seen[$0]++'
+      ;;
   esac
-
-  git config $flag --get-all "$key" 2>/dev/null || true
 }
 
 # Get a boolean config value
@@ -111,24 +126,21 @@ cfg_unset() {
 
 # Get config value with environment variable fallback
 # Usage: cfg_default key env_name fallback_value
+# Now uses auto scope by default (checks local, global, system)
 cfg_default() {
   local key="$1"
   local env_name="$2"
   local fallback="$3"
   local value
 
-  # Try git config first
-  value=$(cfg_get "$key")
+  # Try git config first (auto scope - checks local > global > system)
+  value=$(cfg_get "$key" auto)
 
-  # Fall back to environment variable
+  # Fall back to environment variable (POSIX-compliant indirect reference)
   if [ -z "$value" ] && [ -n "$env_name" ]; then
-    value=$(eval echo "\$$env_name")
+    eval "value=\${${env_name}:-}"
   fi
 
   # Use fallback if still empty
-  if [ -z "$value" ]; then
-    value="$fallback"
-  fi
-
-  printf "%s" "$value"
+  printf "%s" "${value:-$fallback}"
 }
