@@ -321,16 +321,38 @@ cmd_go() {
 
 # Open command
 cmd_open() {
-  if [ $# -ne 1 ]; then
-    log_error "Usage: gtr open <id|branch>"
+  local identifier=""
+  local editor=""
+
+  # Parse flags
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --editor)
+        editor="$2"
+        shift 2
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        if [ -z "$identifier" ]; then
+          identifier="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  if [ -z "$identifier" ]; then
+    log_error "Usage: gtr open <id|branch> [--editor <name>]"
     exit 1
   fi
 
-  local identifier="$1"
-
-  # Get editor from config
-  local editor
-  editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
+  # Get editor from flag or config
+  if [ -z "$editor" ]; then
+    editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
+  fi
 
   local repo_root base_dir prefix
   repo_root=$(discover_repo_root) || exit 1
@@ -359,11 +381,16 @@ cmd_open() {
 # AI command
 cmd_ai() {
   local identifier=""
+  local ai_tool=""
   local -a ai_args=()
 
   # Parse arguments
   while [ $# -gt 0 ]; do
     case "$1" in
+      --ai)
+        ai_tool="$2"
+        shift 2
+        ;;
       --)
         shift
         ai_args=("$@")
@@ -383,13 +410,14 @@ cmd_ai() {
   done
 
   if [ -z "$identifier" ]; then
-    log_error "Usage: gtr ai <id|branch> [-- args...]"
+    log_error "Usage: gtr ai <id|branch> [--ai <name>] [-- args...]"
     exit 1
   fi
 
-  # Get AI tool from config
-  local ai_tool
-  ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none")
+  # Get AI tool from flag or config
+  if [ -z "$ai_tool" ]; then
+    ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none")
+  fi
 
   # Check if AI tool is configured
   if [ "$ai_tool" = "none" ]; then
@@ -805,13 +833,32 @@ cmd_help() {
   cat <<'EOF'
 gtr - Git worktree runner
 
-Run from within a git repository. Each repo has independent worktrees and IDs.
+PHILOSOPHY: Configuration over flags. Set defaults once, then use simple commands.
 
-USAGE:
-  cd ~/your-repo      # Navigate to git repo first
-  gtr <command> [options]
+────────────────────────────────────────────────────────────────────────────────
 
-COMMANDS:
+QUICK START:
+  cd ~/your-repo                              # Navigate to git repo first
+  gtr config set gtr.editor.default cursor    # One-time setup
+  gtr config set gtr.ai.default claude        # One-time setup
+  gtr new my-feature                          # Auto-assigns ID, uses defaults
+  gtr open my-feature                         # Opens in cursor
+  gtr ai my-feature                           # Starts claude
+  gtr rm my-feature                           # Remove when done
+
+────────────────────────────────────────────────────────────────────────────────
+
+KEY CONCEPTS:
+  • Each git repo has independent worktrees and IDs
+  • Main repo is always ID 1 (accessible via: gtr go 1, gtr open 1)
+  • New worktrees auto-assign IDs starting at 2 (configurable)
+  • Commands accept EITHER ID numbers OR branch names
+    Examples: gtr open 2  OR  gtr open my-feature
+
+────────────────────────────────────────────────────────────────────────────────
+
+CORE COMMANDS (daily workflow):
+
   new <branch> [options]
          Create a new worktree (auto-assigns ID by default)
          --id <n>: specify exact ID (rarely needed)
@@ -821,15 +868,18 @@ COMMANDS:
          --no-fetch: skip git fetch
          --yes: non-interactive mode
 
+  open <id|branch> [--editor <name>]
+         Open worktree in editor (uses gtr.editor.default or --editor)
+
+  ai <id|branch> [--ai <name>] [-- args...]
+         Start AI coding tool in worktree (uses gtr.ai.default or --ai)
+
   go <id|branch>
          Navigate to worktree (prints path for: cd "$(gtr go 2)")
-         Accepts either numeric ID or branch name
 
-  open <id|branch>
-         Open worktree in editor (uses gtr.editor.default)
-
-  ai <id|branch> [-- args...]
-         Start AI coding tool in worktree (uses gtr.ai.default)
+  list [--porcelain|--ids]
+         List all worktrees (ID 1 = repo root)
+         Aliases: ls
 
   rm <id|branch> [<id|branch>...] [options]
          Remove worktree(s)
@@ -837,11 +887,12 @@ COMMANDS:
          --force: force removal (dirty worktree)
          --yes: skip confirmation
 
-  ls, list [--porcelain|--ids]
-         List all worktrees (ID 1 = repo root)
+────────────────────────────────────────────────────────────────────────────────
 
-  clean
-         Remove stale/prunable worktrees
+SETUP & MAINTENANCE:
+
+  config {get|set|unset} <key> [value] [--global]
+         Manage configuration
 
   doctor
          Health check (verify git, editors, AI tools)
@@ -849,56 +900,70 @@ COMMANDS:
   adapter
          List available editor & AI tool adapters
 
-  config {get|set|unset} <key> [value] [--global]
-         Manage configuration
+  clean
+         Remove stale/prunable worktrees
 
   version
          Show version
 
-  help
-         Show this help
+────────────────────────────────────────────────────────────────────────────────
 
-EXAMPLES:
-  # Navigate to your git repo first
+WORKFLOW EXAMPLES:
+
+  # One-time repo setup
   cd ~/GitHub/my-project
-
-  # Configure defaults (one-time setup per repo)
   gtr config set gtr.editor.default cursor
   gtr config set gtr.ai.default claude
 
-  # Typical workflow: create, open, start AI
-  gtr new my-feature
-  gtr open my-feature
-  gtr ai my-feature
+  # Daily workflow
+  gtr new feature/user-auth               # Create worktree
+  gtr open feature/user-auth              # Open in editor
+  gtr ai feature/user-auth                # Start AI tool
 
-  # Or chain them together
-  gtr new my-feature && gtr open my-feature && gtr ai my-feature
+  # Navigate to worktree directory
+  cd "$(gtr go feature/user-auth)"
 
-  # Navigate to worktree
-  cd "$(gtr go my-feature)"
+  # Use ID instead of branch name (same result)
+  gtr open 2
+  gtr ai 2
 
-  # List all worktrees
-  gtr list
+  # Override defaults with flags
+  gtr open feature/user-auth --editor vscode
+  gtr ai feature/user-auth --ai aider
 
-  # Remove when done
-  gtr rm my-feature --delete-branch
+  # Chain commands together
+  gtr new hotfix && gtr open hotfix && gtr ai hotfix
 
-  # Health check
+  # When finished
+  gtr rm feature/user-auth --delete-branch
+
+  # Check setup and available tools
   gtr doctor
+  gtr adapter
 
-CONFIGURATION:
+────────────────────────────────────────────────────────────────────────────────
+
+CONFIGURATION OPTIONS:
+
   gtr.worktrees.dir        Worktrees base directory
   gtr.worktrees.prefix     Worktree name prefix (default: wt-)
   gtr.worktrees.startId    Starting ID (default: 2)
   gtr.defaultBranch        Default branch (default: auto)
-  gtr.editor.default       Default editor (cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom, none)
-  gtr.ai.default           Default AI tool (aider, claude, codex, cursor, continue, none)
+  gtr.editor.default       Default editor
+                           Options: cursor, vscode, zed, idea, pycharm,
+                           webstorm, vim, nvim, emacs, sublime, nano,
+                           atom, none
+  gtr.ai.default           Default AI tool
+                           Options: aider, claude, codex, cursor,
+                           continue, none
   gtr.copy.include         Files to copy (multi-valued)
   gtr.copy.exclude         Files to exclude (multi-valued)
   gtr.hook.postCreate      Post-create hooks (multi-valued)
   gtr.hook.postRemove      Post-remove hooks (multi-valued)
 
-See https://github.com/anthropics/git-worktree-runner for more info.
+────────────────────────────────────────────────────────────────────────────────
+
+MORE INFO: https://github.com/anthropics/git-worktree-runner
 EOF
 }
 
