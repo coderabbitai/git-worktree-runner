@@ -661,8 +661,8 @@ cmd_adapter() {
   # Editor adapters
   echo "Editor Adapters:"
   echo ""
-  printf "%-15s %-10s %s\n" "NAME" "STATUS" "NOTES"
-  printf "%-15s %-10s %s\n" "────" "──────" "─────"
+  printf "%-15s %-15s %s\n" "NAME" "STATUS" "NOTES"
+  printf "%-15s %-15s %s\n" "---------------" "---------------" "-----"
 
   for adapter_file in "$GTR_DIR"/adapters/editor/*.sh; do
     if [ -f "$adapter_file" ]; then
@@ -671,9 +671,9 @@ cmd_adapter() {
       . "$adapter_file"
 
       if editor_can_open 2>/dev/null; then
-        printf "%-15s %-10s %s\n" "$adapter_name" "[ready]" ""
+        printf "%-15s %-15s %s\n" "$adapter_name" "[ready]" ""
       else
-        printf "%-15s %-10s %s\n" "$adapter_name" "[missing]" "Not found in PATH"
+        printf "%-15s %-15s %s\n" "$adapter_name" "[missing]" "Not found in PATH"
       fi
     fi
   done
@@ -682,8 +682,8 @@ cmd_adapter() {
   echo ""
   echo "AI Tool Adapters:"
   echo ""
-  printf "%-15s %-10s %s\n" "NAME" "STATUS" "NOTES"
-  printf "%-15s %-10s %s\n" "────" "──────" "─────"
+  printf "%-15s %-15s %s\n" "NAME" "STATUS" "NOTES"
+  printf "%-15s %-15s %s\n" "---------------" "---------------" "-----"
 
   for adapter_file in "$GTR_DIR"/adapters/ai/*.sh; do
     if [ -f "$adapter_file" ]; then
@@ -692,9 +692,9 @@ cmd_adapter() {
       . "$adapter_file"
 
       if ai_can_start 2>/dev/null; then
-        printf "%-15s %-10s %s\n" "$adapter_name" "[ready]" ""
+        printf "%-15s %-15s %s\n" "$adapter_name" "[ready]" ""
       else
-        printf "%-15s %-10s %s\n" "$adapter_name" "[missing]" "Not found in PATH"
+        printf "%-15s %-15s %s\n" "$adapter_name" "[missing]" "Not found in PATH"
       fi
     fi
   done
