@@ -16,7 +16,6 @@ complete -c gtr -f -n "__fish_use_subcommand" -a "version" -d "Show version"
 complete -c gtr -f -n "__fish_use_subcommand" -a "help" -d "Show help"
 
 # New command options
-complete -c gtr -n "__fish_seen_subcommand_from new" -l id -d "Worktree ID (rarely needed)" -r
 complete -c gtr -n "__fish_seen_subcommand_from new" -l from -d "Base ref" -r
 complete -c gtr -n "__fish_seen_subcommand_from new" -l track -d "Track mode" -r -a "auto remote local none"
 complete -c gtr -n "__fish_seen_subcommand_from new" -l no-copy -d "Skip file copying"
@@ -32,8 +31,7 @@ complete -c gtr -n "__fish_seen_subcommand_from rm" -l yes -d "Non-interactive m
 complete -c gtr -n "__fish_seen_subcommand_from config" -f -a "get set unset"
 complete -c gtr -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from get set unset" -f -a "\
   gtr.worktrees.dir\t'Worktrees base directory'
-  gtr.worktrees.prefix\t'Worktree name prefix'
-  gtr.worktrees.startId\t'Starting ID'
+  gtr.worktrees.prefix\t'Worktree folder prefix'
   gtr.defaultBranch\t'Default branch'
   gtr.editor.default\t'Default editor'
   gtr.ai.default\t'Default AI tool'
@@ -43,13 +41,13 @@ complete -c gtr -n "__fish_seen_subcommand_from config; and __fish_seen_subcomma
   gtr.hook.postRemove\t'Post-remove hook'
 "
 
-# Helper function to get worktree IDs and branch names
-function __gtr_worktree_ids_and_branches
-  # Get worktree IDs
-  command gtr list --ids 2>/dev/null
+# Helper function to get branch names and special '1' for main repo
+function __gtr_worktree_branches
+  # Special ID for main repo
+  echo "1"
   # Get branch names
   git branch --format='%(refname:short)' 2>/dev/null
 end
 
-# Complete worktree IDs and branch names for commands that need them
-complete -c gtr -n "__fish_seen_subcommand_from go open ai rm" -f -a "(__gtr_worktree_ids_and_branches)"
+# Complete branch names for commands that need them
+complete -c gtr -n "__fish_seen_subcommand_from go open ai rm" -f -a "(__gtr_worktree_branches)"

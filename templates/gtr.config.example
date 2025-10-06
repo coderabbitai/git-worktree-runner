@@ -7,13 +7,9 @@
 # Default: <repo-name>-worktrees
 # gtr.worktrees.dir = my-worktrees
 
-# Prefix for worktree directory names
-# Default: wt-
+# Prefix for worktree directory names (folders named: {prefix}{branch-name})
+# Default: "" (empty, folders named after branch)
 # gtr.worktrees.prefix = dev-
-
-# Starting ID for auto-assigned worktrees
-# Default: 2
-# gtr.worktrees.startId = 1
 
 # Default branch to create new branches from
 # Options: auto (detect from origin/HEAD), main, master, or any branch name
@@ -64,7 +60,6 @@
 # git config --local --add gtr.hook.postCreate "pnpm install"
 
 # For all repositories (global):
-# git config --global gtr.worktrees.startId 2
 # git config --global gtr.editor.default vscode
 
 # Or use gtr's config command:

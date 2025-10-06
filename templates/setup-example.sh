@@ -7,8 +7,7 @@ set -e
 echo "🔧 Configuring gtr for this repository..."
 
 # Worktree settings
-git config --local gtr.worktrees.prefix "wt-"
-git config --local gtr.worktrees.startId 2
+git config --local gtr.worktrees.prefix ""
 git config --local gtr.defaultBranch "auto"
 
 # Editor (change to your preference: cursor, vscode, zed)

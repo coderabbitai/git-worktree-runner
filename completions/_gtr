@@ -19,24 +19,21 @@ _gtr() {
     'help:Show help'
   )
 
-  local -a worktree_ids branches all_options
-  # Use gtr list --ids for config-aware completion
-  worktree_ids=(${(f)"$(command gtr list --ids 2>/dev/null)"})
+  local -a branches all_options
   # Get branch names
   branches=(${(f)"$(git branch --format='%(refname:short)' 2>/dev/null)"})
-  # Combine IDs and branches
-  all_options=("${worktree_ids[@]}" "${branches[@]}")
+  # Add special ID '1' for main repo
+  all_options=("1" "${branches[@]}")
 
   if (( CURRENT == 2 )); then
     _describe 'commands' commands
   elif (( CURRENT == 3 )); then
     case "$words[2]" in
       go|open|ai|rm)
-        _describe 'worktree IDs or branches' all_options
+        _describe 'branch names' all_options
         ;;
       new)
         _arguments \
-          '--id[Worktree ID]:id:' \
           '--from[Base ref]:ref:' \
           '--track[Track mode]:mode:(auto remote local none)' \
           '--no-copy[Skip file copying]' \
@@ -61,7 +58,6 @@ _gtr() {
             _values 'config key' \
               'gtr.worktrees.dir' \
               'gtr.worktrees.prefix' \
-              'gtr.worktrees.startId' \
               'gtr.defaultBranch' \
               'gtr.editor.default' \
               'gtr.ai.default' \

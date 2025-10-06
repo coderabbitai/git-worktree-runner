@@ -13,15 +13,14 @@ _gtr_completion() {
     return 0
   fi
 
-  # Commands that take worktree IDs or branch names
+  # Commands that take branch names or '1' for main repo
   case "$cmd" in
     go|open|ai|rm)
       if [ "$cword" -eq 2 ]; then
-        # Complete with both IDs and branch names
-        local ids branches all_options
-        ids=$(command gtr list --ids 2>/dev/null || true)
+        # Complete with branch names and special ID '1' for main repo
+        local branches all_options
         branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
-        all_options="$ids $branches"
+        all_options="1 $branches"
         COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
       elif [[ "$cur" == -* ]]; then
         case "$cmd" in
@@ -43,7 +42,7 @@ _gtr_completion() {
       if [ "$cword" -eq 2 ]; then
         COMPREPLY=($(compgen -W "get set unset" -- "$cur"))
       elif [ "$cword" -eq 3 ]; then
-        COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.worktrees.startId gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.hook.postCreate gtr.hook.postRemove" -- "$cur"))
+        COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.hook.postCreate gtr.hook.postRemove" -- "$cur"))
       fi
       ;;
   esac

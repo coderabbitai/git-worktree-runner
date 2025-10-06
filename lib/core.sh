@@ -16,6 +16,17 @@ discover_repo_root() {
   printf "%s" "$root"
 }
 
+# Sanitize branch name for use as directory name
+# Usage: sanitize_branch_name branch_name
+# Converts special characters to hyphens for valid folder names
+sanitize_branch_name() {
+  local branch="$1"
+
+  # Replace slashes, spaces, and other problematic chars with hyphens
+  # Remove any leading/trailing hyphens
+  printf "%s" "$branch" | sed -e 's/[\/\\ :*?"<>|]/-/g' -e 's/^-*//' -e 's/-*$//'
+}
+
 # Resolve the base directory for worktrees
 # Usage: resolve_base_dir repo_root
 resolve_base_dir() {
@@ -71,21 +82,6 @@ resolve_default_branch() {
     # Last resort: just use 'main'
     printf "main"
   fi
-}
-
-# Find the next available worktree ID
-# Usage: next_available_id base_dir prefix [start_id]
-next_available_id() {
-  local base_dir="$1"
-  local prefix="$2"
-  local start_id="${3:-2}"
-  local id="$start_id"
-
-  while [ -d "$base_dir/${prefix}${id}" ]; do
-    id=$((id + 1))
-  done
-
-  printf "%s" "$id"
 }
 
 # Get the current branch of a worktree
@@ -165,87 +161,79 @@ EOF
   printf "%s" "$status"
 }
 
-# Resolve a worktree target from ID or branch name
+# Resolve a worktree target from branch name or special ID '1' for main repo
 # Usage: resolve_target identifier repo_root base_dir prefix
-# Returns: tab-separated "id\tpath\tbranch" on success
+# Returns: tab-separated "is_main\tpath\tbranch" on success (is_main: 1 for main repo, 0 for worktrees)
 # Exit code: 0 on success, 1 if not found
 resolve_target() {
   local identifier="$1"
   local repo_root="$2"
   local base_dir="$3"
   local prefix="$4"
-  local id path branch
+  local id path branch sanitized_name
 
-  # Check if identifier is numeric (ID) or a branch name
-  if echo "$identifier" | grep -qE '^[0-9]+$'; then
-    # Numeric ID
-    id="$identifier"
-
-    if [ "$id" = "1" ]; then
-      # ID 1 is always the repo root
-      path="$repo_root"
-      # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
-      branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
-      [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
-      printf "%s\t%s\t%s\n" "$id" "$path" "$branch"
-      return 0
-    fi
-
-    # Other IDs map to worktree directories
-    path="$base_dir/${prefix}${id}"
-    if [ ! -d "$path" ]; then
-      log_error "Worktree not found: ${prefix}${id}"
-      return 1
-    fi
-    branch=$(current_branch "$path")
-    printf "%s\t%s\t%s\n" "$id" "$path" "$branch"
-    return 0
-  else
-    # Branch name - search for matching worktree
-    # First check if it's the current branch in repo root
+  # Special case: ID 1 is always the repo root
+  if [ "$identifier" = "1" ]; then
+    path="$repo_root"
     # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
     branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
     [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
-    if [ "$branch" = "$identifier" ]; then
-      printf "1\t%s\t%s\n" "$repo_root" "$identifier"
-      return 0
-    fi
-
-    # Search worktree directories for matching branch
-    if [ -d "$base_dir" ]; then
-      for dir in "$base_dir/${prefix}"*; do
-        [ -d "$dir" ] || continue
-        branch=$(current_branch "$dir")
-        if [ "$branch" = "$identifier" ]; then
-          id=$(basename "$dir" | sed "s/^${prefix}//")
-          printf "%s\t%s\t%s\n" "$id" "$dir" "$branch"
-          return 0
-        fi
-      done
-    fi
-
-    log_error "Worktree not found for branch: $identifier"
-    return 1
+    printf "1\t%s\t%s\n" "$path" "$branch"
+    return 0
   fi
+
+  # For all other identifiers, treat as branch name
+  # First check if it's the current branch in repo root (if not ID 1)
+  branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
+  [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+  if [ "$branch" = "$identifier" ]; then
+    printf "1\t%s\t%s\n" "$repo_root" "$identifier"
+    return 0
+  fi
+
+  # Try direct path match with sanitized branch name
+  sanitized_name=$(sanitize_branch_name "$identifier")
+  path="$base_dir/${prefix}${sanitized_name}"
+  if [ -d "$path" ]; then
+    branch=$(current_branch "$path")
+    printf "0\t%s\t%s\n" "$path" "$branch"
+    return 0
+  fi
+
+  # Search worktree directories for matching branch (fallback)
+  if [ -d "$base_dir" ]; then
+    for dir in "$base_dir/${prefix}"*; do
+      [ -d "$dir" ] || continue
+      branch=$(current_branch "$dir")
+      if [ "$branch" = "$identifier" ]; then
+        printf "0\t%s\t%s\n" "$dir" "$branch"
+        return 0
+      fi
+    done
+  fi
+
+  log_error "Worktree not found for branch: $identifier"
+  return 1
 }
 
 # Create a new git worktree
-# Usage: create_worktree base_dir prefix id branch_name from_ref track_mode [skip_fetch]
+# Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch]
 # track_mode: auto, remote, local, or none
 # skip_fetch: 0 (default, fetch) or 1 (skip)
 create_worktree() {
   local base_dir="$1"
   local prefix="$2"
-  local id="$3"
-  local branch_name="$4"
-  local from_ref="$5"
-  local track_mode="${6:-auto}"
-  local skip_fetch="${7:-0}"
-  local worktree_path="$base_dir/${prefix}${id}"
+  local branch_name="$3"
+  local from_ref="$4"
+  local track_mode="${5:-auto}"
+  local skip_fetch="${6:-0}"
+  local sanitized_name
+  sanitized_name=$(sanitize_branch_name "$branch_name")
+  local worktree_path="$base_dir/${prefix}${sanitized_name}"
 
   # Check if worktree already exists
   if [ -d "$worktree_path" ]; then
-    log_error "Worktree ${prefix}${id} already exists at $worktree_path"
+    log_error "Worktree $sanitized_name already exists at $worktree_path"
     return 1
   fi
 

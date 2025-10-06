@@ -80,11 +80,9 @@ main() {
 
 # Create command
 cmd_create() {
-  local worktree_id=""
   local branch_name=""
   local from_ref=""
   local track_mode="auto"
-  local explicit_id=0
   local skip_copy=0
   local skip_fetch=0
   local yes_mode=0
@@ -92,11 +90,6 @@ cmd_create() {
   # Parse flags and arguments
   while [ $# -gt 0 ]; do
     case "$1" in
-      --id)
-        worktree_id="$2"
-        explicit_id=1
-        shift 2
-        ;;
       --from)
         from_ref="$2"
         shift 2
@@ -135,15 +128,9 @@ cmd_create() {
   local repo_root
   repo_root=$(discover_repo_root) || exit 1
 
-  local base_dir prefix start_id
+  local base_dir prefix
   base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
-  start_id=$(cfg_default gtr.worktrees.startId GTR_WORKTREES_STARTID "2")
-
-  # Auto-assign ID if not explicitly provided (NEW DEFAULT BEHAVIOR)
-  if [ "$explicit_id" -eq 0 ]; then
-    worktree_id=$(next_available_id "$base_dir" "$prefix" "$start_id")
-  fi
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
 
   # Get branch name if not provided
   if [ -z "$branch_name" ]; then
@@ -151,7 +138,7 @@ cmd_create() {
       log_error "Branch name required in non-interactive mode"
       exit 1
     fi
-    branch_name=$(prompt_input "Enter branch name for worktree ${prefix}${worktree_id}:")
+    branch_name=$(prompt_input "Enter branch name:")
     if [ -z "$branch_name" ]; then
       log_error "Branch name required"
       exit 1
@@ -163,15 +150,17 @@ cmd_create() {
     from_ref=$(resolve_default_branch "$repo_root")
   fi
 
-  local worktree_path
-  worktree_path="$base_dir/${prefix}${worktree_id}"
+  # Construct worktree path using sanitized branch name
+  local sanitized_name worktree_path
+  sanitized_name=$(sanitize_branch_name "$branch_name")
+  worktree_path="$base_dir/${prefix}${sanitized_name}"
 
-  log_step "Creating worktree: ${prefix}${worktree_id}"
+  log_step "Creating worktree: $sanitized_name"
   echo "Location: $worktree_path"
   echo "Branch: $branch_name"
 
   # Create the worktree
-  if ! create_worktree "$base_dir" "$prefix" "$worktree_id" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch"; then
+  if ! create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch"; then
     exit 1
   fi
 
@@ -243,23 +232,23 @@ cmd_remove() {
   local repo_root base_dir prefix
   repo_root=$(discover_repo_root) || exit 1
   base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
 
   for identifier in $identifiers; do
-    # Resolve target (supports both ID and branch name)
-    local target worktree_id worktree_path branch_name
+    # Resolve target branch
+    local target is_main worktree_path branch_name
     target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || continue
-    worktree_id=$(echo "$target" | cut -f1)
+    is_main=$(echo "$target" | cut -f1)
     worktree_path=$(echo "$target" | cut -f2)
     branch_name=$(echo "$target" | cut -f3)
 
-    # Cannot remove ID 1 (main repository)
-    if [ "$worktree_id" = "1" ]; then
-      log_error "Cannot remove main repository (ID 1)"
+    # Cannot remove main repository
+    if [ "$is_main" = "1" ]; then
+      log_error "Cannot remove main repository"
       continue
     fi
 
-    log_step "Removing worktree: ${prefix}${worktree_id} (branch: $branch_name)"
+    log_step "Removing worktree: $branch_name"
 
     # Remove the worktree
     if ! remove_worktree "$worktree_path" "$force"; then
@@ -298,24 +287,24 @@ cmd_go() {
   local repo_root base_dir prefix
   repo_root=$(discover_repo_root) || exit 1
   base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
 
-  # Resolve target (supports both ID and branch name)
-  local target worktree_id worktree_path branch
+  # Resolve target branch
+  local target is_main worktree_path branch
   target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  worktree_id=$(echo "$target" | cut -f1)
+  is_main=$(echo "$target" | cut -f1)
   worktree_path=$(echo "$target" | cut -f2)
   branch=$(echo "$target" | cut -f3)
 
   # Human messages to stderr so stdout can be used in command substitution
-  if [ "$worktree_id" = "1" ]; then
-    echo "Repo root (id 1)" >&2
+  if [ "$is_main" = "1" ]; then
+    echo "Main repo" >&2
   else
-    echo "Worktree ${prefix}${worktree_id}" >&2
+    echo "Worktree: $branch" >&2
   fi
   echo "Branch: $branch" >&2
 
-  # Print path to stdout for shell integration: cd "$(gtr go 2)"
+  # Print path to stdout for shell integration: cd "$(gtr go my-feature)"
   printf "%s\n" "$worktree_path"
 }
 
@@ -357,12 +346,11 @@ cmd_open() {
   local repo_root base_dir prefix
   repo_root=$(discover_repo_root) || exit 1
   base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
 
-  # Resolve target (supports both ID and branch name)
-  local target worktree_id worktree_path branch
+  # Resolve target branch
+  local target worktree_path branch
   target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  worktree_id=$(echo "$target" | cut -f1)
   worktree_path=$(echo "$target" | cut -f2)
   branch=$(echo "$target" | cut -f3)
 
@@ -432,16 +420,15 @@ cmd_ai() {
   local repo_root base_dir prefix
   repo_root=$(discover_repo_root) || exit 1
   base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
 
-  # Resolve target (supports both ID and branch name)
-  local target worktree_id worktree_path branch
+  # Resolve target branch
+  local target worktree_path branch
   target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  worktree_id=$(echo "$target" | cut -f1)
   worktree_path=$(echo "$target" | cut -f2)
   branch=$(echo "$target" | cut -f3)
 
-  log_step "Starting $ai_tool in worktree: ${prefix}${worktree_id}"
+  log_step "Starting $ai_tool for: $branch"
   echo "Directory: $worktree_path"
   echo "Branch: $branch"
 
@@ -451,17 +438,12 @@ cmd_ai() {
 # List command
 cmd_list() {
   local porcelain=0
-  local ids_only=0
 
   # Parse flags
   while [ $# -gt 0 ]; do
     case "$1" in
       --porcelain)
         porcelain=1
-        shift
-        ;;
-      --ids)
-        ids_only=1
         shift
         ;;
       *)
@@ -473,42 +455,28 @@ cmd_list() {
   local repo_root base_dir prefix
   repo_root=$(discover_repo_root) 2>/dev/null || return 0
   base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
-
-  # IDs only (for completions)
-  if [ "$ids_only" -eq 1 ]; then
-    # Always include ID 1 (repo root)
-    echo "1"
-
-    if [ -d "$base_dir" ]; then
-      find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | while IFS= read -r dir; do
-        basename "$dir" | sed "s/^${prefix}//"
-      done | grep -E '^[0-9]+$' | sort -n
-    fi
-    return 0
-  fi
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
 
   # Machine-readable output (porcelain)
   if [ "$porcelain" -eq 1 ]; then
-    # Always include ID 1 (repo root)
+    # Output: path<tab>branch<tab>status
     local branch status
     # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
     branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
     [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
     [ -z "$branch" ] || [ "$branch" = "HEAD" ] && branch="(detached)"
     status=$(worktree_status "$repo_root")
-    printf "%s\t%s\t%s\t%s\n" "1" "$repo_root" "$branch" "$status"
+    printf "%s\t%s\t%s\n" "$repo_root" "$branch" "$status"
 
     if [ -d "$base_dir" ]; then
-      # Find all worktree directories and output: id<tab>path<tab>branch<tab>status
+      # Find all worktree directories and output: path<tab>branch<tab>status
       find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | while IFS= read -r dir; do
-        local id branch status
-        id=$(basename "$dir" | sed "s/^${prefix}//")
+        local branch status
         branch=$(current_branch "$dir")
         [ -z "$branch" ] && branch="(detached)"
         status=$(worktree_status "$dir")
-        printf "%s\t%s\t%s\t%s\n" "$id" "$dir" "$branch" "$status"
-      done | LC_ALL=C sort -n -k1,1
+        printf "%s\t%s\t%s\n" "$dir" "$branch" "$status"
+      done | LC_ALL=C sort -k2,2
     fi
     return 0
   fi
@@ -516,26 +484,25 @@ cmd_list() {
   # Human-readable output - table format
   echo "Git Worktrees"
   echo ""
-  printf "%-6s %-25s %s\n" "ID" "BRANCH" "PATH"
-  printf "%-6s %-25s %s\n" "──" "──────" "────"
+  printf "%-30s %s\n" "BRANCH" "PATH"
+  printf "%-30s %s\n" "------" "----"
 
-  # Always show repo root as ID 1
+  # Always show repo root first
   local branch
   # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
   branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
   [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
   [ -z "$branch" ] || [ "$branch" = "HEAD" ] && branch="(detached)"
-  printf "%-6s %-25s %s\n" "1" "$branch" "$repo_root"
+  printf "%-30s %s\n" "$branch [main repo]" "$repo_root"
 
-  # Show worktrees
+  # Show worktrees sorted by branch name
   if [ -d "$base_dir" ]; then
     find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | while IFS= read -r dir; do
-      local id branch
-      id=$(basename "$dir" | sed "s/^${prefix}//")
+      local branch
       branch=$(current_branch "$dir")
       [ -z "$branch" ] && branch="(detached)"
-      printf "%-6s %-25s %s\n" "$id" "$branch" "$dir"
-    done | LC_ALL=C sort -n -k1,1
+      printf "%-30s %s\n" "$branch" "$dir"
+    done | LC_ALL=C sort -k1,1
   fi
 
   echo ""
@@ -555,7 +522,7 @@ cmd_clean() {
   local repo_root base_dir prefix
   repo_root=$(discover_repo_root) || exit 1
   base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
 
   if [ ! -d "$base_dir" ]; then
     log_info "No worktrees directory to clean"
@@ -612,7 +579,7 @@ cmd_doctor() {
     # Check worktree base dir
     local base_dir prefix
     base_dir=$(resolve_base_dir "$repo_root")
-    prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "wt-")
+    prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
 
     if [ -d "$base_dir" ]; then
       local count
@@ -841,7 +808,7 @@ QUICK START:
   cd ~/your-repo                              # Navigate to git repo first
   gtr config set gtr.editor.default cursor    # One-time setup
   gtr config set gtr.ai.default claude        # One-time setup
-  gtr new my-feature                          # Auto-assigns ID, uses defaults
+  gtr new my-feature                          # Creates worktree in folder "my-feature"
   gtr open my-feature                         # Opens in cursor
   gtr ai my-feature                           # Starts claude
   gtr rm my-feature                           # Remove when done
@@ -849,40 +816,41 @@ QUICK START:
 ────────────────────────────────────────────────────────────────────────────────
 
 KEY CONCEPTS:
-  • Each git repo has independent worktrees and IDs
-  • Main repo is always ID 1 (accessible via: gtr go 1, gtr open 1)
-  • New worktrees auto-assign IDs starting at 2 (configurable)
-  • Commands accept EITHER ID numbers OR branch names
-    Examples: gtr open 2  OR  gtr open my-feature
+  • Worktree folders are named after the branch name
+  • Main repo is accessible via special ID '1' (e.g., gtr go 1, gtr open 1)
+  • Commands accept branch names to identify worktrees
+    Example: gtr open my-feature, gtr go feature/user-auth
 
 ────────────────────────────────────────────────────────────────────────────────
 
 CORE COMMANDS (daily workflow):
 
   new <branch> [options]
-         Create a new worktree (auto-assigns ID by default)
-         --id <n>: specify exact ID (rarely needed)
+         Create a new worktree (folder named after branch)
          --from <ref>: create from specific ref
          --track <mode>: tracking mode (auto|remote|local|none)
          --no-copy: skip file copying
          --no-fetch: skip git fetch
          --yes: non-interactive mode
 
-  open <id|branch> [--editor <name>]
+  open <branch> [--editor <name>]
          Open worktree in editor (uses gtr.editor.default or --editor)
+         Special: use '1' to open repo root
 
-  ai <id|branch> [--ai <name>] [-- args...]
+  ai <branch> [--ai <name>] [-- args...]
          Start AI coding tool in worktree (uses gtr.ai.default or --ai)
+         Special: use '1' to open repo root
 
-  go <id|branch>
-         Navigate to worktree (prints path for: cd "$(gtr go 2)")
+  go <branch>
+         Navigate to worktree (prints path for: cd "$(gtr go my-feature)")
+         Special: use '1' for repo root
 
-  list [--porcelain|--ids]
-         List all worktrees (ID 1 = repo root)
+  list [--porcelain]
+         List all worktrees
          Aliases: ls
 
-  rm <id|branch> [<id|branch>...] [options]
-         Remove worktree(s)
+  rm <branch> [<branch>...] [options]
+         Remove worktree(s) by branch name
          --delete-branch: also delete the branch
          --force: force removal (dirty worktree)
          --yes: skip confirmation
@@ -916,16 +884,12 @@ WORKFLOW EXAMPLES:
   gtr config set gtr.ai.default claude
 
   # Daily workflow
-  gtr new feature/user-auth               # Create worktree
+  gtr new feature/user-auth               # Create worktree (folder: feature-user-auth)
   gtr open feature/user-auth              # Open in editor
   gtr ai feature/user-auth                # Start AI tool
 
   # Navigate to worktree directory
   cd "$(gtr go feature/user-auth)"
-
-  # Use ID instead of branch name (same result)
-  gtr open 2
-  gtr ai 2
 
   # Override defaults with flags
   gtr open feature/user-auth --editor vscode
@@ -946,8 +910,7 @@ WORKFLOW EXAMPLES:
 CONFIGURATION OPTIONS:
 
   gtr.worktrees.dir        Worktrees base directory
-  gtr.worktrees.prefix     Worktree name prefix (default: wt-)
-  gtr.worktrees.startId    Starting ID (default: 2)
+  gtr.worktrees.prefix     Worktree folder prefix (default: "")
   gtr.defaultBranch        Default branch (default: auto)
   gtr.editor.default       Default editor
                            Options: cursor, vscode, zed, idea, pycharm,

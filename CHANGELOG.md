@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Repository-scoped worktrees** - Each git repo has independent worktrees and IDs
-- **Auto-ID allocation** - Worktrees auto-assigned starting from configurable `gtr.worktrees.startId` (default: 2)
-- **Branch-name-first UX** - All commands accept either numeric IDs or branch names (`gtr open my-feature`)
+- **Repository-scoped worktrees** - Each git repo has independent worktrees
+- **Branch-based folder naming** - Worktree folders are named after their branch names
+- **Branch-name UX** - All commands accept branch names to identify worktrees (`gtr open my-feature`)
 - **Explicit command design** - Each command does one thing (`new` creates, `open` opens, `ai` starts AI). No auto-behavior or override flags
 - **Config-based defaults** - Set `gtr.editor.default` and `gtr.ai.default` once, use everywhere without flags
 - **Editor adapters** - Support for Cursor, VS Code, and Zed
@@ -22,10 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cross-platform support** - Works on macOS, Linux, and Windows (Git Bash/WSL)
 - **Utility commands**:
   - `gtr new <branch>` - Create worktree with smart branch tracking
-  - `gtr go <id|branch>` - Navigate to worktree (shell integration)
-  - `gtr open <id|branch>` - Open in editor
-  - `gtr ai <id|branch>` - Start AI coding tool
-  - `gtr rm <id|branch>` - Remove worktree(s)
+  - `gtr go <branch>` - Navigate to worktree (shell integration)
+  - `gtr open <branch>` - Open in editor
+  - `gtr ai <branch>` - Start AI coding tool
+  - `gtr rm <branch>` - Remove worktree(s)
   - `gtr list` - List all worktrees with human/machine-readable output
   - `gtr clean` - Remove stale worktrees
   - `gtr doctor` - Health check for git, editors, and AI tools

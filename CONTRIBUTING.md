@@ -167,17 +167,19 @@ Currently, testing is manual. Please test your changes on:
 
 #### Manual Testing Checklist
 
-- [ ] Create worktree with auto ID
-- [ ] Create worktree with specific ID
+- [ ] Create worktree with branch name
+- [ ] Create worktree with branch containing slashes (e.g., feature/auth)
 - [ ] Create from remote branch
 - [ ] Create from local branch
 - [ ] Create new branch
 - [ ] Open in editor (if testing adapters)
 - [ ] Run AI tool (if testing adapters)
-- [ ] Remove worktree
+- [ ] Remove worktree by branch name
 - [ ] List worktrees
 - [ ] Test configuration commands
 - [ ] Test completions (tab completion works)
+- [ ] Test `gtr go 1` for main repo
+- [ ] Test `gtr go <branch>` for worktrees
 
 ### Pull Request Process
 
