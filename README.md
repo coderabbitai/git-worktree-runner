@@ -21,16 +21,16 @@ Git worktrees let you check out multiple branches at once in separate directorie
 
 While `git worktree` is powerful, it's verbose and manual. `gtr` adds quality-of-life features for modern development:
 
-| Task               | With `git worktree`                        | With `gtr`                         |
-| ------------------ | ------------------------------------------ | ---------------------------------- |
-| Create worktree    | `git worktree add ../repo-feature feature` | `gtr new feature`                  |
-| Open in editor     | `cd ../repo-feature && cursor .`           | `gtr open feature`             |
-| Start AI tool      | `cd ../repo-feature && aider`              | `gtr ai feature`                |
-| Copy config files  | Manual copy/paste                          | Auto-copy via `gtr.copy.include`   |
-| Run build steps    | Manual `npm install && npm run build`      | Auto-run via `gtr.hook.postCreate` |
-| List worktrees     | `git worktree list` (shows paths)          | `gtr list` (shows branches + status)    |
-| Switch to worktree | `cd ../repo-feature`                       | `cd "$(gtr go feature)"`                 |
-| Clean up           | `git worktree remove ../repo-feature`      | `gtr rm feature`                         |
+| Task               | With `git worktree`                        | With `gtr`                           |
+| ------------------ | ------------------------------------------ | ------------------------------------ |
+| Create worktree    | `git worktree add ../repo-feature feature` | `gtr new feature`                    |
+| Open in editor     | `cd ../repo-feature && cursor .`           | `gtr open feature`                   |
+| Start AI tool      | `cd ../repo-feature && aider`              | `gtr ai feature`                     |
+| Copy config files  | Manual copy/paste                          | Auto-copy via `gtr.copy.include`     |
+| Run build steps    | Manual `npm install && npm run build`      | Auto-run via `gtr.hook.postCreate`   |
+| List worktrees     | `git worktree list` (shows paths)          | `gtr list` (shows branches + status) |
+| Switch to worktree | `cd ../repo-feature`                       | `cd "$(gtr go feature)"`             |
+| Clean up           | `git worktree remove ../repo-feature`      | `gtr rm feature`                     |
 
 **TL;DR:** `gtr` wraps `git worktree` with quality-of-life features for modern development workflows (AI tools, editors, automation).
 
@@ -241,12 +241,12 @@ gtr.ai.default = none
 
 **Supported AI Tools:**
 
-| Tool                                              | Install                                           | Use Case                             | Set as Default                        |
-| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------ | ------------------------------------- |
-| **[Aider](https://aider.chat)**                   | `pip install aider-chat`                          | Pair programming, edit files with AI | `gtr config set gtr.ai.default aider` |
-| **[Claude Code](https://claude.com/claude-code)** | Install from claude.com                           | Terminal-native coding agent         | `gtr config set gtr.ai.default claude` |
-| **[Codex CLI](https://github.com/openai/codex)**  | `npm install -g @openai/codex`                    | OpenAI coding assistant              | `gtr config set gtr.ai.default codex` |
-| **[Cursor](https://cursor.com)**                  | Install from cursor.com                           | AI-powered editor with CLI agent     | `gtr config set gtr.ai.default cursor` |
+| Tool                                              | Install                                           | Use Case                             | Set as Default                           |
+| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------ | ---------------------------------------- |
+| **[Aider](https://aider.chat)**                   | `pip install aider-chat`                          | Pair programming, edit files with AI | `gtr config set gtr.ai.default aider`    |
+| **[Claude Code](https://claude.com/claude-code)** | Install from claude.com                           | Terminal-native coding agent         | `gtr config set gtr.ai.default claude`   |
+| **[Codex CLI](https://github.com/openai/codex)**  | `npm install -g @openai/codex`                    | OpenAI coding assistant              | `gtr config set gtr.ai.default codex`    |
+| **[Cursor](https://cursor.com)**                  | Install from cursor.com                           | AI-powered editor with CLI agent     | `gtr config set gtr.ai.default cursor`   |
 | **[Continue](https://continue.dev)**              | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent             | `gtr config set gtr.ai.default continue` |
 
 **Examples:**
