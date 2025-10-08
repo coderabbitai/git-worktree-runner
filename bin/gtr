@@ -1,0 +1,960 @@
+#!/usr/bin/env bash
+# gtr - Git worktree runner
+# Portable, cross-platform git worktree management
+
+set -e
+
+# Version
+GTR_VERSION="1.0.0"
+
+# Find the script directory (resolve symlinks; allow env override)
+resolve_script_dir() {
+  local src="${BASH_SOURCE[0]}"
+  while [ -h "$src" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    [[ $src != /* ]] && src="$dir/$src"
+  done
+  cd -P "$(dirname "$src")/.." && pwd
+}
+: "${GTR_DIR:=$(resolve_script_dir)}"
+
+# Source library files
+. "$GTR_DIR/lib/ui.sh"
+. "$GTR_DIR/lib/config.sh"
+. "$GTR_DIR/lib/platform.sh"
+. "$GTR_DIR/lib/core.sh"
+. "$GTR_DIR/lib/copy.sh"
+. "$GTR_DIR/lib/hooks.sh"
+
+# Main dispatcher
+main() {
+  local cmd="${1:-help}"
+  shift 2>/dev/null || true
+
+  case "$cmd" in
+    new)
+      cmd_create "$@"
+      ;;
+    rm)
+      cmd_remove "$@"
+      ;;
+    go)
+      cmd_go "$@"
+      ;;
+    open)
+      cmd_open "$@"
+      ;;
+    ai)
+      cmd_ai "$@"
+      ;;
+    ls|list)
+      cmd_list "$@"
+      ;;
+    clean)
+      cmd_clean "$@"
+      ;;
+    doctor)
+      cmd_doctor "$@"
+      ;;
+    adapter|adapters)
+      cmd_adapter "$@"
+      ;;
+    config)
+      cmd_config "$@"
+      ;;
+    version|--version|-v)
+      echo "gtr version $GTR_VERSION"
+      ;;
+    help|--help|-h)
+      cmd_help
+      ;;
+    *)
+      log_error "Unknown command: $cmd"
+      echo "Use 'gtr help' for available commands"
+      exit 1
+      ;;
+  esac
+}
+
+# Create command
+cmd_create() {
+  local branch_name=""
+  local from_ref=""
+  local track_mode="auto"
+  local skip_copy=0
+  local skip_fetch=0
+  local yes_mode=0
+  local force=0
+  local custom_name=""
+
+  # Parse flags and arguments
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --from)
+        from_ref="$2"
+        shift 2
+        ;;
+      --track)
+        track_mode="$2"
+        shift 2
+        ;;
+      --no-copy)
+        skip_copy=1
+        shift
+        ;;
+      --no-fetch)
+        skip_fetch=1
+        shift
+        ;;
+      --yes)
+        yes_mode=1
+        shift
+        ;;
+      --force)
+        force=1
+        shift
+        ;;
+      --name)
+        custom_name="$2"
+        shift 2
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        # Positional argument: treat as branch name
+        if [ -z "$branch_name" ]; then
+          branch_name="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  # Validate flag combinations
+  if [ "$force" -eq 1 ] && [ -z "$custom_name" ]; then
+    log_error "--force requires --name to distinguish worktrees"
+    if [ -n "$branch_name" ]; then
+      echo "Example: gtr new $branch_name --force --name backend" >&2
+    else
+      echo "Example: gtr new feature-auth --force --name backend" >&2
+    fi
+    exit 1
+  fi
+
+  # Get repo info
+  local repo_root
+  repo_root=$(discover_repo_root) || exit 1
+
+  local base_dir prefix
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+  # Get branch name if not provided
+  if [ -z "$branch_name" ]; then
+    if [ "$yes_mode" -eq 1 ]; then
+      log_error "Branch name required in non-interactive mode"
+      exit 1
+    fi
+    branch_name=$(prompt_input "Enter branch name:")
+    if [ -z "$branch_name" ]; then
+      log_error "Branch name required"
+      exit 1
+    fi
+  fi
+
+  # Determine from_ref
+  if [ -z "$from_ref" ]; then
+    from_ref=$(resolve_default_branch "$repo_root")
+  fi
+
+  # Construct folder name for display
+  local folder_name
+  if [ -n "$custom_name" ]; then
+    folder_name="$(sanitize_branch_name "$branch_name")-${custom_name}"
+  else
+    folder_name=$(sanitize_branch_name "$branch_name")
+  fi
+
+  log_step "Creating worktree: $folder_name"
+  echo "Location: $base_dir/${prefix}${folder_name}"
+  echo "Branch: $branch_name"
+
+  # Create the worktree
+  if ! create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name"; then
+    exit 1
+  fi
+
+  # Copy files based on patterns
+  if [ "$skip_copy" -eq 0 ]; then
+    local includes excludes
+    includes=$(cfg_get_all gtr.copy.include)
+    excludes=$(cfg_get_all gtr.copy.exclude)
+
+    if [ -n "$includes" ]; then
+      log_step "Copying files..."
+      copy_patterns "$repo_root" "$worktree_path" "$includes" "$excludes"
+    fi
+  fi
+
+  # Run post-create hooks
+  run_hooks_in postCreate "$worktree_path" \
+    REPO_ROOT="$repo_root" \
+    WORKTREE_PATH="$worktree_path" \
+    BRANCH="$branch_name"
+
+  echo ""
+  log_info "Worktree created: $worktree_path"
+  echo ""
+  echo "Next steps:"
+  echo "  gtr open $branch_name    # Open in editor"
+  echo "  gtr ai $branch_name      # Start AI tool"
+  echo "  cd \"\$(gtr go $branch_name)\"  # Navigate to worktree"
+}
+
+# Remove command
+cmd_remove() {
+  local delete_branch=0
+  local yes_mode=0
+  local force=0
+  local identifiers=""
+
+  # Parse flags
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --delete-branch)
+        delete_branch=1
+        shift
+        ;;
+      --yes)
+        yes_mode=1
+        shift
+        ;;
+      --force)
+        force=1
+        shift
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        identifiers="$identifiers $1"
+        shift
+        ;;
+    esac
+  done
+
+  if [ -z "$identifiers" ]; then
+    log_error "Usage: gtr rm <id|branch> [<id|branch>...] [--delete-branch] [--force] [--yes]"
+    exit 1
+  fi
+
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+  for identifier in $identifiers; do
+    # Resolve target branch
+    local target is_main worktree_path branch_name
+    target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || continue
+    is_main=$(echo "$target" | cut -f1)
+    worktree_path=$(echo "$target" | cut -f2)
+    branch_name=$(echo "$target" | cut -f3)
+
+    # Cannot remove main repository
+    if [ "$is_main" = "1" ]; then
+      log_error "Cannot remove main repository"
+      continue
+    fi
+
+    log_step "Removing worktree: $branch_name"
+
+    # Remove the worktree
+    if ! remove_worktree "$worktree_path" "$force"; then
+      continue
+    fi
+
+    # Handle branch deletion
+    if [ -n "$branch_name" ]; then
+      if [ "$delete_branch" -eq 1 ]; then
+        if [ "$yes_mode" -eq 1 ] || prompt_yes_no "Also delete branch '$branch_name'?"; then
+          if git branch -D "$branch_name" 2>/dev/null; then
+            log_info "Branch deleted: $branch_name"
+          else
+            log_warn "Could not delete branch: $branch_name"
+          fi
+        fi
+      fi
+    fi
+
+    # Run post-remove hooks
+    run_hooks postRemove \
+      REPO_ROOT="$repo_root" \
+      WORKTREE_PATH="$worktree_path" \
+      BRANCH="$branch_name"
+  done
+}
+
+# Go command (navigate to worktree - prints path for shell integration)
+cmd_go() {
+  if [ $# -ne 1 ]; then
+    log_error "Usage: gtr go <id|branch>"
+    exit 1
+  fi
+
+  local identifier="$1"
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+  # Resolve target branch
+  local target is_main worktree_path branch
+  target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
+  is_main=$(echo "$target" | cut -f1)
+  worktree_path=$(echo "$target" | cut -f2)
+  branch=$(echo "$target" | cut -f3)
+
+  # Human messages to stderr so stdout can be used in command substitution
+  if [ "$is_main" = "1" ]; then
+    echo "Main repo" >&2
+  else
+    echo "Worktree: $branch" >&2
+  fi
+  echo "Branch: $branch" >&2
+
+  # Print path to stdout for shell integration: cd "$(gtr go my-feature)"
+  printf "%s\n" "$worktree_path"
+}
+
+# Open command
+cmd_open() {
+  local identifier=""
+  local editor=""
+
+  # Parse flags
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --editor)
+        editor="$2"
+        shift 2
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        if [ -z "$identifier" ]; then
+          identifier="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  if [ -z "$identifier" ]; then
+    log_error "Usage: gtr open <id|branch> [--editor <name>]"
+    exit 1
+  fi
+
+  # Get editor from flag or config
+  if [ -z "$editor" ]; then
+    editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
+  fi
+
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+  # Resolve target branch
+  local target worktree_path branch
+  target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
+  worktree_path=$(echo "$target" | cut -f2)
+  branch=$(echo "$target" | cut -f3)
+
+  if [ "$editor" = "none" ]; then
+    # Just open in GUI file browser
+    open_in_gui "$worktree_path"
+    log_info "Opened in file browser"
+  else
+    # Load editor adapter and open
+    load_editor_adapter "$editor"
+    log_step "Opening in $editor..."
+    editor_open "$worktree_path"
+  fi
+}
+
+# AI command
+cmd_ai() {
+  local identifier=""
+  local ai_tool=""
+  local -a ai_args=()
+
+  # Parse arguments
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --ai)
+        ai_tool="$2"
+        shift 2
+        ;;
+      --)
+        shift
+        ai_args=("$@")
+        break
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        if [ -z "$identifier" ]; then
+          identifier="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  if [ -z "$identifier" ]; then
+    log_error "Usage: gtr ai <id|branch> [--ai <name>] [-- args...]"
+    exit 1
+  fi
+
+  # Get AI tool from flag or config
+  if [ -z "$ai_tool" ]; then
+    ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none")
+  fi
+
+  # Check if AI tool is configured
+  if [ "$ai_tool" = "none" ]; then
+    log_error "No AI tool configured"
+    log_info "Set default: gtr config set gtr.ai.default claude"
+    exit 1
+  fi
+
+  # Load AI adapter
+  load_ai_adapter "$ai_tool"
+
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+  # Resolve target branch
+  local target worktree_path branch
+  target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
+  worktree_path=$(echo "$target" | cut -f2)
+  branch=$(echo "$target" | cut -f3)
+
+  log_step "Starting $ai_tool for: $branch"
+  echo "Directory: $worktree_path"
+  echo "Branch: $branch"
+
+  ai_start "$worktree_path" "${ai_args[@]}"
+}
+
+# List command
+cmd_list() {
+  local porcelain=0
+
+  # Parse flags
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --porcelain)
+        porcelain=1
+        shift
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) 2>/dev/null || return 0
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+  # Machine-readable output (porcelain)
+  if [ "$porcelain" -eq 1 ]; then
+    # Output: path<tab>branch<tab>status
+    local branch status
+    # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
+    branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
+    [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    [ -z "$branch" ] || [ "$branch" = "HEAD" ] && branch="(detached)"
+    status=$(worktree_status "$repo_root")
+    printf "%s\t%s\t%s\n" "$repo_root" "$branch" "$status"
+
+    if [ -d "$base_dir" ]; then
+      # Find all worktree directories and output: path<tab>branch<tab>status
+      find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | while IFS= read -r dir; do
+        local branch status
+        branch=$(current_branch "$dir")
+        [ -z "$branch" ] && branch="(detached)"
+        status=$(worktree_status "$dir")
+        printf "%s\t%s\t%s\n" "$dir" "$branch" "$status"
+      done | LC_ALL=C sort -k2,2
+    fi
+    return 0
+  fi
+
+  # Human-readable output - table format
+  echo "Git Worktrees"
+  echo ""
+  printf "%-30s %s\n" "BRANCH" "PATH"
+  printf "%-30s %s\n" "------" "----"
+
+  # Always show repo root first
+  local branch
+  # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
+  branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
+  [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+  [ -z "$branch" ] || [ "$branch" = "HEAD" ] && branch="(detached)"
+  printf "%-30s %s\n" "$branch [main repo]" "$repo_root"
+
+  # Show worktrees sorted by branch name
+  if [ -d "$base_dir" ]; then
+    find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | while IFS= read -r dir; do
+      local branch
+      branch=$(current_branch "$dir")
+      [ -z "$branch" ] && branch="(detached)"
+      printf "%-30s %s\n" "$branch" "$dir"
+    done | LC_ALL=C sort -k1,1
+  fi
+
+  echo ""
+  echo ""
+  echo "Tip: Use 'gtr list --porcelain' for machine-readable output"
+}
+
+# Clean command (remove prunable worktrees)
+cmd_clean() {
+  log_step "Cleaning up stale worktrees..."
+
+  # Run git worktree prune
+  if git worktree prune 2>/dev/null; then
+    log_info "Pruned stale worktree administrative files"
+  fi
+
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+  if [ ! -d "$base_dir" ]; then
+    log_info "No worktrees directory to clean"
+    return 0
+  fi
+
+  # Find and remove empty directories
+  local cleaned=0
+  local empty_dirs
+  empty_dirs=$(find "$base_dir" -maxdepth 1 -type d -empty 2>/dev/null | grep -v "^${base_dir}$" || true)
+
+  if [ -n "$empty_dirs" ]; then
+    while IFS= read -r dir; do
+      if [ -n "$dir" ]; then
+        if rmdir "$dir" 2>/dev/null; then
+          cleaned=$((cleaned + 1))
+          log_info "Removed empty directory: $(basename "$dir")"
+        fi
+      fi
+    done <<EOF
+$empty_dirs
+EOF
+  fi
+
+  if [ "$cleaned" -gt 0 ]; then
+    log_info "Cleanup complete ($cleaned director$([ "$cleaned" -eq 1 ] && echo 'y' || echo 'ies') removed)"
+  else
+    log_info "Cleanup complete (no empty directories found)"
+  fi
+}
+
+# Doctor command (health check)
+cmd_doctor() {
+  echo "Running gtr health check..."
+  echo ""
+
+  local issues=0
+
+  # Check git
+  if command -v git >/dev/null 2>&1; then
+    local git_version
+    git_version=$(git --version)
+    echo "[OK] Git: $git_version"
+  else
+    echo "[x] Git: not found"
+    issues=$((issues + 1))
+  fi
+
+  # Check repo
+  local repo_root
+  if repo_root=$(discover_repo_root 2>/dev/null); then
+    echo "[OK] Repository: $repo_root"
+
+    # Check worktree base dir
+    local base_dir prefix
+    base_dir=$(resolve_base_dir "$repo_root")
+    prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+    if [ -d "$base_dir" ]; then
+      local count
+      count=$(find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | wc -l | tr -d ' ')
+      echo "[OK] Worktrees directory: $base_dir ($count worktrees)"
+    else
+      echo "[i] Worktrees directory: $base_dir (not created yet)"
+    fi
+  else
+    echo "[x] Not in a git repository"
+    issues=$((issues + 1))
+  fi
+
+  # Check configured editor
+  local editor
+  editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
+  if [ "$editor" != "none" ]; then
+    # Check if adapter exists
+    local editor_adapter="$GTR_DIR/adapters/editor/${editor}.sh"
+    if [ -f "$editor_adapter" ]; then
+      . "$editor_adapter"
+      if editor_can_open 2>/dev/null; then
+        echo "[OK] Editor: $editor (found)"
+      else
+        echo "[!] Editor: $editor (configured but not found in PATH)"
+      fi
+    else
+      echo "[!] Editor: $editor (adapter not found)"
+    fi
+  else
+    echo "[i] Editor: none configured"
+  fi
+
+  # Check configured AI tool
+  local ai_tool
+  ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none")
+  if [ "$ai_tool" != "none" ]; then
+    # Check if adapter exists
+    local adapter_file="$GTR_DIR/adapters/ai/${ai_tool}.sh"
+    if [ -f "$adapter_file" ]; then
+      . "$adapter_file"
+      if ai_can_start 2>/dev/null; then
+        echo "[OK] AI tool: $ai_tool (found)"
+      else
+        echo "[!] AI tool: $ai_tool (configured but not found in PATH)"
+      fi
+    else
+      echo "[!] AI tool: $ai_tool (adapter not found)"
+    fi
+  else
+    echo "[i] AI tool: none configured"
+  fi
+
+  # Check OS
+  local os
+  os=$(detect_os)
+  echo "[OK] Platform: $os"
+
+  echo ""
+  if [ "$issues" -eq 0 ]; then
+    echo "Everything looks good!"
+    return 0
+  else
+    echo "[!] Found $issues issue(s)"
+    return 1
+  fi
+}
+
+# Adapter command (list available adapters)
+cmd_adapter() {
+  echo "Available Adapters"
+  echo ""
+
+  # Editor adapters
+  echo "Editor Adapters:"
+  echo ""
+  printf "%-15s %-15s %s\n" "NAME" "STATUS" "NOTES"
+  printf "%-15s %-15s %s\n" "---------------" "---------------" "-----"
+
+  for adapter_file in "$GTR_DIR"/adapters/editor/*.sh; do
+    if [ -f "$adapter_file" ]; then
+      local adapter_name
+      adapter_name=$(basename "$adapter_file" .sh)
+      . "$adapter_file"
+
+      if editor_can_open 2>/dev/null; then
+        printf "%-15s %-15s %s\n" "$adapter_name" "[ready]" ""
+      else
+        printf "%-15s %-15s %s\n" "$adapter_name" "[missing]" "Not found in PATH"
+      fi
+    fi
+  done
+
+  echo ""
+  echo ""
+  echo "AI Tool Adapters:"
+  echo ""
+  printf "%-15s %-15s %s\n" "NAME" "STATUS" "NOTES"
+  printf "%-15s %-15s %s\n" "---------------" "---------------" "-----"
+
+  for adapter_file in "$GTR_DIR"/adapters/ai/*.sh; do
+    if [ -f "$adapter_file" ]; then
+      local adapter_name
+      adapter_name=$(basename "$adapter_file" .sh)
+      . "$adapter_file"
+
+      if ai_can_start 2>/dev/null; then
+        printf "%-15s %-15s %s\n" "$adapter_name" "[ready]" ""
+      else
+        printf "%-15s %-15s %s\n" "$adapter_name" "[missing]" "Not found in PATH"
+      fi
+    fi
+  done
+
+  echo ""
+  echo ""
+  echo "Tip: Set defaults with:"
+  echo "   gtr config set gtr.editor.default <name>"
+  echo "   gtr config set gtr.ai.default <name>"
+}
+
+# Config command
+cmd_config() {
+  local scope="local"
+  local action="" key="" value=""
+
+  # Parse args flexibly: action, key, value, and --global anywhere
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --global|global)
+        scope="global"
+        shift
+        ;;
+      get|set|unset)
+        action="$1"
+        shift
+        ;;
+      *)
+        if [ -z "$key" ]; then
+          key="$1"
+          shift
+        elif [ -z "$value" ] && [ "$action" = "set" ]; then
+          value="$1"
+          shift
+        else
+          # Unknown extra token
+          shift
+        fi
+        ;;
+    esac
+  done
+
+  # Default action is get
+  action="${action:-get}"
+
+  case "$action" in
+    get)
+      if [ -z "$key" ]; then
+        log_error "Usage: gtr config get <key> [--global]"
+        exit 1
+      fi
+      cfg_get "$key" "$scope"
+      ;;
+    set)
+      if [ -z "$key" ] || [ -z "$value" ]; then
+        log_error "Usage: gtr config set <key> <value> [--global]"
+        exit 1
+      fi
+      cfg_set "$key" "$value" "$scope"
+      log_info "Config set: $key = $value ($scope)"
+      ;;
+    unset)
+      if [ -z "$key" ]; then
+        log_error "Usage: gtr config unset <key> [--global]"
+        exit 1
+      fi
+      cfg_unset "$key" "$scope"
+      log_info "Config unset: $key ($scope)"
+      ;;
+    *)
+      log_error "Unknown config action: $action"
+      log_error "Usage: gtr config {get|set|unset} <key> [value] [--global]"
+      exit 1
+      ;;
+  esac
+}
+
+# Load editor adapter
+load_editor_adapter() {
+  local editor="$1"
+  local adapter_file="$GTR_DIR/adapters/editor/${editor}.sh"
+
+  if [ ! -f "$adapter_file" ]; then
+    log_error "Unknown editor: $editor"
+    log_info "Available editors: cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom"
+    exit 1
+  fi
+
+  . "$adapter_file"
+}
+
+# Load AI adapter
+load_ai_adapter() {
+  local ai_tool="$1"
+  local adapter_file="$GTR_DIR/adapters/ai/${ai_tool}.sh"
+
+  if [ ! -f "$adapter_file" ]; then
+    log_error "Unknown AI tool: $ai_tool"
+    log_info "Available AI tools: aider, claude, codex, cursor, continue"
+    exit 1
+  fi
+
+  . "$adapter_file"
+}
+
+# Help command
+cmd_help() {
+  cat <<'EOF'
+gtr - Git worktree runner
+
+PHILOSOPHY: Configuration over flags. Set defaults once, then use simple commands.
+
+────────────────────────────────────────────────────────────────────────────────
+
+QUICK START:
+  cd ~/your-repo                              # Navigate to git repo first
+  gtr config set gtr.editor.default cursor    # One-time setup
+  gtr config set gtr.ai.default claude        # One-time setup
+  gtr new my-feature                          # Creates worktree in folder "my-feature"
+  gtr open my-feature                         # Opens in cursor
+  gtr ai my-feature                           # Starts claude
+  gtr rm my-feature                           # Remove when done
+
+────────────────────────────────────────────────────────────────────────────────
+
+KEY CONCEPTS:
+  • Worktree folders are named after the branch name
+  • Main repo is accessible via special ID '1' (e.g., gtr go 1, gtr open 1)
+  • Commands accept branch names to identify worktrees
+    Example: gtr open my-feature, gtr go feature/user-auth
+
+────────────────────────────────────────────────────────────────────────────────
+
+CORE COMMANDS (daily workflow):
+
+  new <branch> [options]
+         Create a new worktree (folder named after branch)
+         --from <ref>: create from specific ref
+         --track <mode>: tracking mode (auto|remote|local|none)
+         --no-copy: skip file copying
+         --no-fetch: skip git fetch
+         --force: allow same branch in multiple worktrees (requires --name)
+         --name <suffix>: custom folder name suffix (e.g., backend, frontend)
+         --yes: non-interactive mode
+
+  open <branch> [--editor <name>]
+         Open worktree in editor (uses gtr.editor.default or --editor)
+         Special: use '1' to open repo root
+
+  ai <branch> [--ai <name>] [-- args...]
+         Start AI coding tool in worktree (uses gtr.ai.default or --ai)
+         Special: use '1' to open repo root
+
+  go <branch>
+         Navigate to worktree (prints path for: cd "$(gtr go my-feature)")
+         Special: use '1' for repo root
+
+  list [--porcelain]
+         List all worktrees
+         Aliases: ls
+
+  rm <branch> [<branch>...] [options]
+         Remove worktree(s) by branch name
+         --delete-branch: also delete the branch
+         --force: force removal (dirty worktree)
+         --yes: skip confirmation
+
+────────────────────────────────────────────────────────────────────────────────
+
+SETUP & MAINTENANCE:
+
+  config {get|set|unset} <key> [value] [--global]
+         Manage configuration
+
+  doctor
+         Health check (verify git, editors, AI tools)
+
+  adapter
+         List available editor & AI tool adapters
+
+  clean
+         Remove stale/prunable worktrees
+
+  version
+         Show version
+
+────────────────────────────────────────────────────────────────────────────────
+
+WORKFLOW EXAMPLES:
+
+  # One-time repo setup
+  cd ~/GitHub/my-project
+  gtr config set gtr.editor.default cursor
+  gtr config set gtr.ai.default claude
+
+  # Daily workflow
+  gtr new feature/user-auth               # Create worktree (folder: feature-user-auth)
+  gtr open feature/user-auth              # Open in editor
+  gtr ai feature/user-auth                # Start AI tool
+
+  # Navigate to worktree directory
+  cd "$(gtr go feature/user-auth)"
+
+  # Override defaults with flags
+  gtr open feature/user-auth --editor vscode
+  gtr ai feature/user-auth --ai aider
+
+  # Chain commands together
+  gtr new hotfix && gtr open hotfix && gtr ai hotfix
+
+  # When finished
+  gtr rm feature/user-auth --delete-branch
+
+  # Check setup and available tools
+  gtr doctor
+  gtr adapter
+
+────────────────────────────────────────────────────────────────────────────────
+
+CONFIGURATION OPTIONS:
+
+  gtr.worktrees.dir        Worktrees base directory
+  gtr.worktrees.prefix     Worktree folder prefix (default: "")
+  gtr.defaultBranch        Default branch (default: auto)
+  gtr.editor.default       Default editor
+                           Options: cursor, vscode, zed, idea, pycharm,
+                           webstorm, vim, nvim, emacs, sublime, nano,
+                           atom, none
+  gtr.ai.default           Default AI tool
+                           Options: aider, claude, codex, cursor,
+                           continue, none
+  gtr.copy.include         Files to copy (multi-valued)
+  gtr.copy.exclude         Files to exclude (multi-valued)
+  gtr.hook.postCreate      Post-create hooks (multi-valued)
+  gtr.hook.postRemove      Post-remove hooks (multi-valued)
+
+────────────────────────────────────────────────────────────────────────────────
+
+MORE INFO: https://github.com/coderabbitai/git-worktree-runner
+EOF
+}
+
+# Run main
+main "$@"
