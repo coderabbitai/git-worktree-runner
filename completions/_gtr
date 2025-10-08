@@ -1,0 +1,77 @@
+#compdef gtr
+# Zsh completion for gtr
+
+_gtr() {
+  local -a commands
+  commands=(
+    'new:Create a new worktree'
+    'go:Navigate to worktree'
+    'rm:Remove worktree(s)'
+    'open:Open worktree in editor'
+    'ai:Start AI coding tool'
+    'ls:List all worktrees'
+    'list:List all worktrees'
+    'clean:Remove stale worktrees'
+    'doctor:Health check'
+    'adapter:List available adapters'
+    'config:Manage configuration'
+    'version:Show version'
+    'help:Show help'
+  )
+
+  local -a branches all_options
+  # Get branch names
+  branches=(${(f)"$(git branch --format='%(refname:short)' 2>/dev/null)"})
+  # Add special ID '1' for main repo
+  all_options=("1" "${branches[@]}")
+
+  if (( CURRENT == 2 )); then
+    _describe 'commands' commands
+  elif (( CURRENT == 3 )); then
+    case "$words[2]" in
+      go|open|ai|rm)
+        _describe 'branch names' all_options
+        ;;
+      new)
+        _arguments \
+          '--from[Base ref]:ref:' \
+          '--track[Track mode]:mode:(auto remote local none)' \
+          '--no-copy[Skip file copying]' \
+          '--no-fetch[Skip git fetch]' \
+          '--force[Allow same branch in multiple worktrees]' \
+          '--name[Custom folder name suffix]:name:' \
+          '--yes[Non-interactive mode]'
+        ;;
+      config)
+        _values 'config action' get set unset
+        ;;
+    esac
+  elif (( CURRENT >= 4 )); then
+    case "$words[2]" in
+      rm)
+        _arguments \
+          '--delete-branch[Delete branch]' \
+          '--force[Force removal even if dirty]' \
+          '--yes[Non-interactive mode]'
+        ;;
+      config)
+        case "$words[3]" in
+          get|set|unset)
+            _values 'config key' \
+              'gtr.worktrees.dir' \
+              'gtr.worktrees.prefix' \
+              'gtr.defaultBranch' \
+              'gtr.editor.default' \
+              'gtr.ai.default' \
+              'gtr.copy.include' \
+              'gtr.copy.exclude' \
+              'gtr.hook.postCreate' \
+              'gtr.hook.postRemove'
+            ;;
+        esac
+        ;;
+    esac
+  fi
+}
+
+_gtr "$@"

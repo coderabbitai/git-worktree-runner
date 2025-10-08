@@ -1,0 +1,67 @@
+# Example gtr configuration
+# Copy this to your repository and customize as needed
+
+# === Worktree Settings ===
+
+# Base directory for worktrees (relative to repo parent or absolute path)
+# Default: <repo-name>-worktrees
+# gtr.worktrees.dir = my-worktrees
+
+# Prefix for worktree directory names (folders named: {prefix}{branch-name})
+# Default: "" (empty, folders named after branch)
+# gtr.worktrees.prefix = dev-
+
+# Default branch to create new branches from
+# Options: auto (detect from origin/HEAD), main, master, or any branch name
+# Default: auto
+# gtr.defaultBranch = main
+
+# === Editor Settings ===
+
+# Default editor to open worktrees
+# Options: cursor, vscode, zed, or none
+# Default: none
+# gtr.editor.default = cursor
+
+# === AI Tool Settings ===
+
+# Default AI coding tool
+# Options: aider, or none
+# Default: none
+# gtr.ai.default = aider
+
+# === File Copying ===
+
+# Files to copy to new worktrees (glob patterns, can specify multiple)
+# Default: none
+# gtr.copy.include = **/.env.example
+# gtr.copy.include = **/CLAUDE.md
+# gtr.copy.include = apps/*/run.sh
+
+# Files to exclude from copying (glob patterns)
+# gtr.copy.exclude = **/.env
+# gtr.copy.exclude = **/.env.local
+# gtr.copy.exclude = **/secrets.json
+
+# === Hooks ===
+
+# Commands to run after creating a worktree (can specify multiple, run in order)
+# gtr.hook.postCreate = npm install
+# gtr.hook.postCreate = npm run build
+
+# Commands to run after removing a worktree
+# gtr.hook.postRemove = echo "Cleaned up worktree"
+
+# === How to Apply This Config ===
+
+# For local repository only:
+# git config --local gtr.editor.default cursor
+# git config --local --add gtr.copy.include "**/.env.example"
+# git config --local --add gtr.hook.postCreate "pnpm install"
+
+# For all repositories (global):
+# git config --global gtr.editor.default vscode
+
+# Or use gtr's config command:
+# gtr config set gtr.editor.default cursor
+# gtr config set gtr.editor.default cursor --global
