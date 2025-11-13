@@ -737,7 +737,7 @@ cmd_config() {
         scope="global"
         shift
         ;;
-      get|set|unset)
+      get|set|unset|add)
         action="$1"
         shift
         ;;
@@ -745,7 +745,7 @@ cmd_config() {
         if [ -z "$key" ]; then
           key="$1"
           shift
-        elif [ -z "$value" ] && [ "$action" = "set" ]; then
+        elif [ -z "$value" ] && { [ "$action" = "set" ] || [ "$action" = "add" ]; }; then
           value="$1"
           shift
         else
@@ -775,6 +775,14 @@ cmd_config() {
       cfg_set "$key" "$value" "$scope"
       log_info "Config set: $key = $value ($scope)"
       ;;
+    add)
+      if [ -z "$key" ] || [ -z "$value" ]; then
+        log_error "Usage: gtr config add <key> <value> [--global]"
+        exit 1
+      fi
+      cfg_add "$key" "$value" "$scope"
+      log_info "Config added: $key = $value ($scope)"
+      ;;
     unset)
       if [ -z "$key" ]; then
         log_error "Usage: gtr config unset <key> [--global]"
@@ -785,7 +793,7 @@ cmd_config() {
       ;;
     *)
       log_error "Unknown config action: $action"
-      log_error "Usage: gtr config {get|set|unset} <key> [value] [--global]"
+      log_error "Usage: gtr config {get|set|add|unset} <key> [value] [--global]"
       exit 1
       ;;
   esac
@@ -796,13 +804,23 @@ load_editor_adapter() {
   local editor="$1"
   local adapter_file="$GTR_DIR/adapters/editor/${editor}.sh"
 
-  if [ ! -f "$adapter_file" ]; then
-    log_error "Unknown editor: $editor"
-    log_info "Available editors: cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom"
+  # Try loading explicit adapter first (allows special handling)
+  if [ -f "$adapter_file" ]; then
+    . "$adapter_file"
+    return 0
+  fi
+
+  # Generic fallback: check if command exists in PATH
+  if ! command -v "$editor" >/dev/null 2>&1; then
+    log_error "Editor '$editor' not found"
+    log_info "Built-in adapters: cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom"
+    log_info "Or use any editor command available in your PATH (e.g., code-insiders, fleet)"
     exit 1
   fi
 
-  . "$adapter_file"
+  # Define generic adapter functions dynamically
+  eval "editor_can_open() { command -v '$editor' >/dev/null 2>&1; }"
+  eval "editor_open() { '$editor' \"\$1\"; }"
 }
 
 # Load AI adapter
@@ -810,13 +828,23 @@ load_ai_adapter() {
   local ai_tool="$1"
   local adapter_file="$GTR_DIR/adapters/ai/${ai_tool}.sh"
 
-  if [ ! -f "$adapter_file" ]; then
-    log_error "Unknown AI tool: $ai_tool"
-    log_info "Available AI tools: aider, claude, codex, cursor, continue"
+  # Try loading explicit adapter first (allows special handling)
+  if [ -f "$adapter_file" ]; then
+    . "$adapter_file"
+    return 0
+  fi
+
+  # Generic fallback: check if command exists in PATH
+  if ! command -v "$ai_tool" >/dev/null 2>&1; then
+    log_error "AI tool '$ai_tool' not found"
+    log_info "Built-in adapters: aider, claude, codex, cursor, continue"
+    log_info "Or use any AI tool command available in your PATH (e.g., bunx, gpt)"
     exit 1
   fi
 
-  . "$adapter_file"
+  # Define generic adapter functions dynamically
+  eval "ai_can_start() { command -v '$ai_tool' >/dev/null 2>&1; }"
+  eval "ai_start() { local path=\"\$1\"; shift; (cd \"\$path\" && '$ai_tool' \"\$@\"); }"
 }
 
 # Help command
@@ -885,14 +913,19 @@ CORE COMMANDS (daily workflow):
 
 SETUP & MAINTENANCE:
 
-  config {get|set|unset} <key> [value] [--global]
+  config {get|set|add|unset} <key> [value] [--global]
          Manage configuration
+         - get: read a config value
+         - set: set a single value (replaces existing)
+         - add: add a value (for multi-valued configs like hooks, copy patterns)
+         - unset: remove a config value
 
   doctor
          Health check (verify git, editors, AI tools)
 
   adapter
          List available editor & AI tool adapters
+         Note: Any command in your PATH can be used (e.g., code-insiders, bunx)
 
   clean
          Remove stale/prunable worktrees
