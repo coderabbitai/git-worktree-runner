@@ -811,7 +811,10 @@ load_editor_adapter() {
   fi
 
   # Generic fallback: check if command exists in PATH
-  if ! command -v "$editor" >/dev/null 2>&1; then
+  # Extract first word (command name) from potentially multi-word string
+  local cmd_name="${editor%% *}"
+
+  if ! command -v "$cmd_name" >/dev/null 2>&1; then
     log_error "Editor '$editor' not found"
     log_info "Built-in adapters: cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom"
     log_info "Or use any editor command available in your PATH (e.g., code-insiders, fleet)"
@@ -819,8 +822,9 @@ load_editor_adapter() {
   fi
 
   # Define generic adapter functions dynamically
-  eval "editor_can_open() { command -v '$editor' >/dev/null 2>&1; }"
-  eval "editor_open() { '$editor' \"\$1\"; }"
+  # Note: $editor may contain arguments (e.g., "code --wait")
+  eval "editor_can_open() { command -v '$cmd_name' >/dev/null 2>&1; }"
+  eval "editor_open() { $editor \"\$1\"; }"
 }
 
 # Load AI adapter
