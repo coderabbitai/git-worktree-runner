@@ -51,7 +51,7 @@ resolve_base_dir() {
 
     # Check if absolute or relative
     if [ "${base_dir#/}" = "$base_dir" ]; then
-      # Relative path - resolve from repo root (v1.1.0+)
+      # Relative path - resolve from repo root
       base_dir="$repo_root/$base_dir"
     fi
     # Absolute paths (starting with /) are used as-is
