@@ -839,7 +839,10 @@ load_ai_adapter() {
   fi
 
   # Generic fallback: check if command exists in PATH
-  if ! command -v "$ai_tool" >/dev/null 2>&1; then
+  # Extract first word (command name) from potentially multi-word string
+  local cmd_name="${ai_tool%% *}"
+
+  if ! command -v "$cmd_name" >/dev/null 2>&1; then
     log_error "AI tool '$ai_tool' not found"
     log_info "Built-in adapters: aider, claude, codex, cursor, continue"
     log_info "Or use any AI tool command available in your PATH (e.g., bunx, gpt)"
@@ -847,8 +850,9 @@ load_ai_adapter() {
   fi
 
   # Define generic adapter functions dynamically
-  eval "ai_can_start() { command -v '$ai_tool' >/dev/null 2>&1; }"
-  eval "ai_start() { local path=\"\$1\"; shift; (cd \"\$path\" && '$ai_tool' \"\$@\"); }"
+  # Note: $ai_tool may contain arguments (e.g., "bunx @github/copilot@latest")
+  eval "ai_can_start() { command -v '$cmd_name' >/dev/null 2>&1; }"
+  eval "ai_start() { local path=\"\$1\"; shift; (cd \"\$path\" && $ai_tool \"\$@\"); }"
 }
 
 # Help command
