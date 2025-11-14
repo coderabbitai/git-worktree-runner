@@ -2,7 +2,7 @@
 # UI utilities for logging and prompting
 
 log_info() {
-  printf "[OK] %s\n" "$*"
+  printf "[OK] %s\n" "$*" >&2
 }
 
 log_warn() {
@@ -14,7 +14,7 @@ log_error() {
 }
 
 log_step() {
-  printf "==> %s\n" "$*"
+  printf "==> %s\n" "$*" >&2
 }
 
 log_question() {

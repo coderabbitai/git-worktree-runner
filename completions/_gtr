@@ -7,7 +7,7 @@ _gtr() {
     'new:Create a new worktree'
     'go:Navigate to worktree'
     'rm:Remove worktree(s)'
-    'open:Open worktree in editor'
+    'editor:Open worktree in editor'
     'ai:Start AI coding tool'
     'ls:List all worktrees'
     'list:List all worktrees'
@@ -29,7 +29,7 @@ _gtr() {
     _describe 'commands' commands
   elif (( CURRENT == 3 )); then
     case "$words[2]" in
-      go|open|ai|rm)
+      go|editor|ai|rm)
         _describe 'branch names' all_options
         ;;
       new)

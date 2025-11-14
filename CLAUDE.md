@@ -64,7 +64,7 @@ Test changes using this comprehensive checklist (from CONTRIBUTING.md):
 
 # Open in editor (if testing adapters)
 ./bin/gtr config set gtr.editor.default cursor
-./bin/gtr open test-feature
+./bin/gtr editor test-feature
 # Expected: Opens Cursor at worktree path
 
 # Run AI tool (if testing adapters)
@@ -91,7 +91,7 @@ Test changes using this comprehensive checklist (from CONTRIBUTING.md):
 
 # Test shell completions with tab completion
 gtr new <TAB>
-gtr open <TAB>
+gtr editor <TAB>
 # Expected: Shows available branches/worktrees
 
 # Test gtr go for main repo and worktrees
@@ -171,7 +171,7 @@ git --version
 
 **Branch Name Mapping**: Branch names are sanitized to valid folder names (slashes and special chars → hyphens). For example, `feature/user-auth` becomes folder `feature-user-auth`.
 
-**Special ID '1'**: The main repository is always accessible via ID `1` in commands (e.g., `gtr go 1`, `gtr open 1`).
+**Special ID '1'**: The main repository is always accessible via ID `1` in commands (e.g., `gtr go 1`, `gtr editor 1`).
 
 **Configuration Storage**: All configuration is stored via `git config` (local, global, or system). No custom config files. This makes settings portable and follows git conventions.
 
@@ -187,7 +187,7 @@ git --version
 Understanding how commands are dispatched through the system:
 
 1. **Entry Point** (`bin/gtr:32-79`): Main dispatcher receives command and routes to appropriate handler
-2. **Command Handlers** (`bin/gtr`): Each `cmd_*` function handles a specific command (e.g., `cmd_create`, `cmd_open`, `cmd_ai`)
+2. **Command Handlers** (`bin/gtr`): Each `cmd_*` function handles a specific command (e.g., `cmd_create`, `cmd_editor`, `cmd_ai`)
 3. **Library Functions** (`lib/*.sh`): Command handlers call reusable functions from library modules
 4. **Adapters** (`adapters/*`): Dynamically loaded when needed via `load_editor_adapter` or `load_ai_adapter`
 
@@ -202,11 +202,11 @@ bin/gtr main()
   → run_hooks_in() [lib/hooks.sh]
 ```
 
-**Example flow for `gtr open my-feature`:**
+**Example flow for `gtr editor my-feature`:**
 
 ```
 bin/gtr main()
-  → cmd_open()
+  → cmd_editor()
   → resolve_target() [lib/core.sh]
   → load_editor_adapter()
   → editor_open() [adapters/editor/*.sh]
@@ -413,7 +413,7 @@ bash -c 'source adapters/editor/cursor.sh && editor_can_open && echo "Available"
 bash -c 'source adapters/ai/claude.sh && ai_can_start && echo "Available" || echo "Not found"'
 
 # Debug adapter loading with trace
-bash -x ./bin/gtr open test-feature --editor cursor
+bash -x ./bin/gtr editor test-feature --editor cursor
 # Shows full execution trace including adapter loading
 ```
 

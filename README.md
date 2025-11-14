@@ -38,7 +38,7 @@ gtr config set gtr.ai.default claude        # One-time setup
 
 # Daily workflow
 gtr new my-feature                          # Create worktree
-gtr open my-feature                         # Open in editor
+gtr editor my-feature                       # Open in editor
 gtr ai my-feature                           # Start AI tool
 gtr rm my-feature                           # Remove when done
 ```
@@ -50,7 +50,7 @@ While `git worktree` is powerful, it's verbose and manual. `gtr` adds quality-of
 | Task              | With `git worktree`                        | With `gtr`                           |
 | ----------------- | ------------------------------------------ | ------------------------------------ |
 | Create worktree   | `git worktree add ../repo-feature feature` | `gtr new feature`                    |
-| Open in editor    | `cd ../repo-feature && cursor .`           | `gtr open feature`                   |
+| Open in editor    | `cd ../repo-feature && cursor .`           | `gtr editor feature`                 |
 | Start AI tool     | `cd ../repo-feature && aider`              | `gtr ai feature`                     |
 | Copy config files | Manual copy/paste                          | Auto-copy via `gtr.copy.include`     |
 | Run build steps   | Manual `npm install && npm run build`      | Auto-run via `gtr.hook.postCreate`   |
@@ -83,7 +83,7 @@ gtr config set gtr.ai.default claude
 
 # Daily workflow
 gtr new my-feature          # Create worktree folder: my-feature
-gtr open my-feature         # Open in cursor
+gtr editor my-feature       # Open in cursor
 gtr ai my-feature           # Start claude
 
 # Navigate to worktree
@@ -175,13 +175,13 @@ gtr new my-feature --name descriptive-variant   # Optional: custom name without 
 - `--name <suffix>`: Custom folder name suffix (optional, required with --force)
 - `--yes`: Non-interactive mode
 
-### `gtr open <branch> [--editor <name>]`
+### `gtr editor <branch> [--editor <name>]`
 
 Open worktree in editor (uses `gtr.editor.default` or `--editor` flag).
 
 ```bash
-gtr open my-feature                    # Uses configured editor
-gtr open my-feature --editor vscode    # Override with vscode
+gtr editor my-feature                    # Uses configured editor
+gtr editor my-feature --editor vscode    # Override with vscode
 ```
 
 ### `gtr ai <branch> [--ai <name>] [-- args...]`
@@ -220,7 +220,7 @@ gtr rm my-feature --delete-branch --force      # Delete branch and force
 
 List all worktrees. Use `--porcelain` for machine-readable output.
 
-### `gtr config {get|set|unset} <key> [value] [--global]`
+### `gtr config {get|set|add|unset} <key> [value] [--global]`
 
 Manage configuration via git config.
 
@@ -324,13 +324,13 @@ Copy files to new worktrees using glob patterns:
 
 ```bash
 # Add patterns to copy (multi-valued)
-git config --add gtr.copy.include "**/.env.example"
-git config --add gtr.copy.include "**/CLAUDE.md"
-git config --add gtr.copy.include "*.config.js"
+gtr config add gtr.copy.include "**/.env.example"
+gtr config add gtr.copy.include "**/CLAUDE.md"
+gtr config add gtr.copy.include "*.config.js"
 
 # Exclude patterns (multi-valued)
-git config --add gtr.copy.exclude "**/.env"
-git config --add gtr.copy.exclude "**/secrets.*"
+gtr config add gtr.copy.exclude "**/.env"
+gtr config add gtr.copy.exclude "**/secrets.*"
 ```
 
 **⚠️ Security Note:** Be careful not to copy sensitive files. Use `.env.example` instead of `.env`.
@@ -341,11 +341,11 @@ Run custom commands after worktree operations:
 
 ```bash
 # Post-create hooks (multi-valued, run in order)
-git config --add gtr.hook.postCreate "npm install"
-git config --add gtr.hook.postCreate "npm run build"
+gtr config add gtr.hook.postCreate "npm install"
+gtr config add gtr.hook.postCreate "npm run build"
 
 # Post-remove hooks
-git config --add gtr.hook.postRemove "echo 'Cleaned up!'"
+gtr config add gtr.hook.postRemove "echo 'Cleaned up!'"
 ```
 
 **Environment variables available in hooks:**
@@ -358,19 +358,19 @@ git config --add gtr.hook.postRemove "echo 'Cleaned up!'"
 
 ```bash
 # Node.js (npm)
-git config --add gtr.hook.postCreate "npm install"
+gtr config add gtr.hook.postCreate "npm install"
 
 # Node.js (pnpm)
-git config --add gtr.hook.postCreate "pnpm install"
+gtr config add gtr.hook.postCreate "pnpm install"
 
 # Python
-git config --add gtr.hook.postCreate "pip install -r requirements.txt"
+gtr config add gtr.hook.postCreate "pip install -r requirements.txt"
 
 # Ruby
-git config --add gtr.hook.postCreate "bundle install"
+gtr config add gtr.hook.postCreate "bundle install"
 
 # Rust
-git config --add gtr.hook.postCreate "cargo build"
+gtr config add gtr.hook.postCreate "cargo build"
 ```
 
 ## Configuration Examples
@@ -378,35 +378,35 @@ git config --add gtr.hook.postCreate "cargo build"
 ### Minimal Setup (Just Basics)
 
 ```bash
-git config --local gtr.worktrees.prefix "wt-"
-git config --local gtr.defaultBranch "main"
+gtr config set gtr.worktrees.prefix "wt-"
+gtr config set gtr.defaultBranch "main"
 ```
 
 ### Full-Featured Setup (Node.js Project)
 
 ```bash
 # Worktree settings
-git config --local gtr.worktrees.prefix "wt-"
+gtr config set gtr.worktrees.prefix "wt-"
 
 # Editor
-git config --local gtr.editor.default cursor
+gtr config set gtr.editor.default cursor
 
 # Copy environment templates
-git config --local --add gtr.copy.include "**/.env.example"
-git config --local --add gtr.copy.include "**/.env.development"
-git config --local --add gtr.copy.exclude "**/.env.local"
+gtr config add gtr.copy.include "**/.env.example"
+gtr config add gtr.copy.include "**/.env.development"
+gtr config add gtr.copy.exclude "**/.env.local"
 
 # Build hooks
-git config --local --add gtr.hook.postCreate "pnpm install"
-git config --local --add gtr.hook.postCreate "pnpm run build"
+gtr config add gtr.hook.postCreate "pnpm install"
+gtr config add gtr.hook.postCreate "pnpm run build"
 ```
 
 ### Global Defaults
 
 ```bash
 # Set global preferences
-git config --global gtr.editor.default cursor
-git config --global gtr.ai.default claude
+gtr config set gtr.editor.default cursor --global
+gtr config set gtr.ai.default claude --global
 ```
 
 ## Advanced Usage
@@ -425,11 +425,11 @@ git config --global gtr.ai.default claude
 ```bash
 # Terminal 1: Work on feature
 gtr new feature-a
-gtr open feature-a
+gtr editor feature-a
 
 # Terminal 2: Review PR
 gtr new pr/123
-gtr open pr/123
+gtr editor pr/123
 
 # Terminal 3: Navigate to main branch (repo root)
 cd "$(gtr go 1)"  # Special ID '1' = main repo
@@ -448,7 +448,7 @@ gtr list
 # auth-feature    ~/GitHub/frontend-worktrees/auth-feature
 # nav-redesign    ~/GitHub/frontend-worktrees/nav-redesign
 
-gtr open auth-feature        # Open frontend auth work
+gtr editor auth-feature      # Open frontend auth work
 gtr ai nav-redesign          # AI on frontend nav work
 
 # Backend repo (separate worktrees)
@@ -459,12 +459,12 @@ gtr list
 # api-auth        ~/GitHub/backend-worktrees/api-auth
 # websockets      ~/GitHub/backend-worktrees/websockets
 
-gtr open api-auth            # Open backend auth work
+gtr editor api-auth          # Open backend auth work
 gtr ai websockets            # AI on backend websockets
 
 # Switch back to frontend
 cd ~/GitHub/frontend
-gtr open auth-feature        # Opens frontend auth
+gtr editor auth-feature      # Opens frontend auth
 ```
 
 **Key point:** Each repository has its own worktrees. Use branch names to identify worktrees.
@@ -477,17 +477,17 @@ Create a `.gtr-setup.sh` in your repo:
 #!/bin/sh
 # .gtr-setup.sh - Project-specific gtr configuration
 
-git config --local gtr.worktrees.prefix "dev-"
-git config --local gtr.editor.default cursor
+gtr config set gtr.worktrees.prefix "dev-"
+gtr config set gtr.editor.default cursor
 
 # Copy configs
-git config --local --add gtr.copy.include ".env.example"
-git config --local --add gtr.copy.include "docker-compose.yml"
+gtr config add gtr.copy.include ".env.example"
+gtr config add gtr.copy.include "docker-compose.yml"
 
 # Setup hooks
-git config --local --add gtr.hook.postCreate "docker-compose up -d db"
-git config --local --add gtr.hook.postCreate "npm install"
-git config --local --add gtr.hook.postCreate "npm run db:migrate"
+gtr config add gtr.hook.postCreate "docker-compose up -d db"
+gtr config add gtr.hook.postCreate "npm install"
+gtr config add gtr.hook.postCreate "npm run db:migrate"
 ```
 
 Then run: `sh .gtr-setup.sh`
@@ -585,14 +585,14 @@ command -v cursor  # or: code, zed
 gtr config get gtr.editor.default
 
 # Try opening again
-gtr open 2
+gtr editor 2
 ```
 
 ### File Copying Issues
 
 ```bash
 # Check your patterns
-git config --get-all gtr.copy.include
+gtr config get gtr.copy.include
 
 # Test patterns with find
 cd /path/to/repo

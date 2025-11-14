@@ -28,6 +28,32 @@ resolve_script_dir() {
 . "$GTR_DIR/lib/copy.sh"
 . "$GTR_DIR/lib/hooks.sh"
 
+# Generic adapter functions (used when no explicit adapter file exists)
+# These will be overridden if an adapter file is sourced
+# Globals set by load_editor_adapter: GTR_EDITOR_CMD, GTR_EDITOR_CMD_NAME
+editor_can_open() {
+  command -v "$GTR_EDITOR_CMD_NAME" >/dev/null 2>&1
+}
+
+editor_open() {
+  # $GTR_EDITOR_CMD may contain arguments (e.g., "code --wait")
+  # Using eval here is necessary to handle multi-word commands properly
+  eval "$GTR_EDITOR_CMD \"\$1\""
+}
+
+# Globals set by load_ai_adapter: GTR_AI_CMD, GTR_AI_CMD_NAME
+ai_can_start() {
+  command -v "$GTR_AI_CMD_NAME" >/dev/null 2>&1
+}
+
+ai_start() {
+  local path="$1"
+  shift
+  # $GTR_AI_CMD may contain arguments (e.g., "bunx @github/copilot@latest")
+  # Using eval here is necessary to handle multi-word commands properly
+  (cd "$path" && eval "$GTR_AI_CMD \"\$@\"")
+}
+
 # Main dispatcher
 main() {
   local cmd="${1:-help}"
@@ -43,8 +69,8 @@ main() {
     go)
       cmd_go "$@"
       ;;
-    open)
-      cmd_open "$@"
+    editor)
+      cmd_editor "$@"
       ;;
     ai)
       cmd_ai "$@"
@@ -184,7 +210,7 @@ cmd_create() {
   echo "Branch: $branch_name"
 
   # Create the worktree
-  if ! create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name"; then
+  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name"); then
     exit 1
   fi
 
@@ -210,7 +236,7 @@ cmd_create() {
   log_info "Worktree created: $worktree_path"
   echo ""
   echo "Next steps:"
-  echo "  gtr open $branch_name    # Open in editor"
+  echo "  gtr editor $branch_name  # Open in editor"
   echo "  gtr ai $branch_name      # Start AI tool"
   echo "  cd \"\$(gtr go $branch_name)\"  # Navigate to worktree"
 }
@@ -332,8 +358,8 @@ cmd_go() {
   printf "%s\n" "$worktree_path"
 }
 
-# Open command
-cmd_open() {
+# Editor command
+cmd_editor() {
   local identifier=""
   local editor=""
 
@@ -358,7 +384,7 @@ cmd_open() {
   done
 
   if [ -z "$identifier" ]; then
-    log_error "Usage: gtr open <id|branch> [--editor <name>]"
+    log_error "Usage: gtr editor <id|branch> [--editor <name>]"
     exit 1
   fi
 
@@ -737,7 +763,7 @@ cmd_config() {
         scope="global"
         shift
         ;;
-      get|set|unset)
+      get|set|unset|add)
         action="$1"
         shift
         ;;
@@ -745,7 +771,7 @@ cmd_config() {
         if [ -z "$key" ]; then
           key="$1"
           shift
-        elif [ -z "$value" ] && [ "$action" = "set" ]; then
+        elif [ -z "$value" ] && { [ "$action" = "set" ] || [ "$action" = "add" ]; }; then
           value="$1"
           shift
         else
@@ -775,6 +801,14 @@ cmd_config() {
       cfg_set "$key" "$value" "$scope"
       log_info "Config set: $key = $value ($scope)"
       ;;
+    add)
+      if [ -z "$key" ] || [ -z "$value" ]; then
+        log_error "Usage: gtr config add <key> <value> [--global]"
+        exit 1
+      fi
+      cfg_add "$key" "$value" "$scope"
+      log_info "Config added: $key = $value ($scope)"
+      ;;
     unset)
       if [ -z "$key" ]; then
         log_error "Usage: gtr config unset <key> [--global]"
@@ -785,7 +819,7 @@ cmd_config() {
       ;;
     *)
       log_error "Unknown config action: $action"
-      log_error "Usage: gtr config {get|set|unset} <key> [value] [--global]"
+      log_error "Usage: gtr config {get|set|add|unset} <key> [value] [--global]"
       exit 1
       ;;
   esac
@@ -796,13 +830,27 @@ load_editor_adapter() {
   local editor="$1"
   local adapter_file="$GTR_DIR/adapters/editor/${editor}.sh"
 
-  if [ ! -f "$adapter_file" ]; then
-    log_error "Unknown editor: $editor"
-    log_info "Available editors: cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom"
+  # Try loading explicit adapter first (allows special handling)
+  if [ -f "$adapter_file" ]; then
+    . "$adapter_file"
+    return 0
+  fi
+
+  # Generic fallback: check if command exists in PATH
+  # Extract first word (command name) from potentially multi-word string
+  local cmd_name="${editor%% *}"
+
+  if ! command -v "$cmd_name" >/dev/null 2>&1; then
+    log_error "Editor '$editor' not found"
+    log_info "Built-in adapters: cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom"
+    log_info "Or use any editor command available in your PATH (e.g., code-insiders, fleet)"
     exit 1
   fi
 
-  . "$adapter_file"
+  # Set globals for generic adapter functions
+  # Note: $editor may contain arguments (e.g., "code --wait")
+  GTR_EDITOR_CMD="$editor"
+  GTR_EDITOR_CMD_NAME="$cmd_name"
 }
 
 # Load AI adapter
@@ -810,13 +858,27 @@ load_ai_adapter() {
   local ai_tool="$1"
   local adapter_file="$GTR_DIR/adapters/ai/${ai_tool}.sh"
 
-  if [ ! -f "$adapter_file" ]; then
-    log_error "Unknown AI tool: $ai_tool"
-    log_info "Available AI tools: aider, claude, codex, cursor, continue"
+  # Try loading explicit adapter first (allows special handling)
+  if [ -f "$adapter_file" ]; then
+    . "$adapter_file"
+    return 0
+  fi
+
+  # Generic fallback: check if command exists in PATH
+  # Extract first word (command name) from potentially multi-word string
+  local cmd_name="${ai_tool%% *}"
+
+  if ! command -v "$cmd_name" >/dev/null 2>&1; then
+    log_error "AI tool '$ai_tool' not found"
+    log_info "Built-in adapters: aider, claude, codex, cursor, continue"
+    log_info "Or use any AI tool command available in your PATH (e.g., bunx, gpt)"
     exit 1
   fi
 
-  . "$adapter_file"
+  # Set globals for generic adapter functions
+  # Note: $ai_tool may contain arguments (e.g., "bunx @github/copilot@latest")
+  GTR_AI_CMD="$ai_tool"
+  GTR_AI_CMD_NAME="$cmd_name"
 }
 
 # Help command
@@ -833,7 +895,7 @@ QUICK START:
   gtr config set gtr.editor.default cursor    # One-time setup
   gtr config set gtr.ai.default claude        # One-time setup
   gtr new my-feature                          # Creates worktree in folder "my-feature"
-  gtr open my-feature                         # Opens in cursor
+  gtr editor my-feature                       # Opens in cursor
   gtr ai my-feature                           # Starts claude
   gtr rm my-feature                           # Remove when done
 
@@ -841,9 +903,9 @@ QUICK START:
 
 KEY CONCEPTS:
   • Worktree folders are named after the branch name
-  • Main repo is accessible via special ID '1' (e.g., gtr go 1, gtr open 1)
+  • Main repo is accessible via special ID '1' (e.g., gtr go 1, gtr editor 1)
   • Commands accept branch names to identify worktrees
-    Example: gtr open my-feature, gtr go feature/user-auth
+    Example: gtr editor my-feature, gtr go feature/user-auth
 
 ────────────────────────────────────────────────────────────────────────────────
 
@@ -859,7 +921,7 @@ CORE COMMANDS (daily workflow):
          --name <suffix>: custom folder name suffix (e.g., backend, frontend)
          --yes: non-interactive mode
 
-  open <branch> [--editor <name>]
+  editor <branch> [--editor <name>]
          Open worktree in editor (uses gtr.editor.default or --editor)
          Special: use '1' to open repo root
 
@@ -885,14 +947,19 @@ CORE COMMANDS (daily workflow):
 
 SETUP & MAINTENANCE:
 
-  config {get|set|unset} <key> [value] [--global]
+  config {get|set|add|unset} <key> [value] [--global]
          Manage configuration
+         - get: read a config value
+         - set: set a single value (replaces existing)
+         - add: add a value (for multi-valued configs like hooks, copy patterns)
+         - unset: remove a config value
 
   doctor
          Health check (verify git, editors, AI tools)
 
   adapter
          List available editor & AI tool adapters
+         Note: Any command in your PATH can be used (e.g., code-insiders, bunx)
 
   clean
          Remove stale/prunable worktrees
@@ -911,18 +978,18 @@ WORKFLOW EXAMPLES:
 
   # Daily workflow
   gtr new feature/user-auth               # Create worktree (folder: feature-user-auth)
-  gtr open feature/user-auth              # Open in editor
+  gtr editor feature/user-auth            # Open in editor
   gtr ai feature/user-auth                # Start AI tool
 
   # Navigate to worktree directory
   cd "$(gtr go feature/user-auth)"
 
   # Override defaults with flags
-  gtr open feature/user-auth --editor vscode
+  gtr editor feature/user-auth --editor vscode
   gtr ai feature/user-auth --ai aider
 
   # Chain commands together
-  gtr new hotfix && gtr open hotfix && gtr ai hotfix
+  gtr new hotfix && gtr editor hotfix && gtr ai hotfix
 
   # When finished
   gtr rm feature/user-auth --delete-branch
