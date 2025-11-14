@@ -266,7 +266,8 @@ gtr.worktrees.prefix = dev-
 gtr.defaultBranch = main
 ```
 
-**⚠️ Important:** If storing worktrees inside the repository, add the directory to `.gitignore`:
+> [!IMPORTANT]
+> If storing worktrees inside the repository, add the directory to `.gitignore`.
 
 ```bash
 echo "/.worktrees/" >> .gitignore
@@ -333,7 +334,8 @@ gtr config add gtr.copy.exclude "**/.env"
 gtr config add gtr.copy.exclude "**/secrets.*"
 ```
 
-**⚠️ Security Note:** Be careful not to copy sensitive files. Use `.env.example` instead of `.env`.
+> [!WARNING]
+> Be careful not to copy sensitive files. Use `.env.example` instead of `.env`.
 
 ### Hooks
 
@@ -506,7 +508,8 @@ gtr rm ci-test --yes --delete-branch
 
 ### Multiple Worktrees on Same Branch
 
-**⚠️ Advanced Use Only** - Git normally prevents checking out the same branch in multiple worktrees to avoid conflicts. `gtr` supports bypassing this safety check with `--force` and `--name` flags.
+> [!TIP]
+> Git normally prevents checking out the same branch in multiple worktrees to avoid conflicts. `gtr` supports bypassing this safety check with `--force` and `--name` flags.
 
 **Use cases:**
 
@@ -534,7 +537,7 @@ gtr new feature-auth --force --name tests     # Creates: feature-auth-tests/
 # The --name flag is required with --force to distinguish worktrees
 ```
 
-**Example: Parallel AI development on one feature**
+**Example: Parallel AI development on one feature:**
 
 ```bash
 # Terminal 1: Backend work
@@ -613,7 +616,7 @@ find . -path "**/.env.example"
 
 ## Architecture
 
-```
+```log
 git-worktree-runner/
 ├── bin/gtr              # Main executable
 ├── lib/                 # Core libraries
@@ -696,8 +699,6 @@ Unless required by applicable law or agreed to in writing, software distributed 
 
 Built to streamline parallel development workflows with git worktrees. Inspired by the need for simple, configurable worktree management across different development environments.
 
----
-
-**Happy coding with worktrees! 🚀**
+## Happy coding with worktrees! 🚀
 
 For questions or issues, please [open an issue](https://github.com/coderabbitai/git-worktree-runner/issues).
