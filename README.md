@@ -220,7 +220,7 @@ gtr rm my-feature --delete-branch --force      # Delete branch and force
 
 List all worktrees. Use `--porcelain` for machine-readable output.
 
-### `gtr config {get|set|unset} <key> [value] [--global]`
+### `gtr config {get|set|add|unset} <key> [value] [--global]`
 
 Manage configuration via git config.
 
