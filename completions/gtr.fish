@@ -4,7 +4,7 @@
 complete -c gtr -f -n "__fish_use_subcommand" -a "new" -d "Create a new worktree"
 complete -c gtr -f -n "__fish_use_subcommand" -a "go" -d "Navigate to worktree"
 complete -c gtr -f -n "__fish_use_subcommand" -a "rm" -d "Remove worktree(s)"
-complete -c gtr -f -n "__fish_use_subcommand" -a "open" -d "Open worktree in editor"
+complete -c gtr -f -n "__fish_use_subcommand" -a "editor" -d "Open worktree in editor"
 complete -c gtr -f -n "__fish_use_subcommand" -a "ai" -d "Start AI coding tool"
 complete -c gtr -f -n "__fish_use_subcommand" -a "ls" -d "List all worktrees"
 complete -c gtr -f -n "__fish_use_subcommand" -a "list" -d "List all worktrees"
@@ -52,4 +52,4 @@ function __gtr_worktree_branches
 end
 
 # Complete branch names for commands that need them
-complete -c gtr -n "__fish_seen_subcommand_from go open ai rm" -f -a "(__gtr_worktree_branches)"
+complete -c gtr -n "__fish_seen_subcommand_from go editor ai rm" -f -a "(__gtr_worktree_branches)"

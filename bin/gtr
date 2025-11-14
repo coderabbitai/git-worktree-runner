@@ -43,8 +43,8 @@ main() {
     go)
       cmd_go "$@"
       ;;
-    open)
-      cmd_open "$@"
+    editor)
+      cmd_editor "$@"
       ;;
     ai)
       cmd_ai "$@"
@@ -210,7 +210,7 @@ cmd_create() {
   log_info "Worktree created: $worktree_path"
   echo ""
   echo "Next steps:"
-  echo "  gtr open $branch_name    # Open in editor"
+  echo "  gtr editor $branch_name  # Open in editor"
   echo "  gtr ai $branch_name      # Start AI tool"
   echo "  cd \"\$(gtr go $branch_name)\"  # Navigate to worktree"
 }
@@ -332,8 +332,8 @@ cmd_go() {
   printf "%s\n" "$worktree_path"
 }
 
-# Open command
-cmd_open() {
+# Editor command
+cmd_editor() {
   local identifier=""
   local editor=""
 
@@ -358,7 +358,7 @@ cmd_open() {
   done
 
   if [ -z "$identifier" ]; then
-    log_error "Usage: gtr open <id|branch> [--editor <name>]"
+    log_error "Usage: gtr editor <id|branch> [--editor <name>]"
     exit 1
   fi
 
@@ -869,7 +869,7 @@ QUICK START:
   gtr config set gtr.editor.default cursor    # One-time setup
   gtr config set gtr.ai.default claude        # One-time setup
   gtr new my-feature                          # Creates worktree in folder "my-feature"
-  gtr open my-feature                         # Opens in cursor
+  gtr editor my-feature                       # Opens in cursor
   gtr ai my-feature                           # Starts claude
   gtr rm my-feature                           # Remove when done
 
@@ -877,9 +877,9 @@ QUICK START:
 
 KEY CONCEPTS:
   • Worktree folders are named after the branch name
-  • Main repo is accessible via special ID '1' (e.g., gtr go 1, gtr open 1)
+  • Main repo is accessible via special ID '1' (e.g., gtr go 1, gtr editor 1)
   • Commands accept branch names to identify worktrees
-    Example: gtr open my-feature, gtr go feature/user-auth
+    Example: gtr editor my-feature, gtr go feature/user-auth
 
 ────────────────────────────────────────────────────────────────────────────────
 
@@ -895,7 +895,7 @@ CORE COMMANDS (daily workflow):
          --name <suffix>: custom folder name suffix (e.g., backend, frontend)
          --yes: non-interactive mode
 
-  open <branch> [--editor <name>]
+  editor <branch> [--editor <name>]
          Open worktree in editor (uses gtr.editor.default or --editor)
          Special: use '1' to open repo root
 
@@ -952,18 +952,18 @@ WORKFLOW EXAMPLES:
 
   # Daily workflow
   gtr new feature/user-auth               # Create worktree (folder: feature-user-auth)
-  gtr open feature/user-auth              # Open in editor
+  gtr editor feature/user-auth            # Open in editor
   gtr ai feature/user-auth                # Start AI tool
 
   # Navigate to worktree directory
   cd "$(gtr go feature/user-auth)"
 
   # Override defaults with flags
-  gtr open feature/user-auth --editor vscode
+  gtr editor feature/user-auth --editor vscode
   gtr ai feature/user-auth --ai aider
 
   # Chain commands together
-  gtr new hotfix && gtr open hotfix && gtr ai hotfix
+  gtr new hotfix && gtr editor hotfix && gtr ai hotfix
 
   # When finished
   gtr rm feature/user-auth --delete-branch

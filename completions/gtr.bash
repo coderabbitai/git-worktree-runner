@@ -9,13 +9,13 @@ _gtr_completion() {
 
   # Complete commands on first argument
   if [ "$cword" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "new go open ai rm ls list clean doctor adapter config help version" -- "$cur"))
+    COMPREPLY=($(compgen -W "new go editor ai rm ls list clean doctor adapter config help version" -- "$cur"))
     return 0
   fi
 
   # Commands that take branch names or '1' for main repo
   case "$cmd" in
-    go|open|ai|rm)
+    go|editor|ai|rm)
       if [ "$cword" -eq 2 ]; then
         # Complete with branch names and special ID '1' for main repo
         local branches all_options

@@ -38,7 +38,7 @@ gtr config set gtr.ai.default claude        # One-time setup
 
 # Daily workflow
 gtr new my-feature                          # Create worktree
-gtr open my-feature                         # Open in editor
+gtr editor my-feature                       # Open in editor
 gtr ai my-feature                           # Start AI tool
 gtr rm my-feature                           # Remove when done
 ```
@@ -50,7 +50,7 @@ While `git worktree` is powerful, it's verbose and manual. `gtr` adds quality-of
 | Task              | With `git worktree`                        | With `gtr`                           |
 | ----------------- | ------------------------------------------ | ------------------------------------ |
 | Create worktree   | `git worktree add ../repo-feature feature` | `gtr new feature`                    |
-| Open in editor    | `cd ../repo-feature && cursor .`           | `gtr open feature`                   |
+| Open in editor    | `cd ../repo-feature && cursor .`           | `gtr editor feature`                 |
 | Start AI tool     | `cd ../repo-feature && aider`              | `gtr ai feature`                     |
 | Copy config files | Manual copy/paste                          | Auto-copy via `gtr.copy.include`     |
 | Run build steps   | Manual `npm install && npm run build`      | Auto-run via `gtr.hook.postCreate`   |
@@ -83,7 +83,7 @@ gtr config set gtr.ai.default claude
 
 # Daily workflow
 gtr new my-feature          # Create worktree folder: my-feature
-gtr open my-feature         # Open in cursor
+gtr editor my-feature       # Open in cursor
 gtr ai my-feature           # Start claude
 
 # Navigate to worktree
@@ -175,13 +175,13 @@ gtr new my-feature --name descriptive-variant   # Optional: custom name without 
 - `--name <suffix>`: Custom folder name suffix (optional, required with --force)
 - `--yes`: Non-interactive mode
 
-### `gtr open <branch> [--editor <name>]`
+### `gtr editor <branch> [--editor <name>]`
 
 Open worktree in editor (uses `gtr.editor.default` or `--editor` flag).
 
 ```bash
-gtr open my-feature                    # Uses configured editor
-gtr open my-feature --editor vscode    # Override with vscode
+gtr editor my-feature                    # Uses configured editor
+gtr editor my-feature --editor vscode    # Override with vscode
 ```
 
 ### `gtr ai <branch> [--ai <name>] [-- args...]`
@@ -425,11 +425,11 @@ gtr config set gtr.ai.default claude --global
 ```bash
 # Terminal 1: Work on feature
 gtr new feature-a
-gtr open feature-a
+gtr editor feature-a
 
 # Terminal 2: Review PR
 gtr new pr/123
-gtr open pr/123
+gtr editor pr/123
 
 # Terminal 3: Navigate to main branch (repo root)
 cd "$(gtr go 1)"  # Special ID '1' = main repo
@@ -448,7 +448,7 @@ gtr list
 # auth-feature    ~/GitHub/frontend-worktrees/auth-feature
 # nav-redesign    ~/GitHub/frontend-worktrees/nav-redesign
 
-gtr open auth-feature        # Open frontend auth work
+gtr editor auth-feature      # Open frontend auth work
 gtr ai nav-redesign          # AI on frontend nav work
 
 # Backend repo (separate worktrees)
@@ -459,12 +459,12 @@ gtr list
 # api-auth        ~/GitHub/backend-worktrees/api-auth
 # websockets      ~/GitHub/backend-worktrees/websockets
 
-gtr open api-auth            # Open backend auth work
+gtr editor api-auth          # Open backend auth work
 gtr ai websockets            # AI on backend websockets
 
 # Switch back to frontend
 cd ~/GitHub/frontend
-gtr open auth-feature        # Opens frontend auth
+gtr editor auth-feature      # Opens frontend auth
 ```
 
 **Key point:** Each repository has its own worktrees. Use branch names to identify worktrees.
@@ -585,7 +585,7 @@ command -v cursor  # or: code, zed
 gtr config get gtr.editor.default
 
 # Try opening again
-gtr open 2
+gtr editor 2
 ```
 
 ### File Copying Issues
