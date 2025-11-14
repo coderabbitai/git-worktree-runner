@@ -298,8 +298,8 @@ create_worktree() {
       # Force use of remote branch
       if [ "$remote_exists" -eq 1 ]; then
         log_step "Creating worktree from remote branch origin/$branch_name"
-        if git worktree add $force_flag "$worktree_path" -b "$branch_name" "origin/$branch_name" 2>/dev/null || \
-           git worktree add $force_flag "$worktree_path" "$branch_name" 2>/dev/null; then
+        if git worktree add $force_flag "$worktree_path" -b "$branch_name" "origin/$branch_name" >&2 || \
+           git worktree add $force_flag "$worktree_path" "$branch_name" >&2; then
           log_info "Worktree created tracking origin/$branch_name"
           printf "%s" "$worktree_path"
           return 0
@@ -314,7 +314,7 @@ create_worktree() {
       # Force use of local branch
       if [ "$local_exists" -eq 1 ]; then
         log_step "Creating worktree from local branch $branch_name"
-        if git worktree add $force_flag "$worktree_path" "$branch_name" 2>/dev/null; then
+        if git worktree add $force_flag "$worktree_path" "$branch_name" >&2; then
           log_info "Worktree created with local branch $branch_name"
           printf "%s" "$worktree_path"
           return 0
@@ -328,7 +328,7 @@ create_worktree() {
     none)
       # Create new branch from from_ref
       log_step "Creating new branch $branch_name from $from_ref"
-      if git worktree add $force_flag "$worktree_path" -b "$branch_name" "$from_ref" 2>/dev/null; then
+      if git worktree add $force_flag "$worktree_path" -b "$branch_name" "$from_ref" >&2; then
         log_info "Worktree created with new branch $branch_name"
         printf "%s" "$worktree_path"
         return 0
@@ -350,21 +350,21 @@ create_worktree() {
         fi
 
         # Now add worktree using the tracking branch
-        if git worktree add $force_flag "$worktree_path" "$branch_name" 2>/dev/null; then
+        if git worktree add $force_flag "$worktree_path" "$branch_name" >&2; then
           log_info "Worktree created tracking origin/$branch_name"
           printf "%s" "$worktree_path"
           return 0
         fi
       elif [ "$local_exists" -eq 1 ]; then
         log_step "Using existing local branch $branch_name"
-        if git worktree add $force_flag "$worktree_path" "$branch_name" 2>/dev/null; then
+        if git worktree add $force_flag "$worktree_path" "$branch_name" >&2; then
           log_info "Worktree created with local branch $branch_name"
           printf "%s" "$worktree_path"
           return 0
         fi
       else
         log_step "Creating new branch $branch_name from $from_ref"
-        if git worktree add $force_flag "$worktree_path" -b "$branch_name" "$from_ref" 2>/dev/null; then
+        if git worktree add $force_flag "$worktree_path" -b "$branch_name" "$from_ref" >&2; then
           log_info "Worktree created with new branch $branch_name"
           printf "%s" "$worktree_path"
           return 0
