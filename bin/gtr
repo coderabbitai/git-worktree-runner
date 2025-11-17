@@ -236,9 +236,9 @@ cmd_create() {
   log_info "Worktree created: $worktree_path"
   echo ""
   echo "Next steps:"
-  echo "  gtr editor $branch_name  # Open in editor"
-  echo "  gtr ai $branch_name      # Start AI tool"
-  echo "  cd \"\$(gtr go $branch_name)\"  # Navigate to worktree"
+  echo "  git gtr editor $branch_name  # Open in editor"
+  echo "  git gtr ai $branch_name      # Start AI tool"
+  echo "  cd \"\$(git gtr go $branch_name)\"  # Navigate to worktree"
 }
 
 # Remove command
@@ -460,7 +460,7 @@ cmd_ai() {
   # Check if AI tool is configured
   if [ "$ai_tool" = "none" ]; then
     log_error "No AI tool configured"
-    log_info "Set default: gtr config set gtr.ai.default claude"
+    log_info "Set default: git gtr config set gtr.ai.default claude"
     exit 1
   fi
 
@@ -606,7 +606,7 @@ EOF
 
 # Doctor command (health check)
 cmd_doctor() {
-  echo "Running gtr health check..."
+  echo "Running git gtr health check..."
   echo ""
 
   local issues=0
@@ -747,8 +747,8 @@ cmd_adapter() {
   echo ""
   echo ""
   echo "Tip: Set defaults with:"
-  echo "   gtr config set gtr.editor.default <name>"
-  echo "   gtr config set gtr.ai.default <name>"
+  echo "   git gtr config set gtr.editor.default <name>"
+  echo "   git gtr config set gtr.ai.default <name>"
 }
 
 # Config command

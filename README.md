@@ -114,7 +114,7 @@ cd git-worktree-runner
 
 # Add to PATH (choose one)
 # Option 1: Symlink to /usr/local/bin
-sudo ln -s "$(pwd)/bin/gtr" /usr/local/bin/gtr
+sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
 
 # Option 2: Add to your shell profile
 echo 'export PATH="$PATH:'$(pwd)'/bin"' >> ~/.zshrc  # or ~/.bashrc
