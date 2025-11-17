@@ -70,7 +70,8 @@ resolve_base_dir() {
 
   # Canonicalize base_dir if it exists
   if [ -d "$base_dir" ]; then
-    local canonical_base="$(canonicalize_path "$base_dir")"
+    local canonical_base
+    canonical_base=$(canonicalize_path "$base_dir")
     if [ -n "$canonical_base" ]; then
       base_dir="$canonical_base"
     fi
@@ -78,7 +79,8 @@ resolve_base_dir() {
   fi
 
   # Canonicalize repo_root before comparison
-  local canonical_repo_root="$(canonicalize_path "$repo_root")"
+  local canonical_repo_root
+  canonical_repo_root=$(canonicalize_path "$repo_root")
   # Warn if canonicalization fails (indicates repository issue)
   if [ -z "$canonical_repo_root" ]; then
     log_warn "Unable to canonicalize repository path: $repo_root"
@@ -89,8 +91,8 @@ resolve_base_dir() {
   if [[ "$base_dir" == "$canonical_repo_root"/* ]]; then
     local rel_path="${base_dir#$canonical_repo_root/}"
     # Check if .gitignore exists and whether it includes the worktree directory
-    if [ -f "$repo_root/.gitignore" ]; then
-      if ! grep -qE "^/?${rel_path}/?\$|^/?${rel_path}/\*?\$" "$repo_root/.gitignore" 2>/dev/null; then
+    if [ -f "$canonical_repo_root/.gitignore" ]; then
+      if ! grep -qE "^/?${rel_path}/?\$|^/?${rel_path}/\*?\$" "$canonical_repo_root/.gitignore" 2>/dev/null; then
         log_warn "Worktrees are inside repository at: $rel_path"
         log_warn "Consider adding '/$rel_path/' to .gitignore to avoid committing worktrees"
       fi
