@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`gtr` (Git Worktree Runner) is a cross-platform CLI tool written in Bash that simplifies git worktree management. It wraps `git worktree` with quality-of-life features like editor integration, AI tool support, file copying, and hooks.
+`git gtr` (Git Worktree Runner) is a cross-platform CLI tool written in Bash that simplifies git worktree management. It wraps `git worktree` with quality-of-life features like editor integration, AI tool support, file copying, and hooks. It is installed as a git subcommand, so all commands are invoked as `git gtr <command>`.
 
 ## Development Commands
 
@@ -90,11 +90,11 @@ Test changes using this comprehensive checklist (from CONTRIBUTING.md):
 ./bin/gtr config unset gtr.editor.default
 
 # Test shell completions with tab completion
-gtr new <TAB>
-gtr editor <TAB>
+git gtr new <TAB>
+git gtr editor <TAB>
 # Expected: Shows available branches/worktrees
 
-# Test gtr go for main repo and worktrees
+# Test git gtr go for main repo and worktrees
 cd "$(./bin/gtr go 1)"
 # Expected: Navigates to repo root
 cd "$(./bin/gtr go test-feature)"
@@ -142,7 +142,7 @@ echo "Debug: var=$var" >&2
 # Verify git is available
 git --version
 
-# Check gtr setup
+# Check git gtr setup
 ./bin/gtr doctor
 
 # List available adapters
@@ -171,7 +171,7 @@ git --version
 
 **Branch Name Mapping**: Branch names are sanitized to valid folder names (slashes and special chars → hyphens). For example, `feature/user-auth` becomes folder `feature-user-auth`.
 
-**Special ID '1'**: The main repository is always accessible via ID `1` in commands (e.g., `gtr go 1`, `gtr editor 1`).
+**Special ID '1'**: The main repository is always accessible via ID `1` in commands (e.g., `git gtr go 1`, `git gtr editor 1`).
 
 **Configuration Storage**: All configuration is stored via `git config` (local, global, or system). No custom config files. This makes settings portable and follows git conventions.
 
@@ -191,7 +191,7 @@ Understanding how commands are dispatched through the system:
 3. **Library Functions** (`lib/*.sh`): Command handlers call reusable functions from library modules
 4. **Adapters** (`adapters/*`): Dynamically loaded when needed via `load_editor_adapter` or `load_ai_adapter`
 
-**Example flow for `gtr new my-feature`:**
+**Example flow for `git gtr new my-feature`:**
 
 ```
 bin/gtr main()
@@ -202,7 +202,7 @@ bin/gtr main()
   → run_hooks_in() [lib/hooks.sh]
 ```
 
-**Example flow for `gtr editor my-feature`:**
+**Example flow for `git gtr editor my-feature`:**
 
 ```
 bin/gtr main()
@@ -234,7 +234,7 @@ When releasing a new version, update the version constant in `bin/gtr`:
 GTR_VERSION="1.0.0"  # Update this
 ```
 
-The version is displayed with `gtr version` and `gtr --version`.
+The version is displayed with `git gtr version` and `git gtr --version`.
 
 ### Adding a New Editor Adapter
 
@@ -426,6 +426,6 @@ cd ~/gtr-test-repo
 git init
 git commit --allow-empty -m "Initial commit"
 
-# Now test gtr commands
+# Now test git gtr commands
 /path/to/git-worktree-runner/bin/gtr new test-feature
 ```

@@ -1,10 +1,10 @@
 #!/bin/sh
-# Example setup script for gtr configuration
+# Example setup script for git gtr configuration
 # Customize this for your project
 
 set -e
 
-echo "🔧 Configuring gtr for this repository..."
+echo "🔧 Configuring git gtr for this repository..."
 
 # Worktree settings
 git config --local gtr.worktrees.prefix ""
@@ -29,7 +29,7 @@ git config --local gtr.defaultBranch "auto"
 # git config --local --add gtr.hook.postCreate "bundle install"
 # git config --local --add gtr.hook.postCreate "cargo build"
 
-echo "✅ gtr configured!"
+echo "✅ git gtr configured!"
 echo ""
 echo "View config with: git config --local --list | grep gtr"
-echo "Create a worktree with: gtr new my-feature"
+echo "Create a worktree with: git gtr new my-feature"

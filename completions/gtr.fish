@@ -1,37 +1,58 @@
-# Fish completion for gtr
+# Fish completion for git gtr
+
+# Helper function to check if we're in 'git gtr' context
+function __fish_git_gtr_needs_command
+  set -l cmd (commandline -opc)
+  if [ (count $cmd) -eq 2 -a "$cmd[1]" = "git" -a "$cmd[2]" = "gtr" ]
+    return 0
+  end
+  return 1
+end
+
+function __fish_git_gtr_using_command
+  set -l cmd (commandline -opc)
+  if [ (count $cmd) -ge 3 -a "$cmd[1]" = "git" -a "$cmd[2]" = "gtr" ]
+    for i in $argv
+      if [ "$cmd[3]" = "$i" ]
+        return 0
+      end
+    end
+  end
+  return 1
+end
 
 # Commands
-complete -c gtr -f -n "__fish_use_subcommand" -a "new" -d "Create a new worktree"
-complete -c gtr -f -n "__fish_use_subcommand" -a "go" -d "Navigate to worktree"
-complete -c gtr -f -n "__fish_use_subcommand" -a "rm" -d "Remove worktree(s)"
-complete -c gtr -f -n "__fish_use_subcommand" -a "editor" -d "Open worktree in editor"
-complete -c gtr -f -n "__fish_use_subcommand" -a "ai" -d "Start AI coding tool"
-complete -c gtr -f -n "__fish_use_subcommand" -a "ls" -d "List all worktrees"
-complete -c gtr -f -n "__fish_use_subcommand" -a "list" -d "List all worktrees"
-complete -c gtr -f -n "__fish_use_subcommand" -a "clean" -d "Remove stale worktrees"
-complete -c gtr -f -n "__fish_use_subcommand" -a "doctor" -d "Health check"
-complete -c gtr -f -n "__fish_use_subcommand" -a "adapter" -d "List available adapters"
-complete -c gtr -f -n "__fish_use_subcommand" -a "config" -d "Manage configuration"
-complete -c gtr -f -n "__fish_use_subcommand" -a "version" -d "Show version"
-complete -c gtr -f -n "__fish_use_subcommand" -a "help" -d "Show help"
+complete -f -c git -n '__fish_git_gtr_needs_command' -a new -d 'Create a new worktree'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a go -d 'Navigate to worktree'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a rm -d 'Remove worktree(s)'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a editor -d 'Open worktree in editor'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a ai -d 'Start AI coding tool'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a ls -d 'List all worktrees'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a list -d 'List all worktrees'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a clean -d 'Remove stale worktrees'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a doctor -d 'Health check'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a adapter -d 'List available adapters'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a config -d 'Manage configuration'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a version -d 'Show version'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 
 # New command options
-complete -c gtr -n "__fish_seen_subcommand_from new" -l from -d "Base ref" -r
-complete -c gtr -n "__fish_seen_subcommand_from new" -l track -d "Track mode" -r -a "auto remote local none"
-complete -c gtr -n "__fish_seen_subcommand_from new" -l no-copy -d "Skip file copying"
-complete -c gtr -n "__fish_seen_subcommand_from new" -l no-fetch -d "Skip git fetch"
-complete -c gtr -n "__fish_seen_subcommand_from new" -l force -d "Allow same branch in multiple worktrees"
-complete -c gtr -n "__fish_seen_subcommand_from new" -l name -d "Custom folder name suffix" -r
-complete -c gtr -n "__fish_seen_subcommand_from new" -l yes -d "Non-interactive mode"
+complete -c git -n '__fish_git_gtr_using_command new' -l from -d 'Base ref' -r
+complete -c git -n '__fish_git_gtr_using_command new' -l track -d 'Track mode' -r -a 'auto remote local none'
+complete -c git -n '__fish_git_gtr_using_command new' -l no-copy -d 'Skip file copying'
+complete -c git -n '__fish_git_gtr_using_command new' -l no-fetch -d 'Skip git fetch'
+complete -c git -n '__fish_git_gtr_using_command new' -l force -d 'Allow same branch in multiple worktrees'
+complete -c git -n '__fish_git_gtr_using_command new' -l name -d 'Custom folder name suffix' -r
+complete -c git -n '__fish_git_gtr_using_command new' -l yes -d 'Non-interactive mode'
 
 # Remove command options
-complete -c gtr -n "__fish_seen_subcommand_from rm" -l delete-branch -d "Delete branch"
-complete -c gtr -n "__fish_seen_subcommand_from rm" -l force -d "Force removal even if dirty"
-complete -c gtr -n "__fish_seen_subcommand_from rm" -l yes -d "Non-interactive mode"
+complete -c git -n '__fish_git_gtr_using_command rm' -l delete-branch -d 'Delete branch'
+complete -c git -n '__fish_git_gtr_using_command rm' -l force -d 'Force removal even if dirty'
+complete -c git -n '__fish_git_gtr_using_command rm' -l yes -d 'Non-interactive mode'
 
 # Config command
-complete -c gtr -n "__fish_seen_subcommand_from config" -f -a "get set unset"
-complete -c gtr -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from get set unset" -f -a "\
+complete -f -c git -n '__fish_git_gtr_using_command config' -a 'get set add unset'
+complete -f -c git -n '__fish_git_gtr_using_command config' -a "
   gtr.worktrees.dir\t'Worktrees base directory'
   gtr.worktrees.prefix\t'Worktree folder prefix'
   gtr.defaultBranch\t'Default branch'
@@ -46,10 +67,13 @@ complete -c gtr -n "__fish_seen_subcommand_from config; and __fish_seen_subcomma
 # Helper function to get branch names and special '1' for main repo
 function __gtr_worktree_branches
   # Special ID for main repo
-  echo "1"
+  echo '1'
   # Get branch names
   git branch --format='%(refname:short)' 2>/dev/null
 end
 
 # Complete branch names for commands that need them
-complete -c gtr -n "__fish_seen_subcommand_from go editor ai rm" -f -a "(__gtr_worktree_branches)"
+complete -f -c git -n '__fish_git_gtr_using_command go' -a '(__gtr_worktree_branches)'
+complete -f -c git -n '__fish_git_gtr_using_command editor' -a '(__gtr_worktree_branches)'
+complete -f -c git -n '__fish_git_gtr_using_command ai' -a '(__gtr_worktree_branches)'
+complete -f -c git -n '__fish_git_gtr_using_command rm' -a '(__gtr_worktree_branches)'

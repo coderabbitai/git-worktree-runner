@@ -1,22 +1,25 @@
 #!/bin/bash
-# Bash completion for gtr
+# Bash completion for git gtr
 
-_gtr_completion() {
+_git_gtr() {
   local cur prev words cword
   _init_completion || return
 
-  local cmd="${words[1]}"
+  # words array for git subcommand: [git, gtr, <actual_command>, ...]
+  # cword is the index of current word being completed
 
-  # Complete commands on first argument
-  if [ "$cword" -eq 1 ]; then
+  # If we're completing the first argument after 'git gtr'
+  if [ "$cword" -eq 2 ]; then
     COMPREPLY=($(compgen -W "new go editor ai rm ls list clean doctor adapter config help version" -- "$cur"))
     return 0
   fi
 
+  local cmd="${words[2]}"
+
   # Commands that take branch names or '1' for main repo
   case "$cmd" in
     go|editor|ai|rm)
-      if [ "$cword" -eq 2 ]; then
+      if [ "$cword" -eq 3 ]; then
         # Complete with branch names and special ID '1' for main repo
         local branches all_options
         branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
@@ -39,13 +42,11 @@ _gtr_completion() {
       fi
       ;;
     config)
-      if [ "$cword" -eq 2 ]; then
-        COMPREPLY=($(compgen -W "get set unset" -- "$cur"))
-      elif [ "$cword" -eq 3 ]; then
+      if [ "$cword" -eq 3 ]; then
+        COMPREPLY=($(compgen -W "get set add unset" -- "$cur"))
+      elif [ "$cword" -eq 4 ]; then
         COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.hook.postCreate gtr.hook.postRemove" -- "$cur"))
       fi
       ;;
   esac
 }
-
-complete -F _gtr_completion gtr

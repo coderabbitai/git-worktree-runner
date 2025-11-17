@@ -1,7 +1,7 @@
-#compdef gtr
-# Zsh completion for gtr
+#compdef git-gtr
+# Zsh completion for git gtr
 
-_gtr() {
+_git-gtr() {
   local -a commands
   commands=(
     'new:Create a new worktree'
@@ -43,7 +43,7 @@ _gtr() {
           '--yes[Non-interactive mode]'
         ;;
       config)
-        _values 'config action' get set unset
+        _values 'config action' get set add unset
         ;;
     esac
   elif (( CURRENT >= 4 )); then
@@ -56,7 +56,7 @@ _gtr() {
         ;;
       config)
         case "$words[3]" in
-          get|set|unset)
+          get|set|add|unset)
             _values 'config key' \
               'gtr.worktrees.dir' \
               'gtr.worktrees.prefix' \
@@ -74,4 +74,4 @@ _gtr() {
   fi
 }
 
-_gtr "$@"
+_git-gtr "$@"
