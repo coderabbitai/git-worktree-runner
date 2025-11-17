@@ -224,6 +224,14 @@ cmd_create() {
       log_step "Copying files..."
       copy_patterns "$repo_root" "$worktree_path" "$includes" "$excludes"
     fi
+
+    # Copy git-ignored files/directories if configured
+    local ignored_patterns
+    ignored_patterns=$(cfg_get_all gtr.copy.ignored)
+    if [ -n "$ignored_patterns" ]; then
+      log_step "Copying git-ignored files..."
+      copy_ignored_files "$repo_root" "$worktree_path" "$ignored_patterns" "$excludes"
+    fi
   fi
 
   # Run post-create hooks
@@ -1014,6 +1022,8 @@ CONFIGURATION OPTIONS:
                            continue, none
   gtr.copy.include         Files to copy (multi-valued)
   gtr.copy.exclude         Files to exclude (multi-valued)
+  gtr.copy.ignored         Git-ignored files/dirs to copy (multi-valued)
+                           Examples: node_modules, vendor, .env.local
   gtr.hook.postCreate      Post-create hooks (multi-valued)
   gtr.hook.postRemove      Post-remove hooks (multi-valued)
 

@@ -42,7 +42,7 @@ _gtr_completion() {
       if [ "$cword" -eq 2 ]; then
         COMPREPLY=($(compgen -W "get set unset" -- "$cur"))
       elif [ "$cword" -eq 3 ]; then
-        COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.hook.postCreate gtr.hook.postRemove" -- "$cur"))
+        COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.ignored gtr.hook.postCreate gtr.hook.postRemove" -- "$cur"))
       fi
       ;;
   esac

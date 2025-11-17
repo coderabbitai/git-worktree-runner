@@ -65,6 +65,7 @@ _gtr() {
               'gtr.ai.default' \
               'gtr.copy.include' \
               'gtr.copy.exclude' \
+              'gtr.copy.ignored' \
               'gtr.hook.postCreate' \
               'gtr.hook.postRemove'
             ;;

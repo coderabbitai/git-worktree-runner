@@ -39,6 +39,7 @@ complete -c gtr -n "__fish_seen_subcommand_from config; and __fish_seen_subcomma
   gtr.ai.default\t'Default AI tool'
   gtr.copy.include\t'Files to copy'
   gtr.copy.exclude\t'Files to exclude'
+  gtr.copy.ignored\t'Git-ignored files/dirs to copy'
   gtr.hook.postCreate\t'Post-create hook'
   gtr.hook.postRemove\t'Post-remove hook'
 "
