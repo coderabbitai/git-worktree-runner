@@ -6,6 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `git gtr` (Git Worktree Runner) is a cross-platform CLI tool written in Bash that simplifies git worktree management. It wraps `git worktree` with quality-of-life features like editor integration, AI tool support, file copying, and hooks. It is installed as a git subcommand, so all commands are invoked as `git gtr <command>`.
 
+## Important: v2.0.0 Command Structure
+
+**As of v2.0.0**, the tool is invoked as `git gtr` (git subcommand) to avoid conflicts with GNU coreutils:
+
+- **Production use**: `git gtr <command>` (git subcommand)
+- **Development/testing**: `./bin/gtr <command>` (direct script execution)
+
+**Binary structure**:
+- `bin/git-gtr`: Thin wrapper (16 lines) that allows git subcommand invocation (`git gtr`)
+- `bin/gtr`: Main script containing all logic (900+ lines)
+
+When testing changes locally, you use `./bin/gtr` directly. When documenting user-facing features or writing help text, always reference `git gtr`.
+
 ## Development Commands
 
 ### Testing Changes Locally
@@ -182,6 +195,13 @@ git --version
 - Return code 0 indicates success/availability; non-zero indicates failure
 - See "Adapter Contract" in Important Implementation Details for full specifications
 
+**Generic Adapter Fallback**: In addition to specific adapter files, gtr supports generic adapters via environment variables:
+
+- `GTR_EDITOR_CMD`: Custom editor command (e.g., `GTR_EDITOR_CMD="emacs"`)
+- `GTR_AI_CMD`: Custom AI tool command (e.g., `GTR_AI_CMD="copilot"`)
+
+These generic functions in `bin/gtr:34-55` provide a fallback when no specific adapter file exists. This allows users to configure custom tools without creating adapter files. The generic adapter functions check if the command exists using `command -v` and execute it using `eval` to handle multi-word commands properly (e.g., `code --wait`, `bunx @github/copilot@latest`).
+
 ### Command Flow
 
 Understanding how commands are dispatched through the system:
@@ -227,11 +247,11 @@ When making changes, follow these core principles (from CONTRIBUTING.md):
 
 ### Updating the Version Number
 
-When releasing a new version, update the version constant in `bin/gtr`:
+When releasing a new version, update the version constant in `bin/gtr` (the main script, not the `bin/git-gtr` wrapper):
 
 ```bash
 # bin/gtr line 8
-GTR_VERSION="1.0.0"  # Update this
+GTR_VERSION="2.0.0"  # Update this
 ```
 
 The version is displayed with `git gtr version` and `git gtr --version`.
@@ -350,6 +370,23 @@ All config keys use `gtr.*` prefix and are managed via `git config`:
 - `gtr.hook.postCreate`: Multi-valued commands to run after creating worktree
 - `gtr.hook.postRemove`: Multi-valued commands to run after removing worktree
 
+## Environment Variables
+
+**System environment variables**:
+
+- `GTR_DIR`: Override script directory location (default: auto-detected via symlink resolution in `bin/gtr:11-21`)
+- `GTR_WORKTREES_DIR`: Override base worktrees directory (fallback if `gtr.worktrees.dir` not set)
+- `GTR_EDITOR_CMD`: Generic editor command for custom editors without adapter files
+- `GTR_EDITOR_CMD_NAME`: First word of `GTR_EDITOR_CMD` used for availability checks
+- `GTR_AI_CMD`: Generic AI tool command for custom tools without adapter files
+- `GTR_AI_CMD_NAME`: First word of `GTR_AI_CMD` used for availability checks
+
+**Hook environment variables** (available in `gtr.hook.postCreate` and `gtr.hook.postRemove` scripts):
+
+- `REPO_ROOT`: Repository root path
+- `WORKTREE_PATH`: New worktree path
+- `BRANCH`: Branch name
+
 ## Important Implementation Details
 
 **Worktree Path Resolution**: The `resolve_target` function in `lib/core.sh:193-242` handles both branch names and the special ID '1'. It checks in order: special ID, current branch in main repo, sanitized path match, full directory scan. Returns tab-separated format: `is_main\tpath\tbranch`.
@@ -394,8 +431,14 @@ ls -la /usr/local/bin
 # Create it if needed (macOS/Linux)
 sudo mkdir -p /usr/local/bin
 
-# Verify symlink
-ls -la /usr/local/bin/gtr
+# Verify symlink (v2.0.0+: symlink to git-gtr, not gtr)
+ls -la /usr/local/bin/git-gtr
+
+# Create symlink for v2.0.0+
+sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
+
+# Verify it works
+git gtr version
 ```
 
 ### Adapter Not Found
