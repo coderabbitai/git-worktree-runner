@@ -334,8 +334,19 @@ gtr config add gtr.copy.exclude "**/.env"
 gtr config add gtr.copy.exclude "**/secrets.*"
 ```
 
-> [!WARNING]
-> Be careful not to copy sensitive files. Use `.env.example` instead of `.env`.
+#### Security Best Practices
+
+**The key distinction:** Development secrets (test API keys, local DB passwords) are **low risk** on personal machines. Production credentials are **high risk** everywhere.
+
+```bash
+# Personal dev: copy what you need to run dev servers
+gtr config add gtr.copy.include "**/.env.development"
+gtr config add gtr.copy.include "**/.env.local"
+gtr config add gtr.copy.exclude "**/.env.production"  # Never copy production
+```
+
+> [!TIP]
+> The tool only prevents path traversal (`../`). Everything else is your choice - copy what you need for your worktrees to function.
 
 ### Hooks
 
