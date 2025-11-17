@@ -78,7 +78,7 @@ When adding an editor or AI adapter:
 
 **Fish** (`completions/gtr.fish`):
 
-- Update `complete -c gtr` lines for editor/AI flags
+- Update `complete -c git` lines for editor/AI flags
 - List adapter names explicitly or parse from `git gtr adapter` output
 
 ## Keep in Sync
@@ -128,6 +128,6 @@ The three completion files must stay synchronized:
 
 ## Fish-Specific Notes
 
-- Uses declarative `complete -c gtr` syntax
-- Conditions can check previous arguments with `__fish_seen_subcommand_from`
+- Uses `complete -c git` with custom predicates (`__fish_git_gtr_needs_command`, `__fish_git_gtr_using_command`) to handle git subcommand context
+- Conditions can check previous arguments with custom functions to detect `git gtr` usage
 - Can call external commands for dynamic completion

@@ -50,12 +50,12 @@ git gtr rm my-feature                           # Remove when done
 While `git worktree` is powerful, it's verbose and manual. `git gtr` adds quality-of-life features for modern development:
 
 | Task              | With `git worktree`                        | With `git gtr`                           |
-| ----------------- | ------------------------------------------ | ------------------------------------ |
+| ----------------- | ------------------------------------------ | ---------------------------------------- |
 | Create worktree   | `git worktree add ../repo-feature feature` | `git gtr new feature`                    |
 | Open in editor    | `cd ../repo-feature && cursor .`           | `git gtr editor feature`                 |
 | Start AI tool     | `cd ../repo-feature && aider`              | `git gtr ai feature`                     |
-| Copy config files | Manual copy/paste                          | Auto-copy via `gtr.copy.include`     |
-| Run build steps   | Manual `npm install && npm run build`      | Auto-run via `gtr.hook.postCreate`   |
+| Copy config files | Manual copy/paste                          | Auto-copy via `gtr.copy.include`         |
+| Run build steps   | Manual `npm install && npm run build`      | Auto-run via `gtr.hook.postCreate`       |
 | List worktrees    | `git worktree list` (shows paths)          | `git gtr list` (shows branches + status) |
 | Clean up          | `git worktree remove ../repo-feature`      | `git gtr rm feature`                     |
 
@@ -297,8 +297,8 @@ gtr.ai.default = none
 
 **Supported AI Tools:**
 
-| Tool                                              | Install                                           | Use Case                             | Set as Default                           |
-| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------ | ---------------------------------------- |
+| Tool                                              | Install                                           | Use Case                             | Set as Default                               |
+| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------ | -------------------------------------------- |
 | **[Aider](https://aider.chat)**                   | `pip install aider-chat`                          | Pair programming, edit files with AI | `git gtr config set gtr.ai.default aider`    |
 | **[Claude Code](https://claude.com/claude-code)** | Install from claude.com                           | Terminal-native coding agent         | `git gtr config set gtr.ai.default claude`   |
 | **[Codex CLI](https://github.com/openai/codex)**  | `npm install -g @openai/codex`                    | OpenAI coding assistant              | `git gtr config set gtr.ai.default codex`    |
@@ -631,7 +631,9 @@ find . -path "**/.env.example"
 
 ```log
 git-worktree-runner/
-├── bin/gtr              # Main executable
+├── bin/
+│   ├── git-gtr         # Git subcommand entry point (wrapper)
+│   └── gtr             # Core implementation (1000+ lines)
 ├── lib/                 # Core libraries
 │   ├── core.sh         # Git worktree operations
 │   ├── config.sh       # Configuration management
