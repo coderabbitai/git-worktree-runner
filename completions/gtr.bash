@@ -1,5 +1,17 @@
 #!/bin/bash
 # Bash completion for git gtr
+#
+# Prerequisites:
+#   - bash-completion v2+ must be installed
+#   - Git's bash completion must be enabled
+#
+# This completion integrates with git's completion system by defining a _git_<subcommand>
+# function, which git's completion framework automatically discovers and calls when
+# completing "git gtr ..." commands.
+#
+# Installation:
+#   Add to your ~/.bashrc:
+#     source /path/to/git-worktree-runner/completions/gtr.bash
 
 _git_gtr() {
   local cur prev words cword

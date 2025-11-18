@@ -123,7 +123,7 @@ source ~/.zshrc
 
 ### Shell Completions (Optional)
 
-**Bash** (requires `bash-completion` v2):
+**Bash** (requires `bash-completion` v2 and git completions):
 
 ```bash
 # Install bash-completion first (if not already installed)
@@ -133,15 +133,27 @@ brew install bash-completion@2
 # Ubuntu/Debian:
 sudo apt install bash-completion
 
+# Ensure git's bash completion is enabled (usually installed with git)
 # Then enable gtr completions:
 echo 'source /path/to/git-worktree-runner/completions/gtr.bash' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-**Zsh:**
+**Zsh** (requires git's zsh completion):
 
 ```bash
-echo 'source /path/to/git-worktree-runner/completions/_gtr' >> ~/.zshrc
+# Add completion directory to fpath and enable
+mkdir -p ~/.zsh/completions
+cp /path/to/git-worktree-runner/completions/_gtr ~/.zsh/completions/
+
+# Add to ~/.zshrc (if not already there):
+cat >> ~/.zshrc <<'EOF'
+# Enable completions
+fpath=(~/.zsh/completions $fpath)
+autoload -Uz compinit && compinit
+EOF
+
+source ~/.zshrc
 ```
 
 **Fish:**

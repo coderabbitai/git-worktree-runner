@@ -1,4 +1,13 @@
 # Fish completion for git gtr
+#
+# This completion integrates with fish's completion system by registering completions
+# for the "git" command with custom predicates that detect "git gtr" usage.
+#
+# Installation:
+#   Symlink to fish's completions directory:
+#     ln -s /path/to/git-worktree-runner/completions/gtr.fish ~/.config/fish/completions/
+#   Then reload fish:
+#     exec fish
 
 # Helper function to check if we're in 'git gtr' context
 function __fish_git_gtr_needs_command

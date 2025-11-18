@@ -27,9 +27,9 @@ Shell completions provide tab-completion for `git gtr` commands, flags, branches
 
 Each completion file implements:
 
-1. **Command completion** - Top-level commands (`new`, `rm`, `open`, `ai`, `list`, etc.)
+1. **Command completion** - Top-level commands (`new`, `rm`, `editor`, `ai`, `list`, etc.)
 2. **Flag completion** - Command-specific flags (e.g., `--from`, `--force`, `--editor`)
-3. **Branch completion** - Dynamic completion of existing worktree branches (via `git gtr list --porcelain`)
+3. **Branch completion** - Dynamic completion of git branches plus special ID `1` (via `git branch`)
 4. **Adapter completion** - Editor names (`cursor`, `vscode`, `zed`) and AI tool names (`aider`, `claude`, `codex`)
 
 ## Testing Completions
@@ -37,30 +37,41 @@ Each completion file implements:
 **Manual testing** (no automated tests):
 
 ```bash
-# Bash - source the completion file
+# Bash - source the completion file (requires git's bash completion to be loaded)
 source completions/gtr.bash
 git gtr <TAB>                    # Should show commands
 git gtr new <TAB>                # Should show flags
-git gtr open <TAB>               # Should show branches
-git gtr open --editor <TAB>      # Should show editor names
+git gtr go <TAB>                 # Should show branches + '1'
+git gtr editor <TAB>             # Should show branches + '1'
+git gtr editor --editor <TAB>    # Should show editor names
 
-# Zsh - fpath must include completions directory
-fpath=(completions $fpath)
-autoload -U compinit && compinit
-git gtr <TAB>
+# Zsh - copy to fpath directory and reload (requires git's zsh completion)
+mkdir -p ~/.zsh/completions
+cp completions/_gtr ~/.zsh/completions/
+# Add to ~/.zshrc: fpath=(~/.zsh/completions $fpath)
+# Add to ~/.zshrc: autoload -Uz compinit && compinit
+exec zsh  # Reload shell
+git gtr <TAB>                    # Should show commands
+git gtr new <TAB>                # Should show flags
+git gtr go <TAB>                 # Should show branches + '1'
 
 # Fish - symlink to ~/.config/fish/completions/
 ln -s "$(pwd)/completions/gtr.fish" ~/.config/fish/completions/
-git gtr <TAB>
+exec fish  # Reload shell
+git gtr <TAB>                    # Should show commands
+git gtr new <TAB>                # Should show flags
+git gtr go <TAB>                 # Should show branches + '1'
 ```
+
+**Important**: All shell completions require git's own completion system to be enabled for the `git` command. The completions integrate with git's subcommand completion framework.
 
 ## Branch Completion Logic
 
-All three completions dynamically fetch current worktree branches:
+All three completions dynamically fetch current git branches:
 
-- Parse output of `git gtr list --porcelain` (tab-separated: `path\tbranch\tstatus`)
-- Extract branch column (second field)
-- Exclude the special ID `1` (main repo) if needed
+- Use `git branch --format='%(refname:short)'` to get branch names
+- Add special ID `1` for main repo (allows `git gtr go 1`, `git gtr editor 1`, etc.)
+- Return combined list of branches + `1` for commands that accept branch arguments (go, editor, ai, rm)
 
 ## Adapter Name Updates
 
