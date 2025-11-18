@@ -5,7 +5,7 @@
 set -e
 
 # Version
-GTR_VERSION="1.0.0"
+GTR_VERSION="2.0.0"
 
 # Find the script directory (resolve symlinks; allow env override)
 resolve_script_dir() {
@@ -91,14 +91,14 @@ main() {
       cmd_config "$@"
       ;;
     version|--version|-v)
-      echo "gtr version $GTR_VERSION"
+      echo "git gtr version $GTR_VERSION"
       ;;
     help|--help|-h)
       cmd_help
       ;;
     *)
       log_error "Unknown command: $cmd"
-      echo "Use 'gtr help' for available commands"
+      echo "Use 'git gtr help' for available commands"
       exit 1
       ;;
   esac
@@ -164,9 +164,9 @@ cmd_create() {
   if [ "$force" -eq 1 ] && [ -z "$custom_name" ]; then
     log_error "--force requires --name to distinguish worktrees"
     if [ -n "$branch_name" ]; then
-      echo "Example: gtr new $branch_name --force --name backend" >&2
+      echo "Example: git gtr new $branch_name --force --name backend" >&2
     else
-      echo "Example: gtr new feature-auth --force --name backend" >&2
+      echo "Example: git gtr new feature-auth --force --name backend" >&2
     fi
     exit 1
   fi
@@ -236,9 +236,9 @@ cmd_create() {
   log_info "Worktree created: $worktree_path"
   echo ""
   echo "Next steps:"
-  echo "  gtr editor $branch_name  # Open in editor"
-  echo "  gtr ai $branch_name      # Start AI tool"
-  echo "  cd \"\$(gtr go $branch_name)\"  # Navigate to worktree"
+  echo "  git gtr editor $branch_name  # Open in editor"
+  echo "  git gtr ai $branch_name      # Start AI tool"
+  echo "  cd \"\$(git gtr go $branch_name)\"  # Navigate to worktree"
 }
 
 # Remove command
@@ -275,7 +275,7 @@ cmd_remove() {
   done
 
   if [ -z "$identifiers" ]; then
-    log_error "Usage: gtr rm <id|branch> [<id|branch>...] [--delete-branch] [--force] [--yes]"
+    log_error "Usage: git gtr rm <id|branch> [<id|branch>...] [--delete-branch] [--force] [--yes]"
     exit 1
   fi
 
@@ -329,7 +329,7 @@ cmd_remove() {
 # Go command (navigate to worktree - prints path for shell integration)
 cmd_go() {
   if [ $# -ne 1 ]; then
-    log_error "Usage: gtr go <id|branch>"
+    log_error "Usage: git gtr go <id|branch>"
     exit 1
   fi
 
@@ -384,7 +384,7 @@ cmd_editor() {
   done
 
   if [ -z "$identifier" ]; then
-    log_error "Usage: gtr editor <id|branch> [--editor <name>]"
+    log_error "Usage: git gtr editor <id|branch> [--editor <name>]"
     exit 1
   fi
 
@@ -448,7 +448,7 @@ cmd_ai() {
   done
 
   if [ -z "$identifier" ]; then
-    log_error "Usage: gtr ai <id|branch> [--ai <name>] [-- args...]"
+    log_error "Usage: git gtr ai <id|branch> [--ai <name>] [-- args...]"
     exit 1
   fi
 
@@ -460,7 +460,7 @@ cmd_ai() {
   # Check if AI tool is configured
   if [ "$ai_tool" = "none" ]; then
     log_error "No AI tool configured"
-    log_info "Set default: gtr config set gtr.ai.default claude"
+    log_info "Set default: git gtr config set gtr.ai.default claude"
     exit 1
   fi
 
@@ -557,7 +557,7 @@ cmd_list() {
 
   echo ""
   echo ""
-  echo "Tip: Use 'gtr list --porcelain' for machine-readable output"
+  echo "Tip: Use 'git gtr list --porcelain' for machine-readable output"
 }
 
 # Clean command (remove prunable worktrees)
@@ -606,7 +606,7 @@ EOF
 
 # Doctor command (health check)
 cmd_doctor() {
-  echo "Running gtr health check..."
+  echo "Running git gtr health check..."
   echo ""
 
   local issues=0
@@ -747,8 +747,8 @@ cmd_adapter() {
   echo ""
   echo ""
   echo "Tip: Set defaults with:"
-  echo "   gtr config set gtr.editor.default <name>"
-  echo "   gtr config set gtr.ai.default <name>"
+  echo "   git gtr config set gtr.editor.default <name>"
+  echo "   git gtr config set gtr.ai.default <name>"
 }
 
 # Config command
@@ -788,14 +788,14 @@ cmd_config() {
   case "$action" in
     get)
       if [ -z "$key" ]; then
-        log_error "Usage: gtr config get <key> [--global]"
+        log_error "Usage: git gtr config get <key> [--global]"
         exit 1
       fi
       cfg_get "$key" "$scope"
       ;;
     set)
       if [ -z "$key" ] || [ -z "$value" ]; then
-        log_error "Usage: gtr config set <key> <value> [--global]"
+        log_error "Usage: git gtr config set <key> <value> [--global]"
         exit 1
       fi
       cfg_set "$key" "$value" "$scope"
@@ -803,7 +803,7 @@ cmd_config() {
       ;;
     add)
       if [ -z "$key" ] || [ -z "$value" ]; then
-        log_error "Usage: gtr config add <key> <value> [--global]"
+        log_error "Usage: git gtr config add <key> <value> [--global]"
         exit 1
       fi
       cfg_add "$key" "$value" "$scope"
@@ -811,7 +811,7 @@ cmd_config() {
       ;;
     unset)
       if [ -z "$key" ]; then
-        log_error "Usage: gtr config unset <key> [--global]"
+        log_error "Usage: git gtr config unset <key> [--global]"
         exit 1
       fi
       cfg_unset "$key" "$scope"
@@ -819,7 +819,7 @@ cmd_config() {
       ;;
     *)
       log_error "Unknown config action: $action"
-      log_error "Usage: gtr config {get|set|add|unset} <key> [value] [--global]"
+      log_error "Usage: git gtr config {get|set|add|unset} <key> [value] [--global]"
       exit 1
       ;;
   esac
@@ -884,28 +884,28 @@ load_ai_adapter() {
 # Help command
 cmd_help() {
   cat <<'EOF'
-gtr - Git worktree runner
+git gtr - Git worktree runner
 
 PHILOSOPHY: Configuration over flags. Set defaults once, then use simple commands.
 
 ────────────────────────────────────────────────────────────────────────────────
 
 QUICK START:
-  cd ~/your-repo                              # Navigate to git repo first
-  gtr config set gtr.editor.default cursor    # One-time setup
-  gtr config set gtr.ai.default claude        # One-time setup
-  gtr new my-feature                          # Creates worktree in folder "my-feature"
-  gtr editor my-feature                       # Opens in cursor
-  gtr ai my-feature                           # Starts claude
-  gtr rm my-feature                           # Remove when done
+  cd ~/your-repo                                   # Navigate to git repo first
+  git gtr config set gtr.editor.default cursor     # One-time setup
+  git gtr config set gtr.ai.default claude         # One-time setup
+  git gtr new my-feature                           # Creates worktree in folder "my-feature"
+  git gtr editor my-feature                        # Opens in cursor
+  git gtr ai my-feature                            # Starts claude
+  git gtr rm my-feature                            # Remove when done
 
 ────────────────────────────────────────────────────────────────────────────────
 
 KEY CONCEPTS:
   • Worktree folders are named after the branch name
-  • Main repo is accessible via special ID '1' (e.g., gtr go 1, gtr editor 1)
+  • Main repo is accessible via special ID '1' (e.g., git gtr go 1, git gtr editor 1)
   • Commands accept branch names to identify worktrees
-    Example: gtr editor my-feature, gtr go feature/user-auth
+    Example: git gtr editor my-feature, git gtr go feature/user-auth
 
 ────────────────────────────────────────────────────────────────────────────────
 
@@ -930,7 +930,7 @@ CORE COMMANDS (daily workflow):
          Special: use '1' to open repo root
 
   go <branch>
-         Navigate to worktree (prints path for: cd "$(gtr go my-feature)")
+         Navigate to worktree (prints path for: cd "$(git gtr go my-feature)")
          Special: use '1' for repo root
 
   list [--porcelain]
@@ -973,30 +973,30 @@ WORKFLOW EXAMPLES:
 
   # One-time repo setup
   cd ~/GitHub/my-project
-  gtr config set gtr.editor.default cursor
-  gtr config set gtr.ai.default claude
+  git gtr config set gtr.editor.default cursor
+  git gtr config set gtr.ai.default claude
 
   # Daily workflow
-  gtr new feature/user-auth               # Create worktree (folder: feature-user-auth)
-  gtr editor feature/user-auth            # Open in editor
-  gtr ai feature/user-auth                # Start AI tool
+  git gtr new feature/user-auth               # Create worktree (folder: feature-user-auth)
+  git gtr editor feature/user-auth            # Open in editor
+  git gtr ai feature/user-auth                # Start AI tool
 
   # Navigate to worktree directory
-  cd "$(gtr go feature/user-auth)"
+  cd "$(git gtr go feature/user-auth)"
 
   # Override defaults with flags
-  gtr editor feature/user-auth --editor vscode
-  gtr ai feature/user-auth --ai aider
+  git gtr editor feature/user-auth --editor vscode
+  git gtr ai feature/user-auth --ai aider
 
   # Chain commands together
-  gtr new hotfix && gtr editor hotfix && gtr ai hotfix
+  git gtr new hotfix && git gtr editor hotfix && git gtr ai hotfix
 
   # When finished
-  gtr rm feature/user-auth --delete-branch
+  git gtr rm feature/user-auth --delete-branch
 
   # Check setup and available tools
-  gtr doctor
-  gtr adapter
+  git gtr doctor
+  git gtr adapter
 
 ────────────────────────────────────────────────────────────────────────────────
 

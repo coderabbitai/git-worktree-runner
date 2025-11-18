@@ -1,2 +1,15 @@
 #!/usr/bin/env bash
-exec gtr "$@"
+# git-gtr - Git worktree runner (git subcommand wrapper)
+# Allows running as: git gtr <command>
+
+# Find this script's real location (resolve symlinks)
+SRC="${BASH_SOURCE[0]}"
+while [ -h "$SRC" ]; do
+  DIR="$(cd -P "$(dirname "$SRC")" && pwd)"
+  SRC="$(readlink "$SRC")"
+  [[ $SRC != /* ]] && SRC="$DIR/$SRC"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SRC")" && pwd)"
+
+# Execute the main gtr script
+exec "$SCRIPT_DIR/gtr" "$@"

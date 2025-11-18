@@ -1,18 +1,18 @@
 ---
-applyTo: completions/gtr.bash, completions/_gtr, completions/gtr.fish
+applyTo: completions/gtr.bash, completions/_git-gtr, completions/gtr.fish
 ---
 
 # Completions Instructions
 
 ## Overview
 
-Shell completions provide tab-completion for `gtr` commands, flags, branches, and adapter names across Bash, Zsh, and Fish shells.
+Shell completions provide tab-completion for `git gtr` commands, flags, branches, and adapter names across Bash, Zsh, and Fish shells.
 
 ## When to Update Completions
 
 **Always update all three completion files** when:
 
-- Adding new commands (e.g., `gtr new-command`)
+- Adding new commands (e.g., `git gtr new-command`)
 - Adding new flags to existing commands (e.g., `--new-flag`)
 - Adding editor or AI adapters (completion must list available adapters)
 - Changing command names or flag names
@@ -20,16 +20,16 @@ Shell completions provide tab-completion for `gtr` commands, flags, branches, an
 ## File Responsibilities
 
 - **`completions/gtr.bash`** - Bash completion (requires bash-completion v2+)
-- **`completions/_gtr`** - Zsh completion (uses Zsh completion system)
+- **`completions/_git-gtr`** - Zsh completion (uses Zsh completion system)
 - **`completions/gtr.fish`** - Fish shell completion
 
 ## Implementation Pattern
 
 Each completion file implements:
 
-1. **Command completion** - Top-level commands (`new`, `rm`, `open`, `ai`, `list`, etc.)
+1. **Command completion** - Top-level commands (`new`, `rm`, `editor`, `ai`, `list`, etc.)
 2. **Flag completion** - Command-specific flags (e.g., `--from`, `--force`, `--editor`)
-3. **Branch completion** - Dynamic completion of existing worktree branches (via `gtr list --porcelain`)
+3. **Branch completion** - Dynamic completion of git branches plus special ID `1` (via `git branch`)
 4. **Adapter completion** - Editor names (`cursor`, `vscode`, `zed`) and AI tool names (`aider`, `claude`, `codex`)
 
 ## Testing Completions
@@ -37,30 +37,41 @@ Each completion file implements:
 **Manual testing** (no automated tests):
 
 ```bash
-# Bash - source the completion file
+# Bash - source the completion file (requires git's bash completion to be loaded)
 source completions/gtr.bash
-gtr <TAB>                    # Should show commands
-gtr new <TAB>                # Should show flags
-gtr open <TAB>               # Should show branches
-gtr open --editor <TAB>      # Should show editor names
+git gtr <TAB>                    # Should show commands
+git gtr new <TAB>                # Should show flags
+git gtr go <TAB>                 # Should show branches + '1'
+git gtr editor <TAB>             # Should show branches + '1'
+git gtr editor --editor <TAB>    # Should show editor names
 
-# Zsh - fpath must include completions directory
-fpath=(completions $fpath)
-autoload -U compinit && compinit
-gtr <TAB>
+# Zsh - copy to fpath directory and reload (requires git's zsh completion)
+mkdir -p ~/.zsh/completions
+cp completions/_git-gtr ~/.zsh/completions/
+# Add to ~/.zshrc: fpath=(~/.zsh/completions $fpath)
+# Add to ~/.zshrc: autoload -Uz compinit && compinit
+exec zsh  # Reload shell
+git gtr <TAB>                    # Should show commands
+git gtr new <TAB>                # Should show flags
+git gtr go <TAB>                 # Should show branches + '1'
 
 # Fish - symlink to ~/.config/fish/completions/
 ln -s "$(pwd)/completions/gtr.fish" ~/.config/fish/completions/
-gtr <TAB>
+exec fish  # Reload shell
+git gtr <TAB>                    # Should show commands
+git gtr new <TAB>                # Should show flags
+git gtr go <TAB>                 # Should show branches + '1'
 ```
+
+**Important**: All shell completions require git's own completion system to be enabled for the `git` command. The completions integrate with git's subcommand completion framework.
 
 ## Branch Completion Logic
 
-All three completions dynamically fetch current worktree branches:
+All three completions dynamically fetch current git branches:
 
-- Parse output of `gtr list --porcelain` (tab-separated: `path\tbranch\tstatus`)
-- Extract branch column (second field)
-- Exclude the special ID `1` (main repo) if needed
+- Use `git branch --format='%(refname:short)'` to get branch names
+- Add special ID `1` for main repo (allows `git gtr go 1`, `git gtr editor 1`, etc.)
+- Return combined list of branches + `1` for commands that accept branch arguments (go, editor, ai, rm)
 
 ## Adapter Name Updates
 
@@ -71,15 +82,15 @@ When adding an editor or AI adapter:
 - Update `_gtr_editors` array or case statement
 - Update flag completion for `--editor` in `open` command
 
-**Zsh** (`completions/_gtr`):
+**Zsh** (`completions/_git-gtr`):
 
 - Update `_arguments` completion specs for `--editor` or `--ai`
 - Use `_values` or `_alternative` for adapter names
 
 **Fish** (`completions/gtr.fish`):
 
-- Update `complete -c gtr` lines for editor/AI flags
-- List adapter names explicitly or parse from `gtr adapter` output
+- Update `complete -c git` lines for editor/AI flags
+- List adapter names explicitly or parse from `git gtr adapter` output
 
 ## Keep in Sync
 
@@ -92,7 +103,7 @@ The three completion files must stay synchronized:
 
 ## Examples
 
-**Adding a new command `gtr status`**:
+**Adding a new command `git gtr status`**:
 
 1. Add `status` to main command list in all three files
 2. Add flag completion if the command has flags
@@ -104,7 +115,7 @@ The three completion files must stay synchronized:
 2. Add `sublime` to editor list in all three completion files
 3. Update help text in `bin/gtr` (`cmd_help` function)
 4. Update README with installation instructions
-5. Test `gtr open --editor s<TAB>` completes to `sublime`
+5. Test `git gtr open --editor s<TAB>` completes to `sublime`
 
 ## Common Pitfalls
 
@@ -128,6 +139,6 @@ The three completion files must stay synchronized:
 
 ## Fish-Specific Notes
 
-- Uses declarative `complete -c gtr` syntax
-- Conditions can check previous arguments with `__fish_seen_subcommand_from`
+- Uses `complete -c git` with custom predicates (`__fish_git_gtr_needs_command`, `__fish_git_gtr_using_command`) to handle git subcommand context
+- Conditions can check previous arguments with custom functions to detect `git gtr` usage
 - Can call external commands for dynamic completion

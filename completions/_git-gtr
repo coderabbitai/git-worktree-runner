@@ -1,7 +1,10 @@
-#compdef gtr
-# Zsh completion for gtr
+#compdef git-gtr
+# Zsh completion for git gtr
 
-_gtr() {
+_git_gtr() {
+  # Note: When called via 'git gtr', the words array is [git-gtr, <command>, ...]
+  # Git's completion system invokes this function automatically
+
   local -a commands
   commands=(
     'new:Create a new worktree'
@@ -25,8 +28,10 @@ _gtr() {
   # Add special ID '1' for main repo
   all_options=("1" "${branches[@]}")
 
+  # Complete the gtr subcommand (new, go, editor, etc.)
   if (( CURRENT == 2 )); then
     _describe 'commands' commands
+  # Complete arguments to the subcommand
   elif (( CURRENT == 3 )); then
     case "$words[2]" in
       go|editor|ai|rm)
@@ -43,9 +48,10 @@ _gtr() {
           '--yes[Non-interactive mode]'
         ;;
       config)
-        _values 'config action' get set unset
+        _values 'config action' get set add unset
         ;;
     esac
+  # Complete subsequent arguments
   elif (( CURRENT >= 4 )); then
     case "$words[2]" in
       rm)
@@ -56,7 +62,7 @@ _gtr() {
         ;;
       config)
         case "$words[3]" in
-          get|set|unset)
+          get|set|add|unset)
             _values 'config key' \
               'gtr.worktrees.dir' \
               'gtr.worktrees.prefix' \
@@ -74,4 +80,4 @@ _gtr() {
   fi
 }
 
-_gtr "$@"
+# Function is auto-discovered by git's completion system - do not call it here
