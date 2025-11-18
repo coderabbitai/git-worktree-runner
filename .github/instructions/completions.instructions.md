@@ -1,5 +1,5 @@
 ---
-applyTo: completions/gtr.bash, completions/_gtr, completions/gtr.fish
+applyTo: completions/gtr.bash, completions/_git-gtr, completions/gtr.fish
 ---
 
 # Completions Instructions
@@ -20,7 +20,7 @@ Shell completions provide tab-completion for `git gtr` commands, flags, branches
 ## File Responsibilities
 
 - **`completions/gtr.bash`** - Bash completion (requires bash-completion v2+)
-- **`completions/_gtr`** - Zsh completion (uses Zsh completion system)
+- **`completions/_git-gtr`** - Zsh completion (uses Zsh completion system)
 - **`completions/gtr.fish`** - Fish shell completion
 
 ## Implementation Pattern
@@ -47,7 +47,7 @@ git gtr editor --editor <TAB>    # Should show editor names
 
 # Zsh - copy to fpath directory and reload (requires git's zsh completion)
 mkdir -p ~/.zsh/completions
-cp completions/_gtr ~/.zsh/completions/
+cp completions/_git-gtr ~/.zsh/completions/
 # Add to ~/.zshrc: fpath=(~/.zsh/completions $fpath)
 # Add to ~/.zshrc: autoload -Uz compinit && compinit
 exec zsh  # Reload shell
@@ -82,7 +82,7 @@ When adding an editor or AI adapter:
 - Update `_gtr_editors` array or case statement
 - Update flag completion for `--editor` in `open` command
 
-**Zsh** (`completions/_gtr`):
+**Zsh** (`completions/_git-gtr`):
 
 - Update `_arguments` completion specs for `--editor` or `--ai`
 - Use `_values` or `_alternative` for adapter names

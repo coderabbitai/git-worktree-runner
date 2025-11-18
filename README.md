@@ -144,7 +144,7 @@ source ~/.bashrc
 ```bash
 # Add completion directory to fpath and enable
 mkdir -p ~/.zsh/completions
-cp /path/to/git-worktree-runner/completions/_gtr ~/.zsh/completions/
+cp /path/to/git-worktree-runner/completions/_git-gtr ~/.zsh/completions/
 
 # Add to ~/.zshrc (if not already there):
 cat >> ~/.zshrc <<'EOF'

@@ -334,7 +334,7 @@ When changing `lib/*.sh` files:
 When adding new commands or flags, update all three completion files:
 
 - `completions/gtr.bash` (Bash)
-- `completions/_gtr` (Zsh)
+- `completions/_git-gtr` (Zsh)
 - `completions/gtr.fish` (Fish)
 
 ### Git Version Compatibility
