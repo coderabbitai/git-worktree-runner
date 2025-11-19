@@ -14,22 +14,18 @@ find_claude_executable() {
 
   # Try to find executable using type -P (Bash/Zsh)
   for cmd in claude claude-code; do
-    if command -v type >/dev/null 2>&1; then
-      local exe_path
-      exe_path="$(type -P "$cmd" 2>/dev/null)" && [ -n "$exe_path" ] && {
-        echo "$exe_path"
-        return 0
-      }
-    fi
+    local exe_path
+    exe_path="$(type -P "$cmd" 2>/dev/null)" && [ -n "$exe_path" ] && {
+      echo "$exe_path"
+      return 0
+    }
   done
 
-  # Fallback: use command -v but exclude functions
+  # Fallback: use type -t to check if it's an executable file
   for cmd in claude claude-code; do
-    if type "$cmd" 2>/dev/null | grep -qv "function"; then
-      if command -v "$cmd" >/dev/null 2>&1; then
-        echo "$cmd"
-        return 0
-      fi
+    if [ "$(type -t "$cmd" 2>/dev/null)" = "file" ]; then
+      command -v "$cmd"
+      return 0
     fi
   done
 
