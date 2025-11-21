@@ -27,6 +27,17 @@ sanitize_branch_name() {
   printf "%s" "$branch" | sed -e 's/[\/\\ :*?"<>|]/-/g' -e 's/^-*//' -e 's/-*$//'
 }
 
+# Canonicalize a path to its absolute form, resolving symlinks
+# Usage: canonicalize_path path
+# Returns: canonical path or empty string on failure
+canonicalize_path() {
+  local path="$1"
+  # Unset CDPATH to prevent unexpected directory changes
+  # Suppress stderr to hide errors for non-existent directories
+  # Use subshell to avoid changing current working directory
+  ( unset CDPATH && cd -P -- "$path" 2>/dev/null && pwd -P )
+}
+
 # Resolve the base directory for worktrees
 # Usage: resolve_base_dir repo_root
 resolve_base_dir() {
@@ -57,12 +68,31 @@ resolve_base_dir() {
     # Absolute paths (starting with /) are used as-is
   fi
 
+  # Canonicalize base_dir if it exists
+  if [ -d "$base_dir" ]; then
+    local canonical_base
+    canonical_base=$(canonicalize_path "$base_dir")
+    if [ -n "$canonical_base" ]; then
+      base_dir="$canonical_base"
+    fi
+    # If canonicalization fails (empty result), base_dir keeps its absolute form
+  fi
+
+  # Canonicalize repo_root before comparison
+  local canonical_repo_root
+  canonical_repo_root=$(canonicalize_path "$repo_root")
+  # Warn if canonicalization fails (indicates repository issue)
+  if [ -z "$canonical_repo_root" ]; then
+    log_warn "Unable to canonicalize repository path: $repo_root"
+    canonical_repo_root="$repo_root"
+  fi
+
   # Warn if worktree dir is inside repo (but not a sibling)
-  if [[ "$base_dir" == "$repo_root"/* ]]; then
-    local rel_path="${base_dir#$repo_root/}"
+  if [[ "$base_dir" == "$canonical_repo_root"/* ]]; then
+    local rel_path="${base_dir#$canonical_repo_root/}"
     # Check if .gitignore exists and whether it includes the worktree directory
-    if [ -f "$repo_root/.gitignore" ]; then
-      if ! grep -qE "^/?${rel_path}/?\$|^/?${rel_path}/\*?\$" "$repo_root/.gitignore" 2>/dev/null; then
+    if [ -f "$canonical_repo_root/.gitignore" ]; then
+      if ! grep -qE "^/?${rel_path}/?\$|^/?${rel_path}/\*?\$" "$canonical_repo_root/.gitignore" 2>/dev/null; then
         log_warn "Worktrees are inside repository at: $rel_path"
         log_warn "Consider adding '/$rel_path/' to .gitignore to avoid committing worktrees"
       fi

@@ -2,8 +2,6 @@
 
 > A portable, cross-platform CLI for managing git worktrees with ease
 
-> **⚠️ v2.0 Breaking Change:** As of v2.0.0, the command has been renamed from `gtr` to `git gtr` to avoid conflicts with GNU coreutils. Simply use `git gtr` instead of `gtr` for all commands. [See release notes for details](https://github.com/coderabbitai/git-worktree-runner/releases/tag/v2.0.0).
-
 ![4 AI agents working in parallel across different worktrees](docs/assets/demo-parallel.png)
 
 ## What are git worktrees?
