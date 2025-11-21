@@ -372,8 +372,13 @@ git gtr config add gtr.copy.includeDirs "node_modules"
 git gtr config add gtr.copy.includeDirs ".venv"
 git gtr config add gtr.copy.includeDirs "vendor"
 
-# Exclude specific directories if needed
-git gtr config add gtr.copy.excludeDirs "node_modules/.cache"
+# Exclude specific nested directories (supports glob patterns)
+git gtr config add gtr.copy.excludeDirs "node_modules/.cache"  # Exclude exact path
+git gtr config add gtr.copy.excludeDirs "node_modules/.npm"    # Exclude npm cache (may contain tokens)
+
+# Exclude using wildcards
+git gtr config add gtr.copy.excludeDirs "node_modules/.*"      # Exclude all hidden dirs in node_modules
+git gtr config add gtr.copy.excludeDirs "*/.cache"             # Exclude .cache at any level
 ```
 
 > [!WARNING]

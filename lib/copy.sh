@@ -169,7 +169,7 @@ EOF
 # Copy directories matching patterns (typically git-ignored directories like node_modules)
 # Usage: copy_directories src_root dst_root dir_patterns excludes
 # dir_patterns: newline-separated directory names to copy (e.g., "node_modules", ".venv")
-# excludes: newline-separated directory names to exclude
+# excludes: newline-separated directory patterns to exclude (supports globs like "node_modules/.cache")
 # WARNING: This copies entire directories including potentially sensitive files.
 #          Use gtr.copy.excludeDirs to exclude sensitive directories.
 copy_directories() {
@@ -213,12 +213,22 @@ copy_directories() {
       if [ -n "$excludes" ]; then
         while IFS= read -r exclude_pattern; do
           [ -z "$exclude_pattern" ] && continue
-          local dir_basename
-          dir_basename=$(basename "$dir_path")
-          if [ "$dir_basename" = "$exclude_pattern" ]; then
-            excluded=1
-            break
-          fi
+
+          # Security: reject absolute paths and parent directory traversal in excludes
+          case "$exclude_pattern" in
+            /*|*/../*|../*|*/..|..)
+              log_warn "Skipping unsafe exclude pattern: $exclude_pattern"
+              continue
+              ;;
+          esac
+
+          # Match full path (supports glob patterns like node_modules/.cache or */cache)
+          case "$dir_path" in
+            $exclude_pattern)
+              excluded=1
+              break
+              ;;
+          esac
         done <<EOF
 $excludes
 EOF
@@ -242,6 +252,60 @@ EOF
       if cp -r "$dir_path" "$dest_parent/" 2>/dev/null; then
         log_info "Copied directory $dir_path"
         copied_count=$((copied_count + 1))
+
+        # Remove excluded subdirectories after copying
+        if [ -n "$excludes" ]; then
+          while IFS= read -r exclude_pattern; do
+            [ -z "$exclude_pattern" ] && continue
+
+            # Security: reject absolute paths and parent directory traversal in excludes
+            case "$exclude_pattern" in
+              /*|*/../*|../*|*/..|..)
+                continue
+                ;;
+            esac
+
+            # Check if exclude pattern is a subdirectory of the copied directory
+            # e.g., if we copied "node_modules" and exclude is "node_modules/.cache"
+            case "$exclude_pattern" in
+              "$dir_path"/*)
+                # Extract the relative subdirectory path
+                local subdir="${exclude_pattern#$dir_path/}"
+                local exclude_base="$dest_parent/$dir_path/$subdir"
+
+                # Save current directory
+                local exclude_old_pwd
+                exclude_old_pwd=$(pwd)
+
+                # Change to destination directory for glob expansion
+                cd "$dest_parent/$dir_path" 2>/dev/null || continue
+
+                # Enable dotglob to match hidden files with wildcards
+                local exclude_shopt_save
+                exclude_shopt_save="$(shopt -p dotglob 2>/dev/null || true)"
+                shopt -s dotglob 2>/dev/null || true
+
+                # Expand glob pattern and remove matched paths
+                local removed_any=0
+                for matched_path in $subdir; do
+                  # Check if glob matched anything (avoid literal pattern if no match)
+                  if [ -e "$matched_path" ]; then
+                    rm -rf "$matched_path" 2>/dev/null && removed_any=1 || true
+                  fi
+                done
+
+                # Restore shell options and directory
+                eval "$exclude_shopt_save" 2>/dev/null || true
+                cd "$exclude_old_pwd" || true
+
+                # Log only if we actually removed something
+                [ "$removed_any" -eq 1 ] && log_info "Excluded subdirectory $exclude_pattern" || true
+                ;;
+            esac
+          done <<EOF
+$excludes
+EOF
+        fi
       else
         log_warn "Failed to copy directory $dir_path"
       fi

@@ -1029,6 +1029,7 @@ CONFIGURATION OPTIONS:
                            WARNING: May include sensitive files!
                            Use gtr.copy.excludeDirs to exclude them.
   gtr.copy.excludeDirs     Directories to exclude (multi-valued)
+                           Supports glob patterns (e.g., "node_modules/.cache", "*/.npm")
   gtr.hook.postCreate      Post-create hooks (multi-valued)
   gtr.hook.postRemove      Post-remove hooks (multi-valued)
 
