@@ -69,6 +69,9 @@ main() {
     go)
       cmd_go "$@"
       ;;
+    run)
+      cmd_run "$@"
+      ;;
     editor)
       cmd_editor "$@"
       ;;
@@ -356,6 +359,67 @@ cmd_go() {
 
   # Print path to stdout for shell integration: cd "$(gtr go my-feature)"
   printf "%s\n" "$worktree_path"
+}
+
+# Run command (execute command in worktree directory)
+cmd_run() {
+  local identifier=""
+  local -a run_args=()
+
+  # Parse arguments
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        if [ -z "$identifier" ]; then
+          identifier="$1"
+          shift
+        else
+          run_args=("$@")  # Capture all remaining args as the command
+          break
+        fi
+        ;;
+    esac
+  done
+
+  # Validation
+  if [ -z "$identifier" ]; then
+    log_error "Usage: git gtr run <id|branch> <command...>"
+    exit 1
+  fi
+
+  if [ ${#run_args[@]} -eq 0 ]; then
+    log_error "Usage: git gtr run <id|branch> <command...>"
+    log_error "No command specified"
+    exit 1
+  fi
+
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+  # Resolve target branch
+  local target is_main worktree_path branch
+  target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
+  is_main=$(echo "$target" | cut -f1)
+  worktree_path=$(echo "$target" | cut -f2)
+  branch=$(echo "$target" | cut -f3)
+
+  # Human messages to stderr (like cmd_go)
+  if [ "$is_main" = "1" ]; then
+    log_step "Running in: main repo"
+  else
+    log_step "Running in: $branch"
+  fi
+  echo "Command: ${run_args[*]}" >&2
+  echo "" >&2
+
+  # Execute command in worktree directory (exit code propagates)
+  (cd "$worktree_path" && "${run_args[@]}")
 }
 
 # Editor command
@@ -933,6 +997,15 @@ CORE COMMANDS (daily workflow):
          Navigate to worktree (prints path for: cd "$(git gtr go my-feature)")
          Special: use '1' for repo root
 
+  run <branch> <command...>
+         Execute command in worktree directory
+         Special: use '1' to run in repo root
+
+         Examples:
+           git gtr run feature npm test
+           git gtr run feature-auth git status
+           git gtr run 1 npm run build
+
   list [--porcelain]
          List all worktrees
          Aliases: ls
@@ -980,6 +1053,10 @@ WORKFLOW EXAMPLES:
   git gtr new feature/user-auth               # Create worktree (folder: feature-user-auth)
   git gtr editor feature/user-auth            # Open in editor
   git gtr ai feature/user-auth                # Start AI tool
+
+  # Run commands in worktree
+  git gtr run feature/user-auth npm test      # Run tests
+  git gtr run feature/user-auth npm run dev   # Start dev server
 
   # Navigate to worktree directory
   cd "$(git gtr go feature/user-auth)"

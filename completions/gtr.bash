@@ -22,7 +22,7 @@ _git_gtr() {
 
   # If we're completing the first argument after 'git gtr'
   if [ "$cword" -eq 2 ]; then
-    COMPREPLY=($(compgen -W "new go editor ai rm ls list clean doctor adapter config help version" -- "$cur"))
+    COMPREPLY=($(compgen -W "new go run editor ai rm ls list clean doctor adapter config help version" -- "$cur"))
     return 0
   fi
 
@@ -30,7 +30,7 @@ _git_gtr() {
 
   # Commands that take branch names or '1' for main repo
   case "$cmd" in
-    go|editor|ai|rm)
+    go|run|editor|ai|rm)
       if [ "$cword" -eq 3 ]; then
         # Complete with branch names and special ID '1' for main repo
         local branches all_options

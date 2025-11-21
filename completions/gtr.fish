@@ -33,6 +33,7 @@ end
 # Commands
 complete -f -c git -n '__fish_git_gtr_needs_command' -a new -d 'Create a new worktree'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a go -d 'Navigate to worktree'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a run -d 'Execute command in worktree'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a rm -d 'Remove worktree(s)'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a editor -d 'Open worktree in editor'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a ai -d 'Start AI coding tool'
@@ -83,6 +84,7 @@ end
 
 # Complete branch names for commands that need them
 complete -f -c git -n '__fish_git_gtr_using_command go' -a '(__gtr_worktree_branches)'
+complete -f -c git -n '__fish_git_gtr_using_command run' -a '(__gtr_worktree_branches)'
 complete -f -c git -n '__fish_git_gtr_using_command editor' -a '(__gtr_worktree_branches)'
 complete -f -c git -n '__fish_git_gtr_using_command ai' -a '(__gtr_worktree_branches)'
 complete -f -c git -n '__fish_git_gtr_using_command rm' -a '(__gtr_worktree_branches)'
