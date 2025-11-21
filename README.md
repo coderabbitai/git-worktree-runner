@@ -2,6 +2,8 @@
 
 > A portable, cross-platform CLI for managing git worktrees with ease
 
+> **⚠️ v2.0 Breaking Change:** As of v2.0.0, the command has been renamed from `gtr` to `git gtr` to avoid conflicts with GNU coreutils. Simply use `git gtr` instead of `gtr` for all commands. [See release notes for details](https://github.com/coderabbitai/git-worktree-runner/releases/tag/v2.0.0).
+
 ![4 AI agents working in parallel across different worktrees](docs/assets/demo-parallel.png)
 
 ## What are git worktrees?
@@ -26,38 +28,38 @@
 ```bash
 git clone https://github.com/coderabbitai/git-worktree-runner.git
 cd git-worktree-runner
-sudo ln -s "$(pwd)/bin/gtr" /usr/local/bin/gtr
+sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
 ```
 
 **Use it (3 commands):**
 
 ```bash
 cd ~/your-repo                              # Navigate to git repo
-gtr config set gtr.editor.default cursor    # One-time setup
-gtr config set gtr.ai.default claude        # One-time setup
+git gtr config set gtr.editor.default cursor    # One-time setup
+git gtr config set gtr.ai.default claude        # One-time setup
 
 # Daily workflow
-gtr new my-feature                          # Create worktree
-gtr editor my-feature                       # Open in editor
-gtr ai my-feature                           # Start AI tool
-gtr rm my-feature                           # Remove when done
+git gtr new my-feature                          # Create worktree
+git gtr editor my-feature                       # Open in editor
+git gtr ai my-feature                           # Start AI tool
+git gtr rm my-feature                           # Remove when done
 ```
 
 ## Why gtr?
 
-While `git worktree` is powerful, it's verbose and manual. `gtr` adds quality-of-life features for modern development:
+While `git worktree` is powerful, it's verbose and manual. `git gtr` adds quality-of-life features for modern development:
 
-| Task              | With `git worktree`                        | With `gtr`                           |
-| ----------------- | ------------------------------------------ | ------------------------------------ |
-| Create worktree   | `git worktree add ../repo-feature feature` | `gtr new feature`                    |
-| Open in editor    | `cd ../repo-feature && cursor .`           | `gtr editor feature`                 |
-| Start AI tool     | `cd ../repo-feature && aider`              | `gtr ai feature`                     |
-| Copy config files | Manual copy/paste                          | Auto-copy via `gtr.copy.include`     |
-| Run build steps   | Manual `npm install && npm run build`      | Auto-run via `gtr.hook.postCreate`   |
-| List worktrees    | `git worktree list` (shows paths)          | `gtr list` (shows branches + status) |
-| Clean up          | `git worktree remove ../repo-feature`      | `gtr rm feature`                     |
+| Task              | With `git worktree`                        | With `git gtr`                           |
+| ----------------- | ------------------------------------------ | ---------------------------------------- |
+| Create worktree   | `git worktree add ../repo-feature feature` | `git gtr new feature`                    |
+| Open in editor    | `cd ../repo-feature && cursor .`           | `git gtr editor feature`                 |
+| Start AI tool     | `cd ../repo-feature && aider`              | `git gtr ai feature`                     |
+| Copy config files | Manual copy/paste                          | Auto-copy via `gtr.copy.include`         |
+| Run build steps   | Manual `npm install && npm run build`      | Auto-run via `gtr.hook.postCreate`       |
+| List worktrees    | `git worktree list` (shows paths)          | `git gtr list` (shows branches + status) |
+| Clean up          | `git worktree remove ../repo-feature`      | `git gtr rm feature`                     |
 
-**TL;DR:** `gtr` wraps `git worktree` with quality-of-life features for modern development workflows (AI tools, editors, automation).
+**TL;DR:** `git gtr` wraps `git worktree` with quality-of-life features for modern development workflows (AI tools, editors, automation).
 
 ## Features
 
@@ -78,22 +80,22 @@ While `git worktree` is powerful, it's verbose and manual. `gtr` adds quality-of
 cd ~/GitHub/my-project
 
 # One-time setup (per repository)
-gtr config set gtr.editor.default cursor
-gtr config set gtr.ai.default claude
+git gtr config set gtr.editor.default cursor
+git gtr config set gtr.ai.default claude
 
 # Daily workflow
-gtr new my-feature          # Create worktree folder: my-feature
-gtr editor my-feature       # Open in cursor
-gtr ai my-feature           # Start claude
+git gtr new my-feature          # Create worktree folder: my-feature
+git gtr editor my-feature       # Open in cursor
+git gtr ai my-feature           # Start claude
 
 # Navigate to worktree
-cd "$(gtr go my-feature)"
+cd "$(git gtr go my-feature)"
 
 # List all worktrees
-gtr list
+git gtr list
 
 # Remove when done
-gtr rm my-feature
+git gtr rm my-feature
 ```
 
 ## Requirements
@@ -112,7 +114,7 @@ cd git-worktree-runner
 
 # Add to PATH (choose one)
 # Option 1: Symlink to /usr/local/bin
-sudo ln -s "$(pwd)/bin/gtr" /usr/local/bin/gtr
+sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
 
 # Option 2: Add to your shell profile
 echo 'export PATH="$PATH:'$(pwd)'/bin"' >> ~/.zshrc  # or ~/.bashrc
@@ -121,7 +123,7 @@ source ~/.zshrc
 
 ### Shell Completions (Optional)
 
-**Bash** (requires `bash-completion` v2):
+**Bash** (requires `bash-completion` v2 and git completions):
 
 ```bash
 # Install bash-completion first (if not already installed)
@@ -131,15 +133,27 @@ brew install bash-completion@2
 # Ubuntu/Debian:
 sudo apt install bash-completion
 
+# Ensure git's bash completion is enabled (usually installed with git)
 # Then enable gtr completions:
 echo 'source /path/to/git-worktree-runner/completions/gtr.bash' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-**Zsh:**
+**Zsh** (requires git's zsh completion):
 
 ```bash
-echo 'source /path/to/git-worktree-runner/completions/_gtr' >> ~/.zshrc
+# Add completion directory to fpath and enable
+mkdir -p ~/.zsh/completions
+cp /path/to/git-worktree-runner/completions/_git-gtr ~/.zsh/completions/
+
+# Add to ~/.zshrc (if not already there):
+cat >> ~/.zshrc <<'EOF'
+# Enable completions
+fpath=(~/.zsh/completions $fpath)
+autoload -Uz compinit && compinit
+EOF
+
+source ~/.zshrc
 ```
 
 **Fish:**
@@ -151,18 +165,18 @@ ln -s /path/to/git-worktree-runner/completions/gtr.fish ~/.config/fish/completio
 ## Commands
 
 Commands accept branch names to identify worktrees. Use `1` to reference the main repo.
-Run `gtr help` for full documentation.
+Run `git gtr help` for full documentation.
 
-### `gtr new <branch> [options]`
+### `git gtr new <branch> [options]`
 
 Create a new git worktree. Folder is named after the branch.
 
 ```bash
-gtr new my-feature                              # Creates folder: my-feature
-gtr new hotfix --from v1.2.3                    # Create from specific ref
-gtr new feature/auth                            # Creates folder: feature-auth
-gtr new feature-auth --name backend --force     # Same branch, custom name
-gtr new my-feature --name descriptive-variant   # Optional: custom name without --force
+git gtr new my-feature                              # Creates folder: my-feature
+git gtr new hotfix --from v1.2.3                    # Create from specific ref
+git gtr new feature/auth                            # Creates folder: feature-auth
+git gtr new feature-auth --name backend --force     # Same branch, custom name
+git gtr new my-feature --name descriptive-variant   # Optional: custom name without --force
 ```
 
 **Options:**
@@ -175,67 +189,67 @@ gtr new my-feature --name descriptive-variant   # Optional: custom name without 
 - `--name <suffix>`: Custom folder name suffix (optional, required with --force)
 - `--yes`: Non-interactive mode
 
-### `gtr editor <branch> [--editor <name>]`
+### `git gtr editor <branch> [--editor <name>]`
 
 Open worktree in editor (uses `gtr.editor.default` or `--editor` flag).
 
 ```bash
-gtr editor my-feature                    # Uses configured editor
-gtr editor my-feature --editor vscode    # Override with vscode
+git gtr editor my-feature                    # Uses configured editor
+git gtr editor my-feature --editor vscode    # Override with vscode
 ```
 
-### `gtr ai <branch> [--ai <name>] [-- args...]`
+### `git gtr ai <branch> [--ai <name>] [-- args...]`
 
 Start AI coding tool (uses `gtr.ai.default` or `--ai` flag).
 
 ```bash
-gtr ai my-feature                      # Uses configured AI tool
-gtr ai my-feature --ai aider          # Override with aider
-gtr ai my-feature -- --model gpt-4    # Pass arguments to tool
-gtr ai 1                              # Use AI in main repo
+git gtr ai my-feature                      # Uses configured AI tool
+git gtr ai my-feature --ai aider          # Override with aider
+git gtr ai my-feature -- --model gpt-4    # Pass arguments to tool
+git gtr ai 1                              # Use AI in main repo
 ```
 
-### `gtr go <branch>`
+### `git gtr go <branch>`
 
 Print worktree path for shell navigation.
 
 ```bash
-cd "$(gtr go my-feature)"    # Navigate by branch name
-cd "$(gtr go 1)"             # Navigate to main repo
+cd "$(git gtr go my-feature)"    # Navigate by branch name
+cd "$(git gtr go 1)"             # Navigate to main repo
 ```
 
-### `gtr rm <branch>... [options]`
+### `git gtr rm <branch>... [options]`
 
 Remove worktree(s) by branch name.
 
 ```bash
-gtr rm my-feature                              # Remove one
-gtr rm feature-a feature-b                     # Remove multiple
-gtr rm my-feature --delete-branch --force      # Delete branch and force
+git gtr rm my-feature                              # Remove one
+git gtr rm feature-a feature-b                     # Remove multiple
+git gtr rm my-feature --delete-branch --force      # Delete branch and force
 ```
 
 **Options:** `--delete-branch`, `--force`, `--yes`
 
-### `gtr list [--porcelain]`
+### `git gtr list [--porcelain]`
 
 List all worktrees. Use `--porcelain` for machine-readable output.
 
-### `gtr config {get|set|add|unset} <key> [value] [--global]`
+### `git gtr config {get|set|add|unset} <key> [value] [--global]`
 
 Manage configuration via git config.
 
 ```bash
-gtr config set gtr.editor.default cursor       # Set locally
-gtr config set gtr.ai.default claude --global  # Set globally
-gtr config get gtr.editor.default              # Get value
+git gtr config set gtr.editor.default cursor       # Set locally
+git gtr config set gtr.ai.default claude --global  # Set globally
+git gtr config get gtr.editor.default              # Get value
 ```
 
 ### Other Commands
 
-- `gtr doctor` - Health check (verify git, editors, AI tools)
-- `gtr adapter` - List available editor & AI adapters
-- `gtr clean` - Remove stale worktrees
-- `gtr version` - Show version
+- `git gtr doctor` - Health check (verify git, editors, AI tools)
+- `git gtr adapter` - List available editor & AI adapters
+- `git gtr clean` - Remove stale worktrees
+- `git gtr version` - Show version
 
 ## Configuration
 
@@ -295,28 +309,28 @@ gtr.ai.default = none
 
 **Supported AI Tools:**
 
-| Tool                                              | Install                                           | Use Case                             | Set as Default                           |
-| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------ | ---------------------------------------- |
-| **[Aider](https://aider.chat)**                   | `pip install aider-chat`                          | Pair programming, edit files with AI | `gtr config set gtr.ai.default aider`    |
-| **[Claude Code](https://claude.com/claude-code)** | Install from claude.com                           | Terminal-native coding agent         | `gtr config set gtr.ai.default claude`   |
-| **[Codex CLI](https://github.com/openai/codex)**  | `npm install -g @openai/codex`                    | OpenAI coding assistant              | `gtr config set gtr.ai.default codex`    |
-| **[Cursor](https://cursor.com)**                  | Install from cursor.com                           | AI-powered editor with CLI agent     | `gtr config set gtr.ai.default cursor`   |
-| **[Continue](https://continue.dev)**              | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent             | `gtr config set gtr.ai.default continue` |
+| Tool                                              | Install                                           | Use Case                             | Set as Default                               |
+| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------ | -------------------------------------------- |
+| **[Aider](https://aider.chat)**                   | `pip install aider-chat`                          | Pair programming, edit files with AI | `git gtr config set gtr.ai.default aider`    |
+| **[Claude Code](https://claude.com/claude-code)** | Install from claude.com                           | Terminal-native coding agent         | `git gtr config set gtr.ai.default claude`   |
+| **[Codex CLI](https://github.com/openai/codex)**  | `npm install -g @openai/codex`                    | OpenAI coding assistant              | `git gtr config set gtr.ai.default codex`    |
+| **[Cursor](https://cursor.com)**                  | Install from cursor.com                           | AI-powered editor with CLI agent     | `git gtr config set gtr.ai.default cursor`   |
+| **[Continue](https://continue.dev)**              | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent             | `git gtr config set gtr.ai.default continue` |
 
 **Examples:**
 
 ```bash
 # Set default AI tool for this repo
-gtr config set gtr.ai.default claude
+git gtr config set gtr.ai.default claude
 
 # Or set globally for all repos
-gtr config set gtr.ai.default claude --global
+git gtr config set gtr.ai.default claude --global
 
-# Then just use gtr ai
-gtr ai my-feature
+# Then just use git gtr ai
+git gtr ai my-feature
 
 # Pass arguments to the tool
-gtr ai my-feature -- --plan "refactor auth"
+git gtr ai my-feature -- --plan "refactor auth"
 ```
 
 ### File Copying
@@ -325,13 +339,13 @@ Copy files to new worktrees using glob patterns:
 
 ```bash
 # Add patterns to copy (multi-valued)
-gtr config add gtr.copy.include "**/.env.example"
-gtr config add gtr.copy.include "**/CLAUDE.md"
-gtr config add gtr.copy.include "*.config.js"
+git gtr config add gtr.copy.include "**/.env.example"
+git gtr config add gtr.copy.include "**/CLAUDE.md"
+git gtr config add gtr.copy.include "*.config.js"
 
 # Exclude patterns (multi-valued)
-gtr config add gtr.copy.exclude "**/.env"
-gtr config add gtr.copy.exclude "**/secrets.*"
+git gtr config add gtr.copy.exclude "**/.env"
+git gtr config add gtr.copy.exclude "**/secrets.*"
 ```
 
 #### Security Best Practices
@@ -340,9 +354,9 @@ gtr config add gtr.copy.exclude "**/secrets.*"
 
 ```bash
 # Personal dev: copy what you need to run dev servers
-gtr config add gtr.copy.include "**/.env.development"
-gtr config add gtr.copy.include "**/.env.local"
-gtr config add gtr.copy.exclude "**/.env.production"  # Never copy production
+git gtr config add gtr.copy.include "**/.env.development"
+git gtr config add gtr.copy.include "**/.env.local"
+git gtr config add gtr.copy.exclude "**/.env.production"  # Never copy production
 ```
 
 > [!TIP]
@@ -354,11 +368,11 @@ Run custom commands after worktree operations:
 
 ```bash
 # Post-create hooks (multi-valued, run in order)
-gtr config add gtr.hook.postCreate "npm install"
-gtr config add gtr.hook.postCreate "npm run build"
+git gtr config add gtr.hook.postCreate "npm install"
+git gtr config add gtr.hook.postCreate "npm run build"
 
 # Post-remove hooks
-gtr config add gtr.hook.postRemove "echo 'Cleaned up!'"
+git gtr config add gtr.hook.postRemove "echo 'Cleaned up!'"
 ```
 
 **Environment variables available in hooks:**
@@ -371,19 +385,19 @@ gtr config add gtr.hook.postRemove "echo 'Cleaned up!'"
 
 ```bash
 # Node.js (npm)
-gtr config add gtr.hook.postCreate "npm install"
+git gtr config add gtr.hook.postCreate "npm install"
 
 # Node.js (pnpm)
-gtr config add gtr.hook.postCreate "pnpm install"
+git gtr config add gtr.hook.postCreate "pnpm install"
 
 # Python
-gtr config add gtr.hook.postCreate "pip install -r requirements.txt"
+git gtr config add gtr.hook.postCreate "pip install -r requirements.txt"
 
 # Ruby
-gtr config add gtr.hook.postCreate "bundle install"
+git gtr config add gtr.hook.postCreate "bundle install"
 
 # Rust
-gtr config add gtr.hook.postCreate "cargo build"
+git gtr config add gtr.hook.postCreate "cargo build"
 ```
 
 ## Configuration Examples
@@ -391,35 +405,35 @@ gtr config add gtr.hook.postCreate "cargo build"
 ### Minimal Setup (Just Basics)
 
 ```bash
-gtr config set gtr.worktrees.prefix "wt-"
-gtr config set gtr.defaultBranch "main"
+git gtr config set gtr.worktrees.prefix "wt-"
+git gtr config set gtr.defaultBranch "main"
 ```
 
 ### Full-Featured Setup (Node.js Project)
 
 ```bash
 # Worktree settings
-gtr config set gtr.worktrees.prefix "wt-"
+git gtr config set gtr.worktrees.prefix "wt-"
 
 # Editor
-gtr config set gtr.editor.default cursor
+git gtr config set gtr.editor.default cursor
 
 # Copy environment templates
-gtr config add gtr.copy.include "**/.env.example"
-gtr config add gtr.copy.include "**/.env.development"
-gtr config add gtr.copy.exclude "**/.env.local"
+git gtr config add gtr.copy.include "**/.env.example"
+git gtr config add gtr.copy.include "**/.env.development"
+git gtr config add gtr.copy.exclude "**/.env.local"
 
 # Build hooks
-gtr config add gtr.hook.postCreate "pnpm install"
-gtr config add gtr.hook.postCreate "pnpm run build"
+git gtr config add gtr.hook.postCreate "pnpm install"
+git gtr config add gtr.hook.postCreate "pnpm run build"
 ```
 
 ### Global Defaults
 
 ```bash
 # Set global preferences
-gtr config set gtr.editor.default cursor --global
-gtr config set gtr.ai.default claude --global
+git gtr config set gtr.editor.default cursor --global
+git gtr config set gtr.ai.default claude --global
 ```
 
 ## Advanced Usage
@@ -428,24 +442,24 @@ gtr config set gtr.ai.default claude --global
 
 **gtr is repository-scoped** - each git repository has its own independent set of worktrees:
 
-- Run `gtr` commands from within any git repository
+- Run `git gtr` commands from within any git repository
 - Worktree folders are named after their branch names
 - Each repo manages its own worktrees independently
-- Switch repos with `cd`, then run `gtr` commands for that repo
+- Switch repos with `cd`, then run `git gtr` commands for that repo
 
 ### Working with Multiple Branches
 
 ```bash
 # Terminal 1: Work on feature
-gtr new feature-a
-gtr editor feature-a
+git gtr new feature-a
+git gtr editor feature-a
 
 # Terminal 2: Review PR
-gtr new pr/123
-gtr editor pr/123
+git gtr new pr/123
+git gtr editor pr/123
 
 # Terminal 3: Navigate to main branch (repo root)
-cd "$(gtr go 1)"  # Special ID '1' = main repo
+cd "$(git gtr go 1)"  # Special ID '1' = main repo
 ```
 
 ### Working with Multiple Repositories
@@ -455,29 +469,29 @@ Each repository has its own independent set of worktrees. Switch repos with `cd`
 ```bash
 # Frontend repo
 cd ~/GitHub/frontend
-gtr list
+git gtr list
 # BRANCH          PATH
 # main [main]     ~/GitHub/frontend
 # auth-feature    ~/GitHub/frontend-worktrees/auth-feature
 # nav-redesign    ~/GitHub/frontend-worktrees/nav-redesign
 
-gtr editor auth-feature      # Open frontend auth work
-gtr ai nav-redesign          # AI on frontend nav work
+git gtr editor auth-feature      # Open frontend auth work
+git gtr ai nav-redesign          # AI on frontend nav work
 
 # Backend repo (separate worktrees)
 cd ~/GitHub/backend
-gtr list
+git gtr list
 # BRANCH          PATH
 # main [main]     ~/GitHub/backend
 # api-auth        ~/GitHub/backend-worktrees/api-auth
 # websockets      ~/GitHub/backend-worktrees/websockets
 
-gtr editor api-auth          # Open backend auth work
-gtr ai websockets            # AI on backend websockets
+git gtr editor api-auth          # Open backend auth work
+git gtr ai websockets            # AI on backend websockets
 
 # Switch back to frontend
 cd ~/GitHub/frontend
-gtr editor auth-feature      # Opens frontend auth
+git gtr editor auth-feature      # Opens frontend auth
 ```
 
 **Key point:** Each repository has its own worktrees. Use branch names to identify worktrees.
@@ -488,19 +502,19 @@ Create a `.gtr-setup.sh` in your repo:
 
 ```bash
 #!/bin/sh
-# .gtr-setup.sh - Project-specific gtr configuration
+# .gtr-setup.sh - Project-specific git gtr configuration
 
-gtr config set gtr.worktrees.prefix "dev-"
-gtr config set gtr.editor.default cursor
+git gtr config set gtr.worktrees.prefix "dev-"
+git gtr config set gtr.editor.default cursor
 
 # Copy configs
-gtr config add gtr.copy.include ".env.example"
-gtr config add gtr.copy.include "docker-compose.yml"
+git gtr config add gtr.copy.include ".env.example"
+git gtr config add gtr.copy.include "docker-compose.yml"
 
 # Setup hooks
-gtr config add gtr.hook.postCreate "docker-compose up -d db"
-gtr config add gtr.hook.postCreate "npm install"
-gtr config add gtr.hook.postCreate "npm run db:migrate"
+git gtr config add gtr.hook.postCreate "docker-compose up -d db"
+git gtr config add gtr.hook.postCreate "npm install"
+git gtr config add gtr.hook.postCreate "npm run db:migrate"
 ```
 
 Then run: `sh .gtr-setup.sh`
@@ -511,16 +525,16 @@ Perfect for CI/CD or scripts:
 
 ```bash
 # Create worktree without prompts
-gtr new ci-test --yes --no-copy
+git gtr new ci-test --yes --no-copy
 
 # Remove without confirmation
-gtr rm ci-test --yes --delete-branch
+git gtr rm ci-test --yes --delete-branch
 ```
 
 ### Multiple Worktrees on Same Branch
 
 > [!TIP]
-> Git normally prevents checking out the same branch in multiple worktrees to avoid conflicts. `gtr` supports bypassing this safety check with `--force` and `--name` flags.
+> Git normally prevents checking out the same branch in multiple worktrees to avoid conflicts. `git gtr` supports bypassing this safety check with `--force` and `--name` flags.
 
 **Use cases:**
 
@@ -539,10 +553,10 @@ gtr rm ci-test --yes --delete-branch
 
 ```bash
 # Create multiple worktrees for same branch with descriptive names
-gtr new feature-auth                          # Main worktree: feature-auth/
-gtr new feature-auth --force --name backend   # Creates: feature-auth-backend/
-gtr new feature-auth --force --name frontend  # Creates: feature-auth-frontend/
-gtr new feature-auth --force --name tests     # Creates: feature-auth-tests/
+git gtr new feature-auth                          # Main worktree: feature-auth/
+git gtr new feature-auth --force --name backend   # Creates: feature-auth-backend/
+git gtr new feature-auth --force --name frontend  # Creates: feature-auth-frontend/
+git gtr new feature-auth --force --name tests     # Creates: feature-auth-tests/
 
 # All worktrees are on the same 'feature-auth' branch
 # The --name flag is required with --force to distinguish worktrees
@@ -552,16 +566,16 @@ gtr new feature-auth --force --name tests     # Creates: feature-auth-tests/
 
 ```bash
 # Terminal 1: Backend work
-gtr new feature-auth --force --name backend
-gtr ai feature-auth-backend -- --message "Implement API endpoints"
+git gtr new feature-auth --force --name backend
+git gtr ai feature-auth-backend -- --message "Implement API endpoints"
 
 # Terminal 2: Frontend work
-gtr new feature-auth --force --name frontend
-gtr ai feature-auth-frontend -- --message "Build UI components"
+git gtr new feature-auth --force --name frontend
+git gtr ai feature-auth-frontend -- --message "Build UI components"
 
 # Terminal 3: Tests
-gtr new feature-auth --force --name tests
-gtr ai feature-auth-tests -- --message "Write integration tests"
+git gtr new feature-auth --force --name tests
+git gtr ai feature-auth-tests -- --message "Write integration tests"
 
 # All agents commit to the same feature-auth branch
 ```
@@ -572,7 +586,7 @@ gtr ai feature-auth-tests -- --message "Write integration tests"
 - Only edit files in one worktree at a time
 - Commit/stash changes before switching worktrees
 - Ideal for parallel AI agents working on different parts of one feature
-- Use `gtr list` to see all worktrees and their branches
+- Use `git gtr list` to see all worktrees and their branches
 
 ## Troubleshooting
 
@@ -586,7 +600,7 @@ git fetch origin
 git branch -a | grep your-branch
 
 # Manually specify tracking mode
-gtr new test --track remote
+git gtr new test --track remote
 ```
 
 ### Editor Not Opening
@@ -596,17 +610,17 @@ gtr new test --track remote
 command -v cursor  # or: code, zed
 
 # Check configuration
-gtr config get gtr.editor.default
+git gtr config get gtr.editor.default
 
 # Try opening again
-gtr editor 2
+git gtr editor 2
 ```
 
 ### File Copying Issues
 
 ```bash
 # Check your patterns
-gtr config get gtr.copy.include
+git gtr config get gtr.copy.include
 
 # Test patterns with find
 cd /path/to/repo
@@ -629,7 +643,9 @@ find . -path "**/.env.example"
 
 ```log
 git-worktree-runner/
-├── bin/gtr              # Main executable
+├── bin/
+│   ├── git-gtr         # Git subcommand entry point (wrapper)
+│   └── gtr             # Core implementation (1000+ lines)
 ├── lib/                 # Core libraries
 │   ├── core.sh         # Git worktree operations
 │   ├── config.sh       # Configuration management

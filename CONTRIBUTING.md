@@ -1,6 +1,6 @@
 # Contributing to gtr
 
-Thank you for considering contributing to `gtr`! This document provides guidelines and instructions for contributing.
+Thank you for considering contributing to `git gtr`! This document provides guidelines and instructions for contributing.
 
 ## How to Contribute
 
@@ -178,8 +178,8 @@ Currently, testing is manual. Please test your changes on:
 - [ ] List worktrees
 - [ ] Test configuration commands
 - [ ] Test completions (tab completion works)
-- [ ] Test `gtr go 1` for main repo
-- [ ] Test `gtr go <branch>` for worktrees
+- [ ] Test `git gtr go 1` for main repo
+- [ ] Test `git gtr go <branch>` for worktrees
 
 ### Pull Request Process
 

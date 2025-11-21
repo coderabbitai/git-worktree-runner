@@ -4,7 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`gtr` (Git Worktree Runner) is a cross-platform CLI tool written in Bash that simplifies git worktree management. It wraps `git worktree` with quality-of-life features like editor integration, AI tool support, file copying, and hooks.
+`git gtr` (Git Worktree Runner) is a cross-platform CLI tool written in Bash that simplifies git worktree management. It wraps `git worktree` with quality-of-life features like editor integration, AI tool support, file copying, and hooks. It is installed as a git subcommand, so all commands are invoked as `git gtr <command>`.
+
+## Important: v2.0.0 Command Structure
+
+**As of v2.0.0**, the tool is invoked as `git gtr` (git subcommand) to avoid conflicts with GNU coreutils:
+
+- **Production use**: `git gtr <command>` (git subcommand)
+- **Development/testing**: `./bin/gtr <command>` (direct script execution)
+
+**Binary structure**:
+- `bin/git-gtr`: Thin wrapper (16 lines) that allows git subcommand invocation (`git gtr`)
+- `bin/gtr`: Main script containing all logic (900+ lines)
+
+When testing changes locally, you use `./bin/gtr` directly. When documenting user-facing features or writing help text, always reference `git gtr`.
 
 ## Development Commands
 
@@ -90,11 +103,11 @@ Test changes using this comprehensive checklist (from CONTRIBUTING.md):
 ./bin/gtr config unset gtr.editor.default
 
 # Test shell completions with tab completion
-gtr new <TAB>
-gtr editor <TAB>
+git gtr new <TAB>
+git gtr editor <TAB>
 # Expected: Shows available branches/worktrees
 
-# Test gtr go for main repo and worktrees
+# Test git gtr go for main repo and worktrees
 cd "$(./bin/gtr go 1)"
 # Expected: Navigates to repo root
 cd "$(./bin/gtr go test-feature)"
@@ -142,7 +155,7 @@ echo "Debug: var=$var" >&2
 # Verify git is available
 git --version
 
-# Check gtr setup
+# Check git gtr setup
 ./bin/gtr doctor
 
 # List available adapters
@@ -171,7 +184,7 @@ git --version
 
 **Branch Name Mapping**: Branch names are sanitized to valid folder names (slashes and special chars → hyphens). For example, `feature/user-auth` becomes folder `feature-user-auth`.
 
-**Special ID '1'**: The main repository is always accessible via ID `1` in commands (e.g., `gtr go 1`, `gtr editor 1`).
+**Special ID '1'**: The main repository is always accessible via ID `1` in commands (e.g., `git gtr go 1`, `git gtr editor 1`).
 
 **Configuration Storage**: All configuration is stored via `git config` (local, global, or system). No custom config files. This makes settings portable and follows git conventions.
 
@@ -182,6 +195,13 @@ git --version
 - Return code 0 indicates success/availability; non-zero indicates failure
 - See "Adapter Contract" in Important Implementation Details for full specifications
 
+**Generic Adapter Fallback**: In addition to specific adapter files, gtr supports generic adapters via environment variables:
+
+- `GTR_EDITOR_CMD`: Custom editor command (e.g., `GTR_EDITOR_CMD="emacs"`)
+- `GTR_AI_CMD`: Custom AI tool command (e.g., `GTR_AI_CMD="copilot"`)
+
+These generic functions in `bin/gtr:34-55` provide a fallback when no specific adapter file exists. This allows users to configure custom tools without creating adapter files. The generic adapter functions check if the command exists using `command -v` and execute it using `eval` to handle multi-word commands properly (e.g., `code --wait`, `bunx @github/copilot@latest`).
+
 ### Command Flow
 
 Understanding how commands are dispatched through the system:
@@ -191,7 +211,7 @@ Understanding how commands are dispatched through the system:
 3. **Library Functions** (`lib/*.sh`): Command handlers call reusable functions from library modules
 4. **Adapters** (`adapters/*`): Dynamically loaded when needed via `load_editor_adapter` or `load_ai_adapter`
 
-**Example flow for `gtr new my-feature`:**
+**Example flow for `git gtr new my-feature`:**
 
 ```
 bin/gtr main()
@@ -202,7 +222,7 @@ bin/gtr main()
   → run_hooks_in() [lib/hooks.sh]
 ```
 
-**Example flow for `gtr editor my-feature`:**
+**Example flow for `git gtr editor my-feature`:**
 
 ```
 bin/gtr main()
@@ -227,14 +247,14 @@ When making changes, follow these core principles (from CONTRIBUTING.md):
 
 ### Updating the Version Number
 
-When releasing a new version, update the version constant in `bin/gtr`:
+When releasing a new version, update the version constant in `bin/gtr` (the main script, not the `bin/git-gtr` wrapper):
 
 ```bash
 # bin/gtr line 8
-GTR_VERSION="1.0.0"  # Update this
+GTR_VERSION="2.0.0"  # Update this
 ```
 
-The version is displayed with `gtr version` and `gtr --version`.
+The version is displayed with `git gtr version` and `git gtr --version`.
 
 ### Adding a New Editor Adapter
 
@@ -314,7 +334,7 @@ When changing `lib/*.sh` files:
 When adding new commands or flags, update all three completion files:
 
 - `completions/gtr.bash` (Bash)
-- `completions/_gtr` (Zsh)
+- `completions/_git-gtr` (Zsh)
 - `completions/gtr.fish` (Fish)
 
 ### Git Version Compatibility
@@ -349,6 +369,23 @@ All config keys use `gtr.*` prefix and are managed via `git config`:
 - `gtr.copy.exclude`: Multi-valued glob patterns for files to exclude
 - `gtr.hook.postCreate`: Multi-valued commands to run after creating worktree
 - `gtr.hook.postRemove`: Multi-valued commands to run after removing worktree
+
+## Environment Variables
+
+**System environment variables**:
+
+- `GTR_DIR`: Override script directory location (default: auto-detected via symlink resolution in `bin/gtr:11-21`)
+- `GTR_WORKTREES_DIR`: Override base worktrees directory (fallback if `gtr.worktrees.dir` not set)
+- `GTR_EDITOR_CMD`: Generic editor command for custom editors without adapter files
+- `GTR_EDITOR_CMD_NAME`: First word of `GTR_EDITOR_CMD` used for availability checks
+- `GTR_AI_CMD`: Generic AI tool command for custom tools without adapter files
+- `GTR_AI_CMD_NAME`: First word of `GTR_AI_CMD` used for availability checks
+
+**Hook environment variables** (available in `gtr.hook.postCreate` and `gtr.hook.postRemove` scripts):
+
+- `REPO_ROOT`: Repository root path
+- `WORKTREE_PATH`: New worktree path
+- `BRANCH`: Branch name
 
 ## Important Implementation Details
 
@@ -394,8 +431,14 @@ ls -la /usr/local/bin
 # Create it if needed (macOS/Linux)
 sudo mkdir -p /usr/local/bin
 
-# Verify symlink
-ls -la /usr/local/bin/gtr
+# Verify symlink (v2.0.0+: symlink to git-gtr, not gtr)
+ls -la /usr/local/bin/git-gtr
+
+# Create symlink for v2.0.0+
+sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
+
+# Verify it works
+git gtr version
 ```
 
 ### Adapter Not Found
@@ -426,6 +469,6 @@ cd ~/gtr-test-repo
 git init
 git commit --allow-empty -m "Initial commit"
 
-# Now test gtr commands
+# Now test git gtr commands
 /path/to/git-worktree-runner/bin/gtr new test-feature
 ```
