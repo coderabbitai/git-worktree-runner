@@ -224,6 +224,16 @@ cmd_create() {
       log_step "Copying files..."
       copy_patterns "$repo_root" "$worktree_path" "$includes" "$excludes"
     fi
+
+    # Copy directories (typically git-ignored dirs like node_modules, .venv)
+    local dir_includes dir_excludes
+    dir_includes=$(cfg_get_all gtr.copy.includeDirs)
+    dir_excludes=$(cfg_get_all gtr.copy.excludeDirs)
+
+    if [ -n "$dir_includes" ]; then
+      log_step "Copying directories..."
+      copy_directories "$repo_root" "$worktree_path" "$dir_includes" "$dir_excludes"
+    fi
   fi
 
   # Run post-create hooks
@@ -1014,6 +1024,11 @@ CONFIGURATION OPTIONS:
                            continue, none
   gtr.copy.include         Files to copy (multi-valued)
   gtr.copy.exclude         Files to exclude (multi-valued)
+  gtr.copy.includeDirs     Directories to copy (multi-valued)
+                           Example: node_modules, .venv, vendor
+                           WARNING: May include sensitive files!
+                           Use gtr.copy.excludeDirs to exclude them.
+  gtr.copy.excludeDirs     Directories to exclude (multi-valued)
   gtr.hook.postCreate      Post-create hooks (multi-valued)
   gtr.hook.postRemove      Post-remove hooks (multi-valued)
 

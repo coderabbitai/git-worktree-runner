@@ -362,6 +362,32 @@ git gtr config add gtr.copy.exclude "**/.env.production"  # Never copy productio
 > [!TIP]
 > The tool only prevents path traversal (`../`). Everything else is your choice - copy what you need for your worktrees to function.
 
+#### Copying Directories
+
+Copy entire directories (like `node_modules`, `.venv`, `vendor`) to avoid reinstalling dependencies:
+
+```bash
+# Copy dependency directories to speed up worktree creation
+git gtr config add gtr.copy.includeDirs "node_modules"
+git gtr config add gtr.copy.includeDirs ".venv"
+git gtr config add gtr.copy.includeDirs "vendor"
+
+# Exclude specific directories if needed
+git gtr config add gtr.copy.excludeDirs "node_modules/.cache"
+```
+
+> [!WARNING]
+> Dependency directories may contain sensitive files (credentials, tokens, cached secrets). Always use `gtr.copy.excludeDirs` to exclude sensitive subdirectories if needed.
+
+**Use cases:**
+
+- **JavaScript/TypeScript:** Copy `node_modules` to avoid `npm install` (can take minutes for large projects)
+- **Python:** Copy `.venv` or `venv` to skip `pip install`
+- **PHP:** Copy `vendor` to skip `composer install`
+- **Go:** Copy build caches in `.cache` or `bin` directories
+
+**How it works:** The tool uses `find` to locate directories by name and copies them with `cp -r`. This is much faster than reinstalling dependencies but uses more disk space.
+
 ### Hooks
 
 Run custom commands after worktree operations:

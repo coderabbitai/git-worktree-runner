@@ -71,6 +71,8 @@ _git_gtr() {
               'gtr.ai.default' \
               'gtr.copy.include' \
               'gtr.copy.exclude' \
+              'gtr.copy.includeDirs' \
+              'gtr.copy.excludeDirs' \
               'gtr.hook.postCreate' \
               'gtr.hook.postRemove'
             ;;
