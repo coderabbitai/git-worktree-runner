@@ -1,9 +1,18 @@
-#compdef git-gtr
+#compdef _git-gtr git-gtr
+
+# Register gtr as a git subcommand for completion
+zstyle ':completion:*:*:git:*' user-commands gtr:'Git worktree management'
+
 # Zsh completion for git gtr
 
-_git_gtr() {
-  # Note: When called via 'git gtr', the words array is [git-gtr, <command>, ...]
-  # Git's completion system invokes this function automatically
+_git-gtr() {
+  # Normalize invocation so we always see: [git, gtr, <command>, ...]
+  # Handles: `git gtr`, `gtr`, and `git-gtr` invocations
+  if [[ $words[1] != git ]]; then
+    # Handle both `gtr ...` and `git-gtr ...`
+    words=(git gtr "${words[@]:2}")
+    (( CURRENT += 1 ))
+  fi
 
   local -a commands
   commands=(
@@ -29,32 +38,55 @@ _git_gtr() {
   # Add special ID '1' for main repo
   all_options=("1" "${branches[@]}")
 
+  # Early handler for `new` command - handle all positions
+  if (( CURRENT >= 4 )) && [[ $words[3] == new ]]; then
+    _arguments \
+      '1:branch name:' \
+      '--from[Base ref]:ref:' \
+      '--from-current[Create from current branch]' \
+      '--track[Track mode]:mode:(auto remote local none)' \
+      '--no-copy[Skip file copying]' \
+      '--no-fetch[Skip git fetch]' \
+      '--force[Allow same branch in multiple worktrees]' \
+      '--name[Custom folder name suffix]:name:' \
+      '--yes[Non-interactive mode]'
+    return
+  fi
+
+  # Early handler for `list/ls` command - add --porcelain
+  if (( CURRENT >= 4 )) && [[ $words[3] == (list|ls) ]]; then
+    _arguments '--porcelain[Machine-readable output]'
+    return
+  fi
+
   # Complete the gtr subcommand (new, go, editor, etc.)
-  if (( CURRENT == 2 )); then
+  if (( CURRENT == 3 )); then
     _describe 'commands' commands
   # Complete arguments to the subcommand
-  elif (( CURRENT == 3 )); then
-    case "$words[2]" in
-      go|run|editor|ai|rm)
+  elif (( CURRENT == 4 )); then
+    case "$words[3]" in
+      go|run|rm)
         _describe 'branch names' all_options
         ;;
-      new)
-        _arguments \
-          '--from[Base ref]:ref:' \
-          '--track[Track mode]:mode:(auto remote local none)' \
-          '--no-copy[Skip file copying]' \
-          '--no-fetch[Skip git fetch]' \
-          '--force[Allow same branch in multiple worktrees]' \
-          '--name[Custom folder name suffix]:name:' \
-          '--yes[Non-interactive mode]'
+      editor)
+        _describe 'branch names' all_options
+        ;;
+      ai)
+        _describe 'branch names' all_options
         ;;
       config)
         _values 'config action' get set add unset
         ;;
     esac
   # Complete subsequent arguments
-  elif (( CURRENT >= 4 )); then
-    case "$words[2]" in
+  elif (( CURRENT >= 5 )); then
+    case "$words[3]" in
+      editor)
+        _arguments '--editor[Editor to use]:editor:(cursor vscode zed idea pycharm webstorm vim nvim emacs sublime nano atom none)'
+        ;;
+      ai)
+        _arguments '--ai[AI tool to use]:tool:(aider claude codex cursor continue opencode none)'
+        ;;
       rm)
         _arguments \
           '--delete-branch[Delete branch]' \
@@ -62,20 +94,11 @@ _git_gtr() {
           '--yes[Non-interactive mode]'
         ;;
       config)
-        case "$words[3]" in
+        case "$words[4]" in
           get|set|add|unset)
-            _values 'config key' \
-              'gtr.worktrees.dir' \
-              'gtr.worktrees.prefix' \
-              'gtr.defaultBranch' \
-              'gtr.editor.default' \
-              'gtr.ai.default' \
-              'gtr.copy.include' \
-              'gtr.copy.exclude' \
-              'gtr.copy.includeDirs' \
-              'gtr.copy.excludeDirs' \
-              'gtr.hook.postCreate' \
-              'gtr.hook.postRemove'
+            _arguments \
+              '--global[Use global git config]' \
+              '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.postRemove)'
             ;;
         esac
         ;;
@@ -83,4 +106,4 @@ _git_gtr() {
   fi
 }
 
-# Function is auto-discovered by git's completion system - do not call it here
+_git-gtr "$@"

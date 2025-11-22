@@ -152,8 +152,13 @@ cat >> ~/.zshrc <<'EOF'
 # Enable completions
 fpath=(~/.zsh/completions $fpath)
 autoload -Uz compinit && compinit
+
+# Load git-gtr completions (REQUIRED - must be sourced after compinit)
+source ~/.zsh/completions/_git-gtr
 EOF
 
+# Clear completion cache and reload
+rm -f ~/.zcompdump*
 source ~/.zshrc
 ```
 
@@ -175,6 +180,7 @@ Create a new git worktree. Folder is named after the branch.
 ```bash
 git gtr new my-feature                              # Creates folder: my-feature
 git gtr new hotfix --from v1.2.3                    # Create from specific ref
+git gtr new variant-1 --from-current                # Create from current branch
 git gtr new feature/auth                            # Creates folder: feature-auth
 git gtr new feature-auth --name backend --force     # Same branch, custom name
 git gtr new my-feature --name descriptive-variant   # Optional: custom name without --force
@@ -183,6 +189,7 @@ git gtr new my-feature --name descriptive-variant   # Optional: custom name with
 **Options:**
 
 - `--from <ref>`: Create from specific ref
+- `--from-current`: Create from current branch (useful for parallel variant work)
 - `--track <mode>`: Tracking mode (auto|remote|local|none)
 - `--no-copy`: Skip file copying
 - `--no-fetch`: Skip git fetch

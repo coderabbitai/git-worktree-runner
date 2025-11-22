@@ -48,7 +48,7 @@ _git_gtr() {
     new)
       # Complete flags
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--id --from --track --no-copy --no-fetch --force --name --yes" -- "$cur"))
+        COMPREPLY=($(compgen -W "--id --from --from-current --track --no-copy --no-fetch --force --name --yes" -- "$cur"))
       elif [ "$prev" = "--track" ]; then
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
       fi
