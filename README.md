@@ -328,7 +328,7 @@ gtr.ai.default = none
 | **[Codex CLI](https://github.com/openai/codex)**  | `npm install -g @openai/codex`                    | OpenAI coding assistant              | `git gtr config set gtr.ai.default codex`    |
 | **[Continue](https://continue.dev)**              | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent             | `git gtr config set gtr.ai.default continue` |
 | **[Cursor](https://cursor.com)**                  | Install from cursor.com                           | AI-powered editor with CLI agent     | `git gtr config set gtr.ai.default cursor`   |
-| **[Gemini](https://github.com/google-gemini/gemini-cli)** | `npm install -g @google/gemini-cli`                                | open-source AI agent that brings the power of Gemini         | `git gtr config set gtr.ai.default gemini`   |
+| **[Gemini](https://github.com/google-gemini/gemini-cli)** | `npm install -g @google/gemini-cli`                                | Open-source AI coding assistant powered by Google Gemini         | `git gtr config set gtr.ai.default gemini`   |
 | **[OpenCode](https://opencode.ai)**               | Install from opencode.ai                          | AI coding assistant                  | `git gtr config set gtr.ai.default opencode` |
 
 **Examples:**
