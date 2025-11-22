@@ -14,6 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Development/testing**: `./bin/gtr <command>` (direct script execution)
 
 **Binary structure**:
+
 - `bin/git-gtr`: Thin wrapper (16 lines) that allows git subcommand invocation (`git gtr`)
 - `bin/gtr`: Main script containing all logic (900+ lines)
 
@@ -113,11 +114,31 @@ cd "$(./bin/gtr go 1)"
 cd "$(./bin/gtr go test-feature)"
 # Expected: Navigates to worktree
 
+# Test git gtr run command
+./bin/gtr run test-feature npm --version
+# Expected: Runs npm --version in worktree directory
+./bin/gtr run 1 git status
+# Expected: Runs git status in main repo
+./bin/gtr run test-feature echo "Hello from worktree"
+# Expected: Outputs "Hello from worktree"
+
 # Test copy patterns with include/exclude
 git config --add gtr.copy.include "**/.env.example"
 git config --add gtr.copy.exclude "**/.env"
 ./bin/gtr new test-copy
 # Expected: Copies .env.example but not .env
+
+# Test directory copying with include/exclude patterns
+git config --add gtr.copy.includeDirs "node_modules"
+git config --add gtr.copy.excludeDirs "node_modules/.cache"
+./bin/gtr new test-dir-copy
+# Expected: Copies node_modules but excludes node_modules/.cache
+
+# Test wildcard exclude patterns for directories
+git config --add gtr.copy.includeDirs ".venv"
+git config --add gtr.copy.excludeDirs "*/.cache"  # Exclude .cache at any level
+./bin/gtr new test-wildcard
+# Expected: Copies .venv and node_modules, excludes all .cache directories
 
 # Test post-create and post-remove hooks
 git config --add gtr.hook.postCreate "echo 'Created!' > /tmp/gtr-test"
@@ -171,7 +192,7 @@ git --version
 - **`lib/config.sh`**: Configuration management via `git config` wrapper functions. Supports local/global/system scopes.
 - **`lib/platform.sh`**: OS-specific utilities for macOS/Linux/Windows.
 - **`lib/ui.sh`**: User interface helpers (logging, prompts, formatting).
-- **`lib/copy.sh`**: File copying logic with glob pattern support.
+- **`lib/copy.sh`**: File copying logic with glob pattern support. Includes `copy_patterns()` for file copying and `copy_directories()` for directory copying.
 - **`lib/hooks.sh`**: Hook execution system for post-create/post-remove actions.
 - **`adapters/editor/*.sh`**: Editor adapters (must implement `editor_can_open` and `editor_open`).
 - **`adapters/ai/*.sh`**: AI tool adapters (must implement `ai_can_start` and `ai_start`).
@@ -230,6 +251,15 @@ bin/gtr main()
   → resolve_target() [lib/core.sh]
   → load_editor_adapter()
   → editor_open() [adapters/editor/*.sh]
+```
+
+**Example flow for `git gtr run my-feature npm test`:**
+
+```
+bin/gtr main()
+  → cmd_run()
+  → resolve_target() [lib/core.sh]
+  → (cd "$worktree_path" && eval "$command")
 ```
 
 ## Design Principles
@@ -367,6 +397,8 @@ All config keys use `gtr.*` prefix and are managed via `git config`:
 - `gtr.ai.default`: Default AI tool (aider, claude, codex, etc.)
 - `gtr.copy.include`: Multi-valued glob patterns for files to copy
 - `gtr.copy.exclude`: Multi-valued glob patterns for files to exclude
+- `gtr.copy.includeDirs`: Multi-valued directory patterns to copy (e.g., "node_modules", ".venv", "vendor")
+- `gtr.copy.excludeDirs`: Multi-valued directory patterns to exclude when copying (supports globs like "node_modules/.cache", "\*/.cache")
 - `gtr.hook.postCreate`: Multi-valued commands to run after creating worktree
 - `gtr.hook.postRemove`: Multi-valued commands to run after removing worktree
 
@@ -403,7 +435,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`:
 
 **Configuration Precedence**: The `cfg_default` function in `lib/config.sh:128-146` checks git config first (local > global > system), then environment variables, then fallback values. Use `cfg_get_all` (lib/config.sh:28-51) for multi-valued configs.
 
-**Multi-Value Configuration Pattern**: Some configs support multiple values (`gtr.copy.include`, `gtr.copy.exclude`, `gtr.hook.postCreate`, `gtr.hook.postRemove`). The `cfg_get_all` function merges values from local + global + system and deduplicates. Set with: `git config --add gtr.copy.include "pattern"`.
+**Multi-Value Configuration Pattern**: Some configs support multiple values (`gtr.copy.include`, `gtr.copy.exclude`, `gtr.copy.includeDirs`, `gtr.copy.excludeDirs`, `gtr.hook.postCreate`, `gtr.hook.postRemove`). The `cfg_get_all` function merges values from local + global + system and deduplicates. Set with: `git config --add gtr.copy.include "pattern"`.
 
 **Adapter Loading**: Adapters are sourced dynamically when needed (see `load_editor_adapter` at bin/gtr:794-806 and `load_ai_adapter` at bin/gtr:808-820). They must exist in `adapters/editor/` or `adapters/ai/` and define the required functions.
 
@@ -412,6 +444,16 @@ All config keys use `gtr.*` prefix and are managed via `git config`:
 - **Editor adapters**: Must implement `editor_can_open()` (returns 0 if available) and `editor_open(path)` (opens editor at path)
 - **AI adapters**: Must implement `ai_can_start()` (returns 0 if available) and `ai_start(path, args...)` (starts tool at path with optional args)
 - Both should use `log_error` from `lib/ui.sh` for user-facing error messages
+
+**Directory Copying**: The `copy_directories` function in `lib/copy.sh:179-348` copies entire directories (like `node_modules`, `.venv`, `vendor`) to speed up worktree creation. This is particularly useful for avoiding long dependency installation times. The function:
+
+- Uses `find` to locate directories by name pattern
+- Supports glob patterns for exclusions (e.g., `node_modules/.cache`, `*/.cache`)
+- Validates patterns to prevent path traversal attacks
+- Removes excluded subdirectories after copying the parent directory
+- Integrates into `create_worktree` at `bin/gtr:231-240`
+
+**Security note:** Dependency directories may contain sensitive files (tokens, cached credentials). Always use `gtr.copy.excludeDirs` to exclude sensitive subdirectories.
 
 ## Troubleshooting Development Issues
 
