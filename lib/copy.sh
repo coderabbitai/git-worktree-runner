@@ -265,41 +265,54 @@ EOF
                 ;;
             esac
 
-            # Check if exclude pattern is a subdirectory of the copied directory
-            # e.g., if we copied "node_modules" and exclude is "node_modules/.cache"
+            # Check if pattern applies to this copied directory
+            # Supports patterns like:
+            #   "node_modules/.cache" - exact path
+            #   "*/.cache" - wildcard prefix (matches any directory)
+            #   "node_modules/*" - wildcard suffix (matches all subdirectories)
+            #   "*/.*" - both (matches all hidden subdirectories in any directory)
+
+            # Only process patterns with directory separators
             case "$exclude_pattern" in
-              "$dir_path"/*)
-                # Extract the relative subdirectory path
-                local subdir="${exclude_pattern#$dir_path/}"
-                local exclude_base="$dest_parent/$dir_path/$subdir"
+              */*)
+                # Extract prefix (before first /) and suffix (after first /)
+                local pattern_prefix="${exclude_pattern%%/*}"
+                local pattern_suffix="${exclude_pattern#*/}"
 
-                # Save current directory
-                local exclude_old_pwd
-                exclude_old_pwd=$(pwd)
+                # Check if our copied directory matches the prefix pattern
+                case "$dir_path" in
+                  $pattern_prefix)
+                    # Match! Remove matching subdirectories using suffix pattern
 
-                # Change to destination directory for glob expansion
-                cd "$dest_parent/$dir_path" 2>/dev/null || continue
+                    # Save current directory
+                    local exclude_old_pwd
+                    exclude_old_pwd=$(pwd)
 
-                # Enable dotglob to match hidden files with wildcards
-                local exclude_shopt_save
-                exclude_shopt_save="$(shopt -p dotglob 2>/dev/null || true)"
-                shopt -s dotglob 2>/dev/null || true
+                    # Change to destination directory for glob expansion
+                    cd "$dest_parent/$dir_path" 2>/dev/null || continue
 
-                # Expand glob pattern and remove matched paths
-                local removed_any=0
-                for matched_path in $subdir; do
-                  # Check if glob matched anything (avoid literal pattern if no match)
-                  if [ -e "$matched_path" ]; then
-                    rm -rf "$matched_path" 2>/dev/null && removed_any=1 || true
-                  fi
-                done
+                    # Enable dotglob to match hidden files with wildcards
+                    local exclude_shopt_save
+                    exclude_shopt_save="$(shopt -p dotglob 2>/dev/null || true)"
+                    shopt -s dotglob 2>/dev/null || true
 
-                # Restore shell options and directory
-                eval "$exclude_shopt_save" 2>/dev/null || true
-                cd "$exclude_old_pwd" || true
+                    # Expand glob pattern and remove matched paths
+                    local removed_any=0
+                    for matched_path in $pattern_suffix; do
+                      # Check if glob matched anything (avoid literal pattern if no match)
+                      if [ -e "$matched_path" ]; then
+                        rm -rf "$matched_path" 2>/dev/null && removed_any=1 || true
+                      fi
+                    done
 
-                # Log only if we actually removed something
-                [ "$removed_any" -eq 1 ] && log_info "Excluded subdirectory $exclude_pattern" || true
+                    # Restore shell options and directory
+                    eval "$exclude_shopt_save" 2>/dev/null || true
+                    cd "$exclude_old_pwd" || true
+
+                    # Log only if we actually removed something
+                    [ "$removed_any" -eq 1 ] && log_info "Excluded subdirectory $exclude_pattern" || true
+                    ;;
+                esac
                 ;;
             esac
           done <<EOF
@@ -319,7 +332,7 @@ EOF
   cd "$old_pwd" || return 1
 
   if [ "$copied_count" -gt 0 ]; then
-    log_info "Copied $copied_count director(ies)"
+    log_info "Copied $copied_count directories"
   fi
 
   return 0
