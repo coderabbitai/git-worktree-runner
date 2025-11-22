@@ -965,7 +965,7 @@ load_ai_adapter() {
 
   if ! command -v "$cmd_name" >/dev/null 2>&1; then
     log_error "AI tool '$ai_tool' not found"
-    log_info "Built-in adapters: aider, claude, codex, cursor, continue, opencode"
+    log_info "Built-in adapters: aider, claude, codex, cursor, continue, gemini, opencode"
     log_info "Or use any AI tool command available in your PATH (e.g., bunx, gpt)"
     exit 1
   fi
@@ -1125,7 +1125,7 @@ CONFIGURATION OPTIONS:
                            atom, none
   gtr.ai.default           Default AI tool
                            Options: aider, claude, codex, cursor,
-                           continue, opencode, none
+                           continue, gemini, opencode, none
   gtr.copy.include         Files to copy (multi-valued)
   gtr.copy.exclude         Files to exclude (multi-valued)
   gtr.copy.includeDirs     Directories to copy (multi-valued)
