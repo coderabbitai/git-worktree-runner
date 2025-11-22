@@ -63,7 +63,8 @@ copy_patterns() {
         if [ -n "$excludes" ]; then
           while IFS= read -r exclude_pattern; do
             [ -z "$exclude_pattern" ] && continue
-            # Intentionally unquoted for glob pattern matching (shellcheck SC2254)
+            # Intentional glob pattern matching for file exclusion
+            # shellcheck disable=SC2254
             case "$file" in
               $exclude_pattern)
                 excluded=1
@@ -115,7 +116,8 @@ EOF
         if [ -n "$excludes" ]; then
           while IFS= read -r exclude_pattern; do
             [ -z "$exclude_pattern" ] && continue
-            # Intentionally unquoted for glob pattern matching (shellcheck SC2254)
+            # Intentional glob pattern matching for file exclusion
+            # shellcheck disable=SC2254
             case "$file" in
               $exclude_pattern)
                 excluded=1
@@ -225,7 +227,8 @@ copy_directories() {
           esac
 
           # Match full path (supports glob patterns like node_modules/.cache or */cache)
-          # Intentionally unquoted for glob pattern matching (shellcheck SC2254)
+          # Intentional glob pattern matching for directory exclusion
+          # shellcheck disable=SC2254
           case "$dir_path" in
             $exclude_pattern)
               excluded=1
@@ -284,7 +287,8 @@ EOF
                 local pattern_suffix="${exclude_pattern#*/}"
 
                 # Check if our copied directory matches the prefix pattern
-                # Intentionally unquoted for glob pattern matching (shellcheck SC2254)
+                # Intentional glob pattern matching for directory prefix
+                # shellcheck disable=SC2254
                 case "$dir_path" in
                   $pattern_prefix)
                     # Match! Remove matching subdirectories using suffix pattern
