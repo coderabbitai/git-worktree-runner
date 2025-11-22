@@ -225,6 +225,7 @@ copy_directories() {
           esac
 
           # Match full path (supports glob patterns like node_modules/.cache or */cache)
+          # Intentionally unquoted for glob pattern matching (shellcheck SC2254)
           case "$dir_path" in
             $exclude_pattern)
               excluded=1
@@ -263,6 +264,7 @@ EOF
             # Security: reject absolute paths and parent directory traversal in excludes
             case "$exclude_pattern" in
               /*|*/../*|../*|*/..|..)
+                log_warn "Skipping unsafe exclude pattern: $exclude_pattern"
                 continue
                 ;;
             esac
