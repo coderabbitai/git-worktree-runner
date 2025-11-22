@@ -10,7 +10,7 @@ _git-gtr() {
   # Handles: `git gtr`, `gtr`, and `git-gtr` invocations
   if [[ $words[1] != git ]]; then
     # Handle both `gtr ...` and `git-gtr ...`
-    words=(git gtr "${words[@]:2}")
+    words=(git gtr "${words[@]:1}")
     (( CURRENT += 1 ))
   fi
 
