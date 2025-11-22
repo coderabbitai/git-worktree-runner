@@ -86,7 +86,10 @@ git gtr new my-feature          # Create worktree folder: my-feature
 git gtr editor my-feature       # Open in cursor
 git gtr ai my-feature           # Start claude
 
-# Navigate to worktree
+# Run commands in worktree
+git gtr run my-feature npm test # Run tests
+
+# Navigate to worktree (alternative)
 cd "$(git gtr go my-feature)"
 
 # List all worktrees
@@ -214,6 +217,17 @@ Print worktree path for shell navigation.
 ```bash
 cd "$(git gtr go my-feature)"    # Navigate by branch name
 cd "$(git gtr go 1)"             # Navigate to main repo
+```
+
+### `git gtr run <branch> <command...>`
+
+Execute command in worktree directory.
+
+```bash
+git gtr run my-feature npm test             # Run tests
+git gtr run my-feature npm run dev          # Start dev server
+git gtr run feature-auth git status         # Run git commands
+git gtr run 1 npm run build                 # Run in main repo
 ```
 
 ### `git gtr rm <branch>... [options]`

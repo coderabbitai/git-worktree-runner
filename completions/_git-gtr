@@ -9,6 +9,7 @@ _git_gtr() {
   commands=(
     'new:Create a new worktree'
     'go:Navigate to worktree'
+    'run:Execute command in worktree'
     'rm:Remove worktree(s)'
     'editor:Open worktree in editor'
     'ai:Start AI coding tool'
@@ -34,7 +35,7 @@ _git_gtr() {
   # Complete arguments to the subcommand
   elif (( CURRENT == 3 )); then
     case "$words[2]" in
-      go|editor|ai|rm)
+      go|run|editor|ai|rm)
         _describe 'branch names' all_options
         ;;
       new)
