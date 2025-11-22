@@ -72,6 +72,11 @@ Test changes using this comprehensive checklist (from CONTRIBUTING.md):
 ./bin/gtr new brand-new-feature
 # Expected: Creates new branch and worktree
 
+# Test --from-current flag
+git checkout -b test-from-current-base
+./bin/gtr new variant-1 --from-current
+# Expected: Creates variant-1 from test-from-current-base (not main)
+
 # Test --force and --name flags together
 ./bin/gtr new test-feature --force --name backend
 # Expected: Creates folder "test-feature-backend" on same branch

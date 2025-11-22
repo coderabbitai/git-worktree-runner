@@ -111,6 +111,7 @@ main() {
 cmd_create() {
   local branch_name=""
   local from_ref=""
+  local from_current=0
   local track_mode="auto"
   local skip_copy=0
   local skip_fetch=0
@@ -124,6 +125,10 @@ cmd_create() {
       --from)
         from_ref="$2"
         shift 2
+        ;;
+      --from-current)
+        from_current=1
+        shift
         ;;
       --track)
         track_mode="$2"
@@ -195,9 +200,25 @@ cmd_create() {
     fi
   fi
 
-  # Determine from_ref
+  # Determine from_ref with precedence: --from > --from-current > default
   if [ -z "$from_ref" ]; then
-    from_ref=$(resolve_default_branch "$repo_root")
+    if [ "$from_current" -eq 1 ]; then
+      # Get current branch (try modern git first, then fallback)
+      from_ref=$(git branch --show-current 2>/dev/null)
+      if [ -z "$from_ref" ]; then
+        from_ref=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+      fi
+
+      # Handle detached HEAD state
+      if [ -z "$from_ref" ] || [ "$from_ref" = "HEAD" ]; then
+        log_warn "Currently in detached HEAD state - falling back to default branch"
+        from_ref=$(resolve_default_branch "$repo_root")
+      else
+        log_info "Creating from current branch: $from_ref"
+      fi
+    else
+      from_ref=$(resolve_default_branch "$repo_root")
+    fi
   fi
 
   # Construct folder name for display
@@ -988,6 +1009,7 @@ CORE COMMANDS (daily workflow):
   new <branch> [options]
          Create a new worktree (folder named after branch)
          --from <ref>: create from specific ref
+         --from-current: create from current branch (for parallel variants)
          --track <mode>: tracking mode (auto|remote|local|none)
          --no-copy: skip file copying
          --no-fetch: skip git fetch
@@ -1077,6 +1099,11 @@ WORKFLOW EXAMPLES:
 
   # Chain commands together
   git gtr new hotfix && git gtr editor hotfix && git gtr ai hotfix
+
+  # Create variant worktrees from current branch (for parallel work)
+  git checkout feature/user-auth
+  git gtr new variant-1 --from-current        # Creates variant-1 from feature/user-auth
+  git gtr new variant-2 --from-current        # Creates variant-2 from feature/user-auth
 
   # When finished
   git gtr rm feature/user-auth --delete-branch

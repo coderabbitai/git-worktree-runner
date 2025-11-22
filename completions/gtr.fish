@@ -48,6 +48,7 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 
 # New command options
 complete -c git -n '__fish_git_gtr_using_command new' -l from -d 'Base ref' -r
+complete -c git -n '__fish_git_gtr_using_command new' -l from-current -d 'Create from current branch'
 complete -c git -n '__fish_git_gtr_using_command new' -l track -d 'Track mode' -r -a 'auto remote local none'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-copy -d 'Skip file copying'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-fetch -d 'Skip git fetch'
