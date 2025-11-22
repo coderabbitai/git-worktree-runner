@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ### Added
 
+- `--from-current` flag for `git gtr new` command to create worktrees from the current branch instead of the default branch (useful for creating parallel variant worktrees)
+- `run` command to execute commands in worktrees without navigation (e.g., `git gtr run <branch> npm test`)
+- Directory copying support via `gtr.copy.includeDirs` and `gtr.copy.excludeDirs` to copy entire directories (e.g., `node_modules`, `.venv`, `vendor`) when creating worktrees, avoiding dependency reinstallation
+- OpenCode AI adapter for AI tool integration
+
 ### Changed
 
 ### Deprecated
@@ -15,6 +20,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 ### Removed
 
 ### Fixed
+
+- Zsh completion: Fixed word array normalization to correctly handle `gtr` and `git-gtr` direct invocations (not just `git gtr`)
+- Zsh completion: Fixed `new` command options to complete at any position, not just after the first argument
+- Zsh completion: Added `--editor` completion for `editor` command with list of available editors
+- Zsh completion: Added `--ai` completion for `ai` command with list of available AI tools
+- Zsh completion: Added `--porcelain` completion for `list`/`ls` commands
+- Zsh completion: Added `--global` completion for `config` command
 
 ### Security
 

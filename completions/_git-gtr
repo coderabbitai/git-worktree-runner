@@ -1,4 +1,4 @@
-#compdef _git-gtr git-gtr
+#compdef _git-gtr git-gtr gtr
 
 # Register gtr as a git subcommand for completion
 zstyle ':completion:*:*:git:*' user-commands gtr:'Git worktree management'
