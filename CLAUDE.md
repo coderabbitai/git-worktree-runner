@@ -133,6 +133,15 @@ git config --add gtr.copy.exclude "**/.env"
 ./bin/gtr new test-copy
 # Expected: Copies .env.example but not .env
 
+# Test .worktreeinclude file
+echo -e "# Test patterns\n**/.env.example\n*.md" > .worktreeinclude
+echo "TEST=value" > .env.example
+./bin/gtr new test-worktreeinclude
+# Expected: Copies .env.example and *.md files to worktree
+ls "$(./bin/gtr go test-worktreeinclude)/.env.example"
+./bin/gtr rm test-worktreeinclude
+rm .worktreeinclude .env.example
+
 # Test directory copying with include/exclude patterns
 git config --add gtr.copy.includeDirs "node_modules"
 git config --add gtr.copy.excludeDirs "node_modules/.cache"
@@ -402,6 +411,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`:
 - `gtr.ai.default`: Default AI tool (aider, claude, codex, etc.)
 - `gtr.copy.include`: Multi-valued glob patterns for files to copy
 - `gtr.copy.exclude`: Multi-valued glob patterns for files to exclude
+- `.worktreeinclude`: File in repo root with glob patterns (merged with `gtr.copy.include`)
 - `gtr.copy.includeDirs`: Multi-valued directory patterns to copy (e.g., "node_modules", ".venv", "vendor")
 - `gtr.copy.excludeDirs`: Multi-valued directory patterns to exclude when copying (supports globs like "node_modules/.cache", "\*/.cache")
 - `gtr.hook.postCreate`: Multi-valued commands to run after creating worktree

@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 # File copying utilities with pattern matching
 
+# Parse .gitignore-style pattern file
+# Usage: parse_pattern_file file_path
+# Returns: newline-separated patterns (comments and empty lines stripped)
+parse_pattern_file() {
+  local file_path="$1"
+
+  if [ ! -f "$file_path" ]; then
+    return 0
+  fi
+
+  # Read file, strip comments and empty lines
+  grep -v '^#' "$file_path" 2>/dev/null | grep -v '^[[:space:]]*$' || true
+}
+
 # Copy files matching patterns from source to destination
 # Usage: copy_patterns src_root dst_root includes excludes [preserve_paths]
 # includes: newline-separated glob patterns to include
