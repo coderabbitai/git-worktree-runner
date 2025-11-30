@@ -369,6 +369,21 @@ git gtr config add gtr.copy.exclude "**/.env"
 git gtr config add gtr.copy.exclude "**/secrets.*"
 ```
 
+#### Using .worktreeinclude file
+
+Alternatively, create a `.worktreeinclude` file in your repository root:
+
+```gitignore
+# .worktreeinclude - files to copy to new worktrees
+# Comments start with #
+
+**/.env.example
+**/CLAUDE.md
+*.config.js
+```
+
+The file uses `.gitignore`-style syntax (one pattern per line, `#` for comments, empty lines ignored). Patterns from `.worktreeinclude` are merged with `gtr.copy.include` config settings - both sources are used together.
+
 #### Security Best Practices
 
 **The key distinction:** Development secrets (test API keys, local DB passwords) are **low risk** on personal machines. Production credentials are **high risk** everywhere.

@@ -240,9 +240,21 @@ cmd_create() {
 
   # Copy files based on patterns
   if [ "$skip_copy" -eq 0 ]; then
-    local includes excludes
+    local includes excludes file_includes
     includes=$(cfg_get_all gtr.copy.include)
     excludes=$(cfg_get_all gtr.copy.exclude)
+
+    # Read .worktreeinclude file if exists
+    file_includes=$(parse_pattern_file "$repo_root/.worktreeinclude")
+
+    # Merge patterns (newline-separated)
+    if [ -n "$file_includes" ]; then
+      if [ -n "$includes" ]; then
+        includes="$includes"$'\n'"$file_includes"
+      else
+        includes="$file_includes"
+      fi
+    fi
 
     if [ -n "$includes" ]; then
       log_step "Copying files..."
