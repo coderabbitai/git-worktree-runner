@@ -373,7 +373,7 @@ git gtr config add gtr.copy.exclude "**/secrets.*"
 
 Alternatively, create a `.worktreeinclude` file in your repository root:
 
-```
+```gitignore
 # .worktreeinclude - files to copy to new worktrees
 # Comments start with #
 
