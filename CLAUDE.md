@@ -134,7 +134,7 @@ git config --add gtr.copy.exclude "**/.env"
 # Expected: Copies .env.example but not .env
 
 # Test .worktreeinclude file
-echo -e "# Test patterns\n**/.env.example\n*.md" > .worktreeinclude
+printf '# Test patterns\n**/.env.example\n*.md\n' > .worktreeinclude
 echo "TEST=value" > .env.example
 ./bin/gtr new test-worktreeinclude
 # Expected: Copies .env.example and *.md files to worktree
