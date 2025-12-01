@@ -1,0 +1,21 @@
+# CodeRabbit configuration
+# See: https://docs.coderabbit.ai/guides/review-instructions/
+
+early_access: true
+
+issue_enrichment:
+  planning:
+    enabled: true
+
+reviews:
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: true
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+
+chat:
+  auto_reply: true
