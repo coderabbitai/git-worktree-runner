@@ -29,18 +29,32 @@ cd git-worktree-runner
 sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
 ```
 
-**Use it (3 commands):**
+**Usage:**
 
 ```bash
-cd ~/your-repo                              # Navigate to git repo
-git gtr config set gtr.editor.default cursor    # One-time setup
-git gtr config set gtr.ai.default claude        # One-time setup
+# Navigate to your git repo
+cd ~/GitHub/my-project
+
+# One-time setup (per repository)
+git gtr config set gtr.editor.default cursor
+git gtr config set gtr.ai.default claude
 
 # Daily workflow
-git gtr new my-feature                          # Create worktree
-git gtr editor my-feature                       # Open in editor
-git gtr ai my-feature                           # Start AI tool
-git gtr rm my-feature                           # Remove when done
+git gtr new my-feature          # Create worktree folder: my-feature
+git gtr editor my-feature       # Open in cursor
+git gtr ai my-feature           # Start claude
+
+# Run commands in worktree
+git gtr run my-feature npm test # Run tests
+
+# Navigate to worktree (alternative)
+cd "$(git gtr go my-feature)"
+
+# List all worktrees
+git gtr list
+
+# Remove when done
+git gtr rm my-feature
 ```
 
 ## Why gtr?
@@ -71,58 +85,12 @@ While `git worktree` is powerful, it's verbose and manual. `git gtr` adds qualit
 - 🌍 **Cross-platform** - Works on macOS, Linux, and Windows (Git Bash)
 - 🎯 **Shell completions** - Tab completion for Bash, Zsh, and Fish
 
-## Quick Start
-
-```bash
-# Navigate to your git repo
-cd ~/GitHub/my-project
-
-# One-time setup (per repository)
-git gtr config set gtr.editor.default cursor
-git gtr config set gtr.ai.default claude
-
-# Daily workflow
-git gtr new my-feature          # Create worktree folder: my-feature
-git gtr editor my-feature       # Open in cursor
-git gtr ai my-feature           # Start claude
-
-# Run commands in worktree
-git gtr run my-feature npm test # Run tests
-
-# Navigate to worktree (alternative)
-cd "$(git gtr go my-feature)"
-
-# List all worktrees
-git gtr list
-
-# Remove when done
-git gtr rm my-feature
-```
-
 ## Requirements
 
 - **Git** 2.5+ (for `git worktree` support)
 - **Bash** 3.2+ (macOS ships 3.2; 4.0+ recommended for advanced features)
 
-## Installation
-
-### Quick Install (macOS/Linux)
-
-```bash
-# Clone the repository
-git clone https://github.com/coderabbitai/git-worktree-runner.git
-cd git-worktree-runner
-
-# Add to PATH (choose one)
-# Option 1: Symlink to /usr/local/bin
-sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
-
-# Option 2: Add to your shell profile
-echo 'export PATH="$PATH:'$(pwd)'/bin"' >> ~/.zshrc  # or ~/.bashrc
-source ~/.zshrc
-```
-
-### Shell Completions (Optional)
+## Shell Completions (Optional)
 
 **Bash** (requires `bash-completion` v2 and git completions):
 
