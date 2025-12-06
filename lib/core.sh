@@ -375,7 +375,7 @@ create_worktree() {
         log_step "Branch '$branch_name' exists on remote"
 
         # Create tracking branch first for explicit upstream configuration
-        if git branch --track "$branch_name" "origin/$branch_name" 2>/dev/null; then
+        if git branch --track "$branch_name" "origin/$branch_name" >/dev/null 2>&1; then
           log_info "Created local branch tracking origin/$branch_name"
         fi
 
