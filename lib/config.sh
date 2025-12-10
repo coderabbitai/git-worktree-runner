@@ -121,7 +121,7 @@ cfg_unset() {
     --local|local|*) flag="--local" ;;
   esac
 
-  git config $flag --unset "$key" 2>/dev/null || true
+  git config $flag --unset-all "$key" 2>/dev/null || true
 }
 
 # Get config value with environment variable fallback
