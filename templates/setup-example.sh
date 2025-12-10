@@ -33,3 +33,8 @@ echo "✅ git gtr configured!"
 echo ""
 echo "View config with: git config --local --list | grep gtr"
 echo "Create a worktree with: git gtr new my-feature"
+
+# Fish shell completions for git gtr
+echo "To enable fish shell completions for git gtr, run:"
+echo "  ln -s /path/to/git-worktree-runner/completions/gtr.fish ~/.config/fish/completions/"
+echo "Then reload fish with: exec fish"
