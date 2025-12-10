@@ -16,6 +16,13 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+  pre_merge_checks:
+    custom_checks:
+      - mode: error
+        name: shell-check
+        instructions: |
+          - Always check if the shell scripts are valid and sytactically correct.
+          - Make sure there are examples for all the supported shells, such as bash, zsh, fish, etc.
 
 chat:
   auto_reply: true
