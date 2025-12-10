@@ -240,7 +240,43 @@ git gtr config get gtr.editor.default              # Get value
 
 ## Configuration
 
-All configuration is stored via `git config`, making it easy to manage per-repository or globally.
+All configuration is stored via `git config`, making it easy to manage per-repository or globally. You can also use a `.gtrconfig` file for team-shared settings.
+
+### Team Configuration with .gtrconfig
+
+Create a `.gtrconfig` file in your repository root to share configuration across your team:
+
+```gitconfig
+# .gtrconfig - commit this file to share settings with your team
+
+[copy]
+    include = **/.env.example
+    include = *.md
+    exclude = **/.env
+
+[copy]
+    includeDirs = node_modules
+    excludeDirs = node_modules/.cache
+
+[hooks]
+    postCreate = npm install
+    postCreate = cp .env.example .env
+
+[defaults]
+    editor = cursor
+    ai = claude
+```
+
+**Configuration precedence** (highest to lowest):
+
+1. `git config --local` (`.git/config`) - personal overrides
+2. `.gtrconfig` (repo root) - team defaults
+3. `git config --global` (`~/.gitconfig`) - user defaults
+4. Environment variables
+5. Default values
+
+> [!TIP]
+> See `templates/.gtrconfig.example` for a complete example with all available settings.
 
 ### Worktree Settings
 
@@ -296,15 +332,15 @@ gtr.ai.default = none
 
 **Supported AI Tools:**
 
-| Tool                                              | Install                                           | Use Case                             | Set as Default                               |
-| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------ | -------------------------------------------- |
-| **[Aider](https://aider.chat)**                   | `pip install aider-chat`                          | Pair programming, edit files with AI | `git gtr config set gtr.ai.default aider`    |
-| **[Claude Code](https://claude.com/claude-code)** | Install from claude.com                           | Terminal-native coding agent         | `git gtr config set gtr.ai.default claude`   |
-| **[Codex CLI](https://github.com/openai/codex)**  | `npm install -g @openai/codex`                    | OpenAI coding assistant              | `git gtr config set gtr.ai.default codex`    |
-| **[Continue](https://continue.dev)**              | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent             | `git gtr config set gtr.ai.default continue` |
-| **[Cursor](https://cursor.com)**                  | Install from cursor.com                           | AI-powered editor with CLI agent     | `git gtr config set gtr.ai.default cursor`   |
-| **[Gemini](https://github.com/google-gemini/gemini-cli)** | `npm install -g @google/gemini-cli`                                | Open-source AI coding assistant powered by Google Gemini         | `git gtr config set gtr.ai.default gemini`   |
-| **[OpenCode](https://opencode.ai)**               | Install from opencode.ai                          | AI coding assistant                  | `git gtr config set gtr.ai.default opencode` |
+| Tool                                                      | Install                                           | Use Case                                                 | Set as Default                               |
+| --------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------- |
+| **[Aider](https://aider.chat)**                           | `pip install aider-chat`                          | Pair programming, edit files with AI                     | `git gtr config set gtr.ai.default aider`    |
+| **[Claude Code](https://claude.com/claude-code)**         | Install from claude.com                           | Terminal-native coding agent                             | `git gtr config set gtr.ai.default claude`   |
+| **[Codex CLI](https://github.com/openai/codex)**          | `npm install -g @openai/codex`                    | OpenAI coding assistant                                  | `git gtr config set gtr.ai.default codex`    |
+| **[Continue](https://continue.dev)**                      | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent                                 | `git gtr config set gtr.ai.default continue` |
+| **[Cursor](https://cursor.com)**                          | Install from cursor.com                           | AI-powered editor with CLI agent                         | `git gtr config set gtr.ai.default cursor`   |
+| **[Gemini](https://github.com/google-gemini/gemini-cli)** | `npm install -g @google/gemini-cli`               | Open-source AI coding assistant powered by Google Gemini | `git gtr config set gtr.ai.default gemini`   |
+| **[OpenCode](https://opencode.ai)**                       | Install from opencode.ai                          | AI coding assistant                                      | `git gtr config set gtr.ai.default opencode` |
 
 **Examples:**
 

@@ -221,7 +221,7 @@ git --version
 
 **Special ID '1'**: The main repository is always accessible via ID `1` in commands (e.g., `git gtr go 1`, `git gtr editor 1`).
 
-**Configuration Storage**: All configuration is stored via `git config` (local, global, or system). No custom config files. This makes settings portable and follows git conventions.
+**Configuration Storage**: Configuration is stored via `git config` (local, global, or system) and can also be stored in a `.gtrconfig` file for team-shared settings. The `.gtrconfig` file uses gitconfig syntax and is parsed natively by git using `git config -f`.
 
 **Adapter Pattern**: Editor and AI tool integrations follow a simple adapter pattern with two required functions per adapter type:
 
@@ -402,7 +402,18 @@ When using Git commands, check if fallbacks exist (e.g., in `lib/core.sh:97-100`
 
 ## Configuration Reference
 
-All config keys use `gtr.*` prefix and are managed via `git config`:
+All config keys use `gtr.*` prefix and are managed via `git config`. Configuration can also be stored in a `.gtrconfig` file for team sharing.
+
+**Configuration precedence** (highest to lowest):
+
+1. `git config --local` (`.git/config`) - personal overrides
+2. `.gtrconfig` (repo root) - team defaults
+3. `git config --global` (`~/.gitconfig`) - user defaults
+4. `git config --system` (`/etc/gitconfig`) - system defaults
+5. Environment variables
+6. Fallback values
+
+### Git Config Keys
 
 - `gtr.worktrees.dir`: Base directory for worktrees (default: `<repo-name>-worktrees`)
 - `gtr.worktrees.prefix`: Folder prefix for worktrees (default: `""`)
@@ -411,11 +422,28 @@ All config keys use `gtr.*` prefix and are managed via `git config`:
 - `gtr.ai.default`: Default AI tool (aider, claude, codex, etc.)
 - `gtr.copy.include`: Multi-valued glob patterns for files to copy
 - `gtr.copy.exclude`: Multi-valued glob patterns for files to exclude
-- `.worktreeinclude`: File in repo root with glob patterns (merged with `gtr.copy.include`)
 - `gtr.copy.includeDirs`: Multi-valued directory patterns to copy (e.g., "node_modules", ".venv", "vendor")
 - `gtr.copy.excludeDirs`: Multi-valued directory patterns to exclude when copying (supports globs like "node_modules/.cache", "\*/.cache")
 - `gtr.hook.postCreate`: Multi-valued commands to run after creating worktree
 - `gtr.hook.postRemove`: Multi-valued commands to run after removing worktree
+
+### File-based Configuration
+
+- `.gtrconfig`: Repository-level config file using gitconfig syntax (parsed via `git config -f`)
+- `.worktreeinclude`: File with glob patterns (merged with `gtr.copy.include`, deprecated in favor of `.gtrconfig`)
+
+#### .gtrconfig Key Mapping
+
+| Git Config Key         | .gtrconfig Key     |
+| ---------------------- | ------------------ |
+| `gtr.copy.include`     | `copy.include`     |
+| `gtr.copy.exclude`     | `copy.exclude`     |
+| `gtr.copy.includeDirs` | `copy.includeDirs` |
+| `gtr.copy.excludeDirs` | `copy.excludeDirs` |
+| `gtr.hook.postCreate`  | `hooks.postCreate` |
+| `gtr.hook.postRemove`  | `hooks.postRemove` |
+| `gtr.editor.default`   | `defaults.editor`  |
+| `gtr.ai.default`       | `defaults.ai`      |
 
 ## Environment Variables
 
