@@ -241,8 +241,9 @@ cmd_create() {
   # Copy files based on patterns
   if [ "$skip_copy" -eq 0 ]; then
     local includes excludes file_includes
-    includes=$(cfg_get_all gtr.copy.include)
-    excludes=$(cfg_get_all gtr.copy.exclude)
+    # Pass .gtrconfig keys as second argument for file-based config
+    includes=$(cfg_get_all gtr.copy.include copy.include)
+    excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
 
     # Read .worktreeinclude file if exists
     file_includes=$(parse_pattern_file "$repo_root/.worktreeinclude")
@@ -263,8 +264,9 @@ cmd_create() {
 
     # Copy directories (typically git-ignored dirs like node_modules, .venv)
     local dir_includes dir_excludes
-    dir_includes=$(cfg_get_all gtr.copy.includeDirs)
-    dir_excludes=$(cfg_get_all gtr.copy.excludeDirs)
+    # Pass .gtrconfig keys as second argument for file-based config
+    dir_includes=$(cfg_get_all gtr.copy.includeDirs copy.includeDirs)
+    dir_excludes=$(cfg_get_all gtr.copy.excludeDirs copy.excludeDirs)
 
     if [ -n "$dir_includes" ]; then
       log_step "Copying directories..."
@@ -495,9 +497,9 @@ cmd_editor() {
     exit 1
   fi
 
-  # Get editor from flag or config
+  # Get editor from flag or config (with .gtrconfig support)
   if [ -z "$editor" ]; then
-    editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
+    editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor)
   fi
 
   local repo_root base_dir prefix
@@ -559,9 +561,9 @@ cmd_ai() {
     exit 1
   fi
 
-  # Get AI tool from flag or config
+  # Get AI tool from flag or config (with .gtrconfig support)
   if [ -z "$ai_tool" ]; then
-    ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none")
+    ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none" defaults.ai)
   fi
 
   # Check if AI tool is configured
@@ -750,9 +752,9 @@ cmd_doctor() {
     issues=$((issues + 1))
   fi
 
-  # Check configured editor
+  # Check configured editor (with .gtrconfig support)
   local editor
-  editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
+  editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor)
   if [ "$editor" != "none" ]; then
     # Check if adapter exists
     local editor_adapter="$GTR_DIR/adapters/editor/${editor}.sh"
@@ -770,9 +772,9 @@ cmd_doctor() {
     echo "[i] Editor: none configured"
   fi
 
-  # Check configured AI tool
+  # Check configured AI tool (with .gtrconfig support)
   local ai_tool
-  ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none")
+  ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none" defaults.ai)
   if [ "$ai_tool" != "none" ]; then
     # Check if adapter exists
     local adapter_file="$GTR_DIR/adapters/ai/${ai_tool}.sh"
@@ -898,7 +900,7 @@ cmd_config() {
         log_error "Usage: git gtr config get <key> [--global]"
         exit 1
       fi
-      cfg_get_all "$key" "$scope"
+      cfg_get_all "$key" "" "$scope"
       ;;
     set)
       if [ -z "$key" ] || [ -z "$value" ]; then

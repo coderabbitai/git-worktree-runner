@@ -1,0 +1,55 @@
+# .gtrconfig - Repository-level gtr configuration
+# Copy this file to your repository root as ".gtrconfig" and customize
+# Documentation: https://github.com/coderabbitai/git-worktree-runner
+#
+# This file uses gitconfig syntax and is parsed natively by git.
+# Configuration precedence (highest to lowest):
+#   1. git config --local (.git/config)
+#   2. .gtrconfig (this file)
+#   3. git config --global (~/.gitconfig)
+#   4. git config --system (/etc/gitconfig)
+#   5. Environment variables
+#   6. Default values
+
+[copy]
+    # Files to copy to new worktrees (glob patterns)
+    # Supports ** for recursive matching
+    include = **/.env.example
+    # include = *.md
+    # include = config/*.json
+
+    # Files to exclude from copying
+    # exclude = **/.env
+    # exclude = **/.env.local
+
+[copy]
+    # Directories to copy entirely (speeds up npm install, pip install, etc.)
+    # These are typically git-ignored directories
+    includeDirs = node_modules
+    # includeDirs = .venv
+    # includeDirs = vendor
+
+    # Subdirectories to exclude when copying directories
+    # Supports globs like */.cache to exclude .cache at any level
+    excludeDirs = node_modules/.cache
+    # excludeDirs = */.cache
+    # excludeDirs = node_modules/.npm
+
+[hooks]
+    # Commands to run after creating a worktree
+    # Environment variables available: REPO_ROOT, WORKTREE_PATH, BRANCH
+    # postCreate = npm install
+    # postCreate = cp .env.example .env
+    # postCreate = echo "Created worktree at $WORKTREE_PATH"
+
+    # Commands to run after removing a worktree
+    # postRemove = echo "Removed worktree for branch $BRANCH"
+
+[defaults]
+    # Default editor for 'git gtr editor' command
+    # Available: cursor, vscode, zed, windsurf, or custom via GTR_EDITOR_CMD
+    # editor = cursor
+
+    # Default AI tool for 'git gtr ai' command
+    # Available: aider, claude, codex, gemini, or custom via GTR_AI_CMD
+    # ai = claude
