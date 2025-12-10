@@ -19,6 +19,7 @@ _git-gtr() {
     'new:Create a new worktree'
     'go:Navigate to worktree'
     'run:Execute command in worktree'
+    'copy:Copy files between worktrees'
     'rm:Remove worktree(s)'
     'editor:Open worktree in editor'
     'ai:Start AI coding tool'
@@ -65,7 +66,7 @@ _git-gtr() {
   # Complete arguments to the subcommand
   elif (( CURRENT == 4 )); then
     case "$words[3]" in
-      go|run|rm)
+      go|run|rm|copy)
         _describe 'branch names' all_options
         ;;
       editor)
@@ -92,6 +93,18 @@ _git-gtr() {
           '--delete-branch[Delete branch]' \
           '--force[Force removal even if dirty]' \
           '--yes[Non-interactive mode]'
+        ;;
+      copy)
+        _arguments \
+          '-n[Dry-run preview]' \
+          '--dry-run[Preview without copying]' \
+          '-a[Copy to all worktrees]' \
+          '--all[Copy to all worktrees]' \
+          '--from[Source worktree]:source:->worktrees' \
+          '*:target:->worktrees'
+        case "$state" in
+          worktrees) _describe 'branch names' all_options ;;
+        esac
         ;;
       config)
         case "$words[4]" in

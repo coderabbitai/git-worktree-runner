@@ -436,3 +436,21 @@ remove_worktree() {
 list_worktrees() {
   git worktree list
 }
+
+# List all worktree branch names (excluding main repo)
+# Usage: list_worktree_branches repo_root base_dir prefix
+# Returns: newline-separated list of branch names
+list_worktree_branches() {
+  local repo_root="$1"
+  local base_dir="$2"
+  local prefix="$3"
+
+  [ ! -d "$base_dir" ] && return 0
+
+  for dir in "$base_dir/${prefix}"*; do
+    [ -d "$dir" ] || continue
+    local branch
+    branch=$(current_branch "$dir")
+    [ -n "$branch" ] && echo "$branch"
+  done
+}
