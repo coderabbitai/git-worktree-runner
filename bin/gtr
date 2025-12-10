@@ -900,7 +900,7 @@ cmd_config() {
         log_error "Usage: git gtr config get <key> [--global]"
         exit 1
       fi
-      cfg_get_all "$key" "$scope"
+      cfg_get_all "$key" "" "$scope"
       ;;
     set)
       if [ -z "$key" ] || [ -z "$value" ]; then

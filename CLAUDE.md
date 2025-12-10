@@ -476,7 +476,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 
 **Track Mode**: The `create_worktree()` function in `lib/core.sh` intelligently chooses between remote tracking, local branch, or new branch creation based on what exists. It tries remote first, then local, then creates new.
 
-**Configuration Precedence**: The `cfg_default()` function in `lib/config.sh` checks git config first (local > global > system), then environment variables, then fallback values. Use `cfg_get_all()` for multi-valued configs.
+**Configuration Precedence**: The `cfg_default()` function in `lib/config.sh` checks local git config first, then `.gtrconfig` file, then global/system git config, then environment variables, then fallback values. Use `cfg_get_all(key, file_key, scope)` for multi-valued configs where `file_key` is the corresponding key in `.gtrconfig` (e.g., `copy.include` for `gtr.copy.include`).
 
 **Multi-Value Configuration Pattern**: Some configs support multiple values (`gtr.copy.include`, `gtr.copy.exclude`, `gtr.copy.includeDirs`, `gtr.copy.excludeDirs`, `gtr.hook.postCreate`, `gtr.hook.postRemove`). The `cfg_get_all()` function merges values from local + global + system + `.gtrconfig` file and deduplicates. Set with: `git config --add gtr.copy.include "pattern"`.
 

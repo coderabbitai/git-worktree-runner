@@ -272,8 +272,9 @@ Create a `.gtrconfig` file in your repository root to share configuration across
 1. `git config --local` (`.git/config`) - personal overrides
 2. `.gtrconfig` (repo root) - team defaults
 3. `git config --global` (`~/.gitconfig`) - user defaults
-4. Environment variables
-5. Default values
+4. `git config --system` (`/etc/gitconfig`) - system defaults
+5. Environment variables
+6. Default values
 
 > [!TIP]
 > See `templates/.gtrconfig.example` for a complete example with all available settings.
