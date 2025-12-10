@@ -22,7 +22,7 @@ _git_gtr() {
 
   # If we're completing the first argument after 'git gtr'
   if [ "$cword" -eq 2 ]; then
-    COMPREPLY=($(compgen -W "new go run editor ai rm ls list clean doctor adapter config help version" -- "$cur"))
+    COMPREPLY=($(compgen -W "new go run copy editor ai rm ls list clean doctor adapter config help version" -- "$cur"))
     return 0
   fi
 
@@ -43,6 +43,17 @@ _git_gtr() {
             COMPREPLY=($(compgen -W "--delete-branch --force --yes" -- "$cur"))
             ;;
         esac
+      fi
+      ;;
+    copy)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "-n --dry-run -a --all --from" -- "$cur"))
+      else
+        # Complete with branch names and special ID '1' for main repo
+        local branches all_options
+        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
+        all_options="1 $branches"
+        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
       fi
       ;;
     new)

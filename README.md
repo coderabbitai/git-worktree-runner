@@ -217,6 +217,24 @@ git gtr rm my-feature --delete-branch --force      # Delete branch and force
 
 **Options:** `--delete-branch`, `--force`, `--yes`
 
+### `git gtr copy <target>... [options] [-- <pattern>...]`
+
+Copy files from main repo to existing worktree(s). Useful for syncing env files after worktree creation.
+
+```bash
+git gtr copy my-feature                       # Uses gtr.copy.include patterns
+git gtr copy my-feature -- ".env*"            # Explicit pattern
+git gtr copy my-feature -- ".env*" "*.json"   # Multiple patterns
+git gtr copy -a -- ".env*"                    # Copy to all worktrees
+git gtr copy my-feature -n -- "**/.env*"      # Dry-run preview
+```
+
+**Options:**
+
+- `-n, --dry-run`: Preview without copying
+- `-a, --all`: Copy to all worktrees
+- `--from <source>`: Copy from different worktree (default: main repo)
+
 ### `git gtr list [--porcelain]`
 
 List all worktrees. Use `--porcelain` for machine-readable output.

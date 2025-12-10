@@ -154,6 +154,21 @@ git config --add gtr.copy.excludeDirs "*/.cache"  # Exclude .cache at any level
 ./bin/gtr new test-wildcard
 # Expected: Copies .venv and node_modules, excludes all .cache directories
 
+# Test copy command (copy files to existing worktrees)
+echo "TEST=value" > .env.example
+./bin/gtr new test-copy
+./bin/gtr copy test-copy -- ".env.example"
+# Expected: Copies .env.example to worktree
+
+./bin/gtr copy test-copy -n -- "*.md"
+# Expected: Dry-run shows what would be copied without copying
+
+./bin/gtr copy -a -- ".env.example"
+# Expected: Copies to all worktrees
+
+./bin/gtr rm test-copy --force --yes
+rm .env.example
+
 # Test post-create and post-remove hooks
 git config --add gtr.hook.postCreate "echo 'Created!' > /tmp/gtr-test"
 ./bin/gtr new test-hooks
