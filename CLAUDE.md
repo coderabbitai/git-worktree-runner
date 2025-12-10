@@ -430,7 +430,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 ### File-based Configuration
 
 - `.gtrconfig`: Repository-level config file using gitconfig syntax (parsed via `git config -f`)
-- `.worktreeinclude`: File with glob patterns (merged with `gtr.copy.include`, deprecated in favor of `.gtrconfig`)
+- `.worktreeinclude`: File with glob patterns (merged with `gtr.copy.include`)
 
 #### .gtrconfig Key Mapping
 
