@@ -15,8 +15,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Binary structure**:
 
-- `bin/git-gtr`: Thin wrapper (16 lines) that allows git subcommand invocation (`git gtr`)
-- `bin/gtr`: Main script containing all logic (900+ lines)
+- `bin/git-gtr`: Thin wrapper that allows git subcommand invocation (`git gtr`)
+- `bin/gtr`: Main script containing all logic (~1100 lines)
 
 When testing changes locally, you use `./bin/gtr` directly. When documenting user-facing features or writing help text, always reference `git gtr`.
 
@@ -235,13 +235,13 @@ git --version
 - `GTR_EDITOR_CMD`: Custom editor command (e.g., `GTR_EDITOR_CMD="emacs"`)
 - `GTR_AI_CMD`: Custom AI tool command (e.g., `GTR_AI_CMD="copilot"`)
 
-These generic functions in `bin/gtr:34-55` provide a fallback when no specific adapter file exists. This allows users to configure custom tools without creating adapter files. The generic adapter functions check if the command exists using `command -v` and execute it using `eval` to handle multi-word commands properly (e.g., `code --wait`, `bunx @github/copilot@latest`).
+These generic functions (defined early in `bin/gtr`) provide a fallback when no specific adapter file exists. This allows users to configure custom tools without creating adapter files. The generic adapter functions check if the command exists using `command -v` and execute it using `eval` to handle multi-word commands properly (e.g., `code --wait`, `bunx @github/copilot@latest`).
 
 ### Command Flow
 
 Understanding how commands are dispatched through the system:
 
-1. **Entry Point** (`bin/gtr:32-79`): Main dispatcher receives command and routes to appropriate handler
+1. **Entry Point** (`main()` in `bin/gtr`): Main dispatcher receives command and routes to appropriate handler via case statement
 2. **Command Handlers** (`bin/gtr`): Each `cmd_*` function handles a specific command (e.g., `cmd_create`, `cmd_editor`, `cmd_ai`)
 3. **Library Functions** (`lib/*.sh`): Command handlers call reusable functions from library modules
 4. **Adapters** (`adapters/*`): Dynamically loaded when needed via `load_editor_adapter` or `load_ai_adapter`
@@ -389,7 +389,7 @@ The codebase includes fallbacks for different Git versions:
 - **Git 2.5-2.21**: Falls back to `git rev-parse --abbrev-ref HEAD`
 - **Minimum**: Git 2.5+ (for basic `git worktree` support)
 
-When using Git commands, check if fallbacks exist (e.g., in `lib/core.sh:97-100`) or add them for new features.
+When using Git commands, check if fallbacks exist (search for `git branch --show-current` in `lib/core.sh`) or add them for new features.
 
 ## Code Style
 
@@ -449,7 +449,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 
 **System environment variables**:
 
-- `GTR_DIR`: Override script directory location (default: auto-detected via symlink resolution in `bin/gtr:11-21`)
+- `GTR_DIR`: Override script directory location (default: auto-detected via `resolve_script_dir()` in `bin/gtr`)
 - `GTR_WORKTREES_DIR`: Override base worktrees directory (fallback if `gtr.worktrees.dir` not set)
 - `GTR_EDITOR_CMD`: Generic editor command for custom editors without adapter files
 - `GTR_EDITOR_CMD_NAME`: First word of `GTR_EDITOR_CMD` used for availability checks
@@ -464,9 +464,9 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 
 ## Important Implementation Details
 
-**Worktree Path Resolution**: The `resolve_target` function in `lib/core.sh:193-242` handles both branch names and the special ID '1'. It checks in order: special ID, current branch in main repo, sanitized path match, full directory scan. Returns tab-separated format: `is_main\tpath\tbranch`.
+**Worktree Path Resolution**: The `resolve_target()` function in `lib/core.sh` handles both branch names and the special ID '1'. It checks in order: special ID, current branch in main repo, sanitized path match, full directory scan. Returns tab-separated format: `is_main\tpath\tbranch`.
 
-**Base Directory Resolution** (v1.1.0+): The `resolve_base_dir` function in `lib/core.sh:30-76` determines where worktrees are stored. Behavior:
+**Base Directory Resolution** (v1.1.0+): The `resolve_base_dir()` function in `lib/core.sh` determines where worktrees are stored. Behavior:
 
 - Empty config → `<repo>-worktrees` (sibling directory)
 - Relative paths → resolved from **repo root** (e.g., `.worktrees` → `<repo>/.worktrees`)
@@ -474,13 +474,13 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 - Tilde expansion → `~/worktrees` → `$HOME/worktrees`
 - Auto-warns if worktrees inside repo without `.gitignore` entry
 
-**Track Mode**: The auto-detect mode in `lib/core.sh:244-350` (`create_worktree` function) intelligently chooses between remote tracking, local branch, or new branch creation based on what exists. It tries remote first, then local, then creates new.
+**Track Mode**: The `create_worktree()` function in `lib/core.sh` intelligently chooses between remote tracking, local branch, or new branch creation based on what exists. It tries remote first, then local, then creates new.
 
-**Configuration Precedence**: The `cfg_default` function in `lib/config.sh:128-146` checks git config first (local > global > system), then environment variables, then fallback values. Use `cfg_get_all` (lib/config.sh:28-51) for multi-valued configs.
+**Configuration Precedence**: The `cfg_default()` function in `lib/config.sh` checks git config first (local > global > system), then environment variables, then fallback values. Use `cfg_get_all()` for multi-valued configs.
 
-**Multi-Value Configuration Pattern**: Some configs support multiple values (`gtr.copy.include`, `gtr.copy.exclude`, `gtr.copy.includeDirs`, `gtr.copy.excludeDirs`, `gtr.hook.postCreate`, `gtr.hook.postRemove`). The `cfg_get_all` function merges values from local + global + system and deduplicates. Set with: `git config --add gtr.copy.include "pattern"`.
+**Multi-Value Configuration Pattern**: Some configs support multiple values (`gtr.copy.include`, `gtr.copy.exclude`, `gtr.copy.includeDirs`, `gtr.copy.excludeDirs`, `gtr.hook.postCreate`, `gtr.hook.postRemove`). The `cfg_get_all()` function merges values from local + global + system + `.gtrconfig` file and deduplicates. Set with: `git config --add gtr.copy.include "pattern"`.
 
-**Adapter Loading**: Adapters are sourced dynamically when needed (see `load_editor_adapter` at bin/gtr:794-806 and `load_ai_adapter` at bin/gtr:808-820). They must exist in `adapters/editor/` or `adapters/ai/` and define the required functions.
+**Adapter Loading**: Adapters are sourced dynamically via `load_editor_adapter()` and `load_ai_adapter()` in `bin/gtr`. They must exist in `adapters/editor/` or `adapters/ai/` and define the required functions.
 
 **Adapter Contract**:
 
@@ -488,13 +488,13 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 - **AI adapters**: Must implement `ai_can_start()` (returns 0 if available) and `ai_start(path, args...)` (starts tool at path with optional args)
 - Both should use `log_error` from `lib/ui.sh` for user-facing error messages
 
-**Directory Copying**: The `copy_directories` function in `lib/copy.sh:179-348` copies entire directories (like `node_modules`, `.venv`, `vendor`) to speed up worktree creation. This is particularly useful for avoiding long dependency installation times. The function:
+**Directory Copying**: The `copy_directories()` function in `lib/copy.sh` copies entire directories (like `node_modules`, `.venv`, `vendor`) to speed up worktree creation. This is particularly useful for avoiding long dependency installation times. The function:
 
 - Uses `find` to locate directories by name pattern
 - Supports glob patterns for exclusions (e.g., `node_modules/.cache`, `*/.cache`)
 - Validates patterns to prevent path traversal attacks
 - Removes excluded subdirectories after copying the parent directory
-- Integrates into `create_worktree` at `bin/gtr:231-240`
+- Called from `cmd_create()` in `bin/gtr`
 
 **Security note:** Dependency directories may contain sensitive files (tokens, cached credentials). Always use `gtr.copy.excludeDirs` to exclude sensitive subdirectories.
 
@@ -557,3 +557,21 @@ git commit --allow-empty -m "Initial commit"
 # Now test git gtr commands
 /path/to/git-worktree-runner/bin/gtr new test-feature
 ```
+
+## Documentation Structure
+
+This project has multiple documentation files for different purposes:
+
+- **`CLAUDE.md`** (this file) - Extended development guide for Claude Code
+- **`README.md`** - User-facing documentation (commands, configuration, installation)
+- **`CONTRIBUTING.md`** - Contribution guidelines and coding standards
+- **`.github/copilot-instructions.md`** - Condensed AI agent guide (architecture, adapter contracts, debugging)
+- **`.github/instructions/*.instructions.md`** - File-pattern-specific guidance:
+  - `testing.instructions.md` - Manual testing checklist
+  - `sh.instructions.md` - Shell scripting conventions
+  - `lib.instructions.md` - Core library modification guidelines
+  - `editor.instructions.md` - Editor adapter contract
+  - `ai.instructions.md` - AI tool adapter contract
+  - `completions.instructions.md` - Shell completion updates
+
+When working on specific areas, consult the relevant `.github/instructions/*.md` file for detailed guidance.
