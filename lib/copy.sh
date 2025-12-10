@@ -16,16 +16,18 @@ parse_pattern_file() {
 }
 
 # Copy files matching patterns from source to destination
-# Usage: copy_patterns src_root dst_root includes excludes [preserve_paths]
+# Usage: copy_patterns src_root dst_root includes excludes [preserve_paths] [dry_run]
 # includes: newline-separated glob patterns to include
 # excludes: newline-separated glob patterns to exclude
 # preserve_paths: true (default) to preserve directory structure
+# dry_run: true to only show what would be copied without copying
 copy_patterns() {
   local src_root="$1"
   local dst_root="$2"
   local includes="$3"
   local excludes="$4"
   local preserve_paths="${5:-true}"
+  local dry_run="${6:-false}"
 
   if [ -z "$includes" ]; then
     # No patterns to copy
@@ -101,17 +103,22 @@ EOF
           dest_file="$dst_root/$(basename "$file")"
         fi
 
-        # Create destination directory
+        # Create destination directory (skip in dry-run mode)
         local dest_dir
         dest_dir=$(dirname "$dest_file")
-        mkdir -p "$dest_dir"
 
-        # Copy the file
-        if cp "$file" "$dest_file" 2>/dev/null; then
-          log_info "Copied $file"
+        # Copy the file (or show what would be copied in dry-run mode)
+        if [ "$dry_run" = "true" ]; then
+          log_info "[dry-run] Would copy: $file"
           copied_count=$((copied_count + 1))
         else
-          log_warn "Failed to copy $file"
+          mkdir -p "$dest_dir"
+          if cp "$file" "$dest_file" 2>/dev/null; then
+            log_info "Copied $file"
+            copied_count=$((copied_count + 1))
+          else
+            log_warn "Failed to copy $file"
+          fi
         fi
       done <<EOF
 $(find . -path "./$pattern" -type f 2>/dev/null)
@@ -154,17 +161,22 @@ EOF
           dest_file="$dst_root/$(basename "$file")"
         fi
 
-        # Create destination directory
+        # Create destination directory (skip in dry-run mode)
         local dest_dir
         dest_dir=$(dirname "$dest_file")
-        mkdir -p "$dest_dir"
 
-        # Copy the file
-        if cp "$file" "$dest_file" 2>/dev/null; then
-          log_info "Copied $file"
+        # Copy the file (or show what would be copied in dry-run mode)
+        if [ "$dry_run" = "true" ]; then
+          log_info "[dry-run] Would copy: $file"
           copied_count=$((copied_count + 1))
         else
-          log_warn "Failed to copy $file"
+          mkdir -p "$dest_dir"
+          if cp "$file" "$dest_file" 2>/dev/null; then
+            log_info "Copied $file"
+            copied_count=$((copied_count + 1))
+          else
+            log_warn "Failed to copy $file"
+          fi
         fi
       done
     fi
@@ -178,7 +190,11 @@ EOF
   cd "$old_pwd" || return 1
 
   if [ "$copied_count" -gt 0 ]; then
-    log_info "Copied $copied_count file(s)"
+    if [ "$dry_run" = "true" ]; then
+      log_info "[dry-run] Would copy $copied_count file(s)"
+    else
+      log_info "Copied $copied_count file(s)"
+    fi
   fi
 
   return 0
