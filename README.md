@@ -503,6 +503,33 @@ git gtr config add gtr.hook.postCreate "bundle install"
 git gtr config add gtr.hook.postCreate "cargo build"
 ```
 
+### Custom Next Steps
+
+Display project-specific guidance after worktree creation:
+
+```bash
+# Add custom next steps (multi-valued)
+git gtr config add gtr.nextStep "npm install  # Install dependencies"
+git gtr config add gtr.nextStep "cp .env.example .env  # Setup environment"
+```
+
+After creating a worktree, these appear alongside built-in next steps:
+
+```
+Next steps:
+  git gtr editor feature-branch  # Open in editor
+  git gtr ai feature-branch      # Start AI tool
+  cd "$(git gtr go feature-branch)"  # Navigate to worktree
+  npm install  # Install dependencies
+  cp .env.example .env  # Setup environment
+```
+
+**Variable substitution supported:**
+
+- `$BRANCH` - Branch name
+- `$WORKTREE_PATH` - Worktree path
+- `$REPO_ROOT` - Repository root path
+
 ## Configuration Examples
 
 ### Minimal Setup (Just Basics)
