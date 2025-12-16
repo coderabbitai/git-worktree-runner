@@ -284,8 +284,8 @@ EOF
       # Create parent directory
       mkdir -p "$dest_parent"
 
-      # Copy directory (cp -r copies the directory itself into dest_parent)
-      if cp -r "$dir_path" "$dest_parent/" 2>/dev/null; then
+      # Copy directory (cp -RP preserves symlinks as symlinks)
+      if cp -RP "$dir_path" "$dest_parent/" 2>/dev/null; then
         log_info "Copied directory $dir_path"
         copied_count=$((copied_count + 1))
 
