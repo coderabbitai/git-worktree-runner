@@ -173,9 +173,18 @@ rm .env.example
 git config --add gtr.hook.postCreate "echo 'Created!' > /tmp/gtr-test"
 ./bin/gtr new test-hooks
 # Expected: Creates /tmp/gtr-test file
+git config --add gtr.hook.preRemove "echo 'Pre-remove!' > /tmp/gtr-pre-removed"
 git config --add gtr.hook.postRemove "echo 'Removed!' > /tmp/gtr-removed"
 ./bin/gtr rm test-hooks
-# Expected: Creates /tmp/gtr-removed file
+# Expected: Creates /tmp/gtr-pre-removed and /tmp/gtr-removed files
+
+# Test pre-remove hook failure aborts removal
+git config gtr.hook.preRemove "exit 1"
+./bin/gtr new test-hook-fail
+./bin/gtr rm test-hook-fail
+# Expected: Removal aborted due to hook failure
+./bin/gtr rm test-hook-fail --force
+# Expected: Removal proceeds despite hook failure
 ```
 
 ### Debugging Bash Scripts
@@ -440,6 +449,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 - `gtr.copy.includeDirs`: Multi-valued directory patterns to copy (e.g., "node_modules", ".venv", "vendor")
 - `gtr.copy.excludeDirs`: Multi-valued directory patterns to exclude when copying (supports globs like "node_modules/.cache", "\*/.cache")
 - `gtr.hook.postCreate`: Multi-valued commands to run after creating worktree
+- `gtr.hook.preRemove`: Multi-valued commands to run before removing worktree (abort on failure unless --force)
 - `gtr.hook.postRemove`: Multi-valued commands to run after removing worktree
 
 ### File-based Configuration
@@ -456,6 +466,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 | `gtr.copy.includeDirs` | `copy.includeDirs` |
 | `gtr.copy.excludeDirs` | `copy.excludeDirs` |
 | `gtr.hook.postCreate`  | `hooks.postCreate` |
+| `gtr.hook.preRemove`   | `hooks.preRemove`  |
 | `gtr.hook.postRemove`  | `hooks.postRemove` |
 | `gtr.editor.default`   | `defaults.editor`  |
 | `gtr.ai.default`       | `defaults.ai`      |
@@ -471,11 +482,13 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 - `GTR_AI_CMD`: Generic AI tool command for custom tools without adapter files
 - `GTR_AI_CMD_NAME`: First word of `GTR_AI_CMD` used for availability checks
 
-**Hook environment variables** (available in `gtr.hook.postCreate` and `gtr.hook.postRemove` scripts):
+**Hook environment variables** (available in `gtr.hook.postCreate`, `gtr.hook.preRemove`, and `gtr.hook.postRemove` scripts):
 
 - `REPO_ROOT`: Repository root path
-- `WORKTREE_PATH`: New worktree path
+- `WORKTREE_PATH`: Worktree path
 - `BRANCH`: Branch name
+
+**Note:** `preRemove` hooks run with cwd set to the worktree directory (before deletion). If a preRemove hook fails, removal is aborted unless `--force` is used.
 
 ## Important Implementation Details
 
@@ -493,7 +506,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 
 **Configuration Precedence**: The `cfg_default()` function in `lib/config.sh` checks local git config first, then `.gtrconfig` file, then global/system git config, then environment variables, then fallback values. Use `cfg_get_all(key, file_key, scope)` for multi-valued configs where `file_key` is the corresponding key in `.gtrconfig` (e.g., `copy.include` for `gtr.copy.include`).
 
-**Multi-Value Configuration Pattern**: Some configs support multiple values (`gtr.copy.include`, `gtr.copy.exclude`, `gtr.copy.includeDirs`, `gtr.copy.excludeDirs`, `gtr.hook.postCreate`, `gtr.hook.postRemove`). The `cfg_get_all()` function merges values from local + global + system + `.gtrconfig` file and deduplicates. Set with: `git config --add gtr.copy.include "pattern"`.
+**Multi-Value Configuration Pattern**: Some configs support multiple values (`gtr.copy.include`, `gtr.copy.exclude`, `gtr.copy.includeDirs`, `gtr.copy.excludeDirs`, `gtr.hook.postCreate`, `gtr.hook.preRemove`, `gtr.hook.postRemove`). The `cfg_get_all()` function merges values from local + global + system + `.gtrconfig` file and deduplicates. Set with: `git config --add gtr.copy.include "pattern"`.
 
 **Adapter Loading**: Adapters are sourced dynamically via `load_editor_adapter()` and `load_ai_adapter()` in `bin/gtr`. They must exist in `adapters/editor/` or `adapters/ai/` and define the required functions.
 
