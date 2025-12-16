@@ -68,7 +68,7 @@ _git_gtr() {
       if [ "$cword" -eq 3 ]; then
         COMPREPLY=($(compgen -W "get set add unset" -- "$cur"))
       elif [ "$cword" -eq 4 ]; then
-        COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.postRemove" -- "$cur"))
+        COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove" -- "$cur"))
       fi
       ;;
   esac

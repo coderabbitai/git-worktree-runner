@@ -80,6 +80,7 @@ complete -f -c git -n '__fish_git_gtr_using_command config' -a "
   gtr.copy.includeDirs\t'Directories to copy (e.g., node_modules)'
   gtr.copy.excludeDirs\t'Directories to exclude'
   gtr.hook.postCreate\t'Post-create hook'
+  gtr.hook.preRemove\t'Pre-remove hook (abort on failure)'
   gtr.hook.postRemove\t'Post-remove hook'
 "
 
