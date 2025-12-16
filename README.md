@@ -454,21 +454,34 @@ git gtr config add gtr.copy.excludeDirs "*/.cache"             # Exclude .cache 
 
 ### Hooks
 
-Run custom commands after worktree operations:
+Run custom commands during worktree operations:
 
 ```bash
 # Post-create hooks (multi-valued, run in order)
 git gtr config add gtr.hook.postCreate "npm install"
 git gtr config add gtr.hook.postCreate "npm run build"
 
+# Pre-remove hooks (run before deletion, abort on failure)
+git gtr config add gtr.hook.preRemove "npm run cleanup"
+
 # Post-remove hooks
 git gtr config add gtr.hook.postRemove "echo 'Cleaned up!'"
 ```
 
+**Hook execution order:**
+
+| Hook | Timing | Use Case |
+|------|--------|----------|
+| `postCreate` | After worktree creation | Setup, install dependencies |
+| `preRemove` | Before worktree deletion | Cleanup requiring directory access |
+| `postRemove` | After worktree deletion | Notifications, logging |
+
+> **Note:** Pre-remove hooks abort removal on failure. Use `--force` to skip failed hooks.
+
 **Environment variables available in hooks:**
 
 - `REPO_ROOT` - Repository root path
-- `WORKTREE_PATH` - New worktree path
+- `WORKTREE_PATH` - Worktree path
 - `BRANCH` - Branch name
 
 **Examples for different build tools:**
