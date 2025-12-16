@@ -42,6 +42,10 @@
     # postCreate = cp .env.example .env
     # postCreate = echo "Created worktree at $WORKTREE_PATH"
 
+    # Commands to run BEFORE removing a worktree (hook runs in worktree directory)
+    # If hook fails (non-zero exit), removal is aborted unless --force is used
+    # preRemove = npm run cleanup
+
     # Commands to run after removing a worktree
     # postRemove = echo "Removed worktree for branch $BRANCH"
 
