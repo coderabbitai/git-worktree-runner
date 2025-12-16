@@ -351,6 +351,19 @@ cmd_remove() {
 
     log_step "Removing worktree: $branch_name"
 
+    # Run pre-remove hooks (abort on failure unless --force)
+    if ! run_hooks_in preRemove "$worktree_path" \
+      REPO_ROOT="$repo_root" \
+      WORKTREE_PATH="$worktree_path" \
+      BRANCH="$branch_name"; then
+      if [ "$force" -eq 0 ]; then
+        log_error "Pre-remove hook failed for $branch_name. Use --force to skip hooks."
+        continue
+      else
+        log_warn "Pre-remove hook failed, continuing due to --force"
+      fi
+    fi
+
     # Remove the worktree
     if ! remove_worktree "$worktree_path" "$force"; then
       continue
@@ -1290,6 +1303,7 @@ CONFIGURATION OPTIONS:
   gtr.copy.excludeDirs     Directories to exclude (multi-valued)
                            Supports glob patterns (e.g., "node_modules/.cache", "*/.npm")
   gtr.hook.postCreate      Post-create hooks (multi-valued)
+  gtr.hook.preRemove       Pre-remove hooks (multi-valued, abort on failure)
   gtr.hook.postRemove      Post-remove hooks (multi-valued)
 
 ────────────────────────────────────────────────────────────────────────────────
