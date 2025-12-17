@@ -24,7 +24,7 @@ sanitize_branch_name() {
 
   # Replace slashes, spaces, and other problematic chars with hyphens
   # Remove any leading/trailing hyphens
-  printf "%s" "$branch" | sed -e 's/[\/\\ :*?"<>|]/-/g' -e 's/^-*//' -e 's/-*$//'
+  printf "%s" "$branch" | sed -e 's/[\/\\ :*?"<>|#]/-/g' -e 's/^-*//' -e 's/-*$//'
 }
 
 # Canonicalize a path to its absolute form, resolving symlinks
