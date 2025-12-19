@@ -86,7 +86,7 @@ _git-gtr() {
         _arguments '--editor[Editor to use]:editor:(cursor vscode zed idea pycharm webstorm vim nvim emacs sublime nano atom none)'
         ;;
       ai)
-        _arguments '--ai[AI tool to use]:tool:(aider claude codex continue cursor gemini opencode none)'
+        _arguments '--ai[AI tool to use]:tool:(aider claude codex continue copilot cursor gemini opencode none)'
         ;;
       rm)
         _arguments \
