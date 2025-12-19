@@ -423,11 +423,16 @@ remove_worktree() {
     force_flag="--force"
   fi
 
-  if git worktree remove $force_flag "$worktree_path" 2>/dev/null; then
+  local remove_output
+  if remove_output=$(git worktree remove $force_flag "$worktree_path" 2>&1); then
     log_info "Worktree removed: $worktree_path"
     return 0
   else
-    log_error "Failed to remove worktree"
+    if [ -n "$remove_output" ]; then
+      log_error "Failed to remove worktree: $remove_output"
+    else
+      log_error "Failed to remove worktree"
+    fi
     return 1
   fi
 }
