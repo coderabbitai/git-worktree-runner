@@ -349,7 +349,7 @@ cmd_remove() {
       continue
     fi
 
-    log_step "Removing worktree: $branch_name"
+    log_step "Removing worktree: $(basename "$worktree_path")"
 
     # Run pre-remove hooks (abort on failure unless --force)
     if ! run_hooks_in preRemove "$worktree_path" \
