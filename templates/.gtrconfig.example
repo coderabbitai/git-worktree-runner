@@ -49,6 +49,12 @@
     # Commands to run after removing a worktree
     # postRemove = echo "Removed worktree for branch $BRANCH"
 
+[nextSteps]
+    # Custom next steps to display after worktree creation
+    # Supports variable substitution: $BRANCH, $WORKTREE_PATH, $REPO_ROOT
+    # step = npm install  # Install dependencies
+    # step = cp .env.example .env  # Setup environment
+
 [defaults]
     # Default editor for 'git gtr editor' command
     # Available: cursor, vscode, zed, windsurf, or custom via GTR_EDITOR_CMD

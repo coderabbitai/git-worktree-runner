@@ -290,6 +290,23 @@ cmd_create() {
   echo "  git gtr editor $branch_name  # Open in editor"
   echo "  git gtr ai $branch_name      # Start AI tool"
   echo "  cd \"\$(git gtr go $branch_name)\"  # Navigate to worktree"
+
+  # Display custom next steps from configuration
+  local custom_steps
+  custom_steps=$(cfg_get_all "gtr.nextStep" "nextSteps.step")
+  if [ -n "$custom_steps" ]; then
+    while IFS= read -r step; do
+      [ -z "$step" ] && continue
+      # Substitute variables
+      step="${step//\$BRANCH/$branch_name}"
+      step="${step//\${BRANCH\}/$branch_name}"
+      step="${step//\$WORKTREE_PATH/$worktree_path}"
+      step="${step//\${WORKTREE_PATH\}/$worktree_path}"
+      step="${step//\$REPO_ROOT/$repo_root}"
+      step="${step//\${REPO_ROOT\}/$repo_root}"
+      echo "  $step"
+    done <<< "$custom_steps"
+  fi
 }
 
 # Remove command
@@ -1305,6 +1322,8 @@ CONFIGURATION OPTIONS:
   gtr.hook.postCreate      Post-create hooks (multi-valued)
   gtr.hook.preRemove       Pre-remove hooks (multi-valued, abort on failure)
   gtr.hook.postRemove      Post-remove hooks (multi-valued)
+  gtr.nextStep             Custom next steps to display after worktree creation
+                           (multi-valued, supports $BRANCH, $WORKTREE_PATH, $REPO_ROOT)
 
 ────────────────────────────────────────────────────────────────────────────────
 

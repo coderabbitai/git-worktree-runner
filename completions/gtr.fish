@@ -82,6 +82,7 @@ complete -f -c git -n '__fish_git_gtr_using_command config' -a "
   gtr.hook.postCreate\t'Post-create hook'
   gtr.hook.preRemove\t'Pre-remove hook (abort on failure)'
   gtr.hook.postRemove\t'Post-remove hook'
+  gtr.nextStep\t'Custom next steps after worktree creation'
 "
 
 # Helper function to get branch names and special '1' for main repo

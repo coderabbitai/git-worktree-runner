@@ -451,6 +451,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 - `gtr.hook.postCreate`: Multi-valued commands to run after creating worktree
 - `gtr.hook.preRemove`: Multi-valued commands to run before removing worktree (abort on failure unless --force)
 - `gtr.hook.postRemove`: Multi-valued commands to run after removing worktree
+- `gtr.nextStep`: Multi-valued custom next steps to display after worktree creation (supports $BRANCH, $WORKTREE_PATH, $REPO_ROOT)
 
 ### File-based Configuration
 
@@ -468,6 +469,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 | `gtr.hook.postCreate`  | `hooks.postCreate` |
 | `gtr.hook.preRemove`   | `hooks.preRemove`  |
 | `gtr.hook.postRemove`  | `hooks.postRemove` |
+| `gtr.nextStep`         | `nextSteps.step`   |
 | `gtr.editor.default`   | `defaults.editor`  |
 | `gtr.ai.default`       | `defaults.ai`      |
 
@@ -506,7 +508,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 
 **Configuration Precedence**: The `cfg_default()` function in `lib/config.sh` checks local git config first, then `.gtrconfig` file, then global/system git config, then environment variables, then fallback values. Use `cfg_get_all(key, file_key, scope)` for multi-valued configs where `file_key` is the corresponding key in `.gtrconfig` (e.g., `copy.include` for `gtr.copy.include`).
 
-**Multi-Value Configuration Pattern**: Some configs support multiple values (`gtr.copy.include`, `gtr.copy.exclude`, `gtr.copy.includeDirs`, `gtr.copy.excludeDirs`, `gtr.hook.postCreate`, `gtr.hook.preRemove`, `gtr.hook.postRemove`). The `cfg_get_all()` function merges values from local + global + system + `.gtrconfig` file and deduplicates. Set with: `git config --add gtr.copy.include "pattern"`.
+**Multi-Value Configuration Pattern**: Some configs support multiple values (`gtr.copy.include`, `gtr.copy.exclude`, `gtr.copy.includeDirs`, `gtr.copy.excludeDirs`, `gtr.hook.postCreate`, `gtr.hook.preRemove`, `gtr.hook.postRemove`, `gtr.nextStep`). The `cfg_get_all()` function merges values from local + global + system + `.gtrconfig` file and deduplicates. Set with: `git config --add gtr.copy.include "pattern"`.
 
 **Adapter Loading**: Adapters are sourced dynamically via `load_editor_adapter()` and `load_ai_adapter()` in `bin/gtr`. They must exist in `adapters/editor/` or `adapters/ai/` and define the required functions.
 
