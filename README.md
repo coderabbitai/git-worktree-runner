@@ -21,13 +21,40 @@
 
 ## Quick Start
 
-**Install (30 seconds):**
+**Install:**
 
 ```bash
 git clone https://github.com/coderabbitai/git-worktree-runner.git
 cd git-worktree-runner
+./install.sh
+```
+
+<details>
+<summary><b>Manual installation options</b></summary>
+
+**macOS (Apple Silicon with Homebrew):**
+
+```bash
+ln -s "$(pwd)/bin/git-gtr" "$(brew --prefix)/bin/git-gtr"
+```
+
+**macOS (Intel) / Linux:**
+
+```bash
+sudo mkdir -p /usr/local/bin
 sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
 ```
+
+**User-local (no sudo required):**
+
+```bash
+mkdir -p ~/bin
+ln -s "$(pwd)/bin/git-gtr" ~/bin/git-gtr
+# Add to ~/.zshrc or ~/.bashrc if ~/bin is not in PATH:
+# export PATH="$HOME/bin:$PATH"
+```
+
+</details>
 
 **Usage:**
 
@@ -470,11 +497,11 @@ git gtr config add gtr.hook.postRemove "echo 'Cleaned up!'"
 
 **Hook execution order:**
 
-| Hook | Timing | Use Case |
-|------|--------|----------|
-| `postCreate` | After worktree creation | Setup, install dependencies |
-| `preRemove` | Before worktree deletion | Cleanup requiring directory access |
-| `postRemove` | After worktree deletion | Notifications, logging |
+| Hook         | Timing                   | Use Case                           |
+| ------------ | ------------------------ | ---------------------------------- |
+| `postCreate` | After worktree creation  | Setup, install dependencies        |
+| `preRemove`  | Before worktree deletion | Cleanup requiring directory access |
+| `postRemove` | After worktree deletion  | Notifications, logging             |
 
 > **Note:** Pre-remove hooks abort removal on failure. Use `--force` to skip failed hooks.
 
@@ -692,6 +719,32 @@ git gtr ai feature-auth-tests -- --message "Write integration tests"
 - Use `git gtr list` to see all worktrees and their branches
 
 ## Troubleshooting
+
+### "git: 'gtr' is not a git command"
+
+This error means `git-gtr` is not in your PATH. Verify installation:
+
+```bash
+# Check if symlink exists
+ls -la /usr/local/bin/git-gtr 2>/dev/null || ls -la ~/bin/git-gtr 2>/dev/null
+
+# Check if git-gtr is findable
+which git-gtr
+
+# Check your PATH includes the install location
+echo $PATH | tr ':' '\n' | grep -E "(local/bin|/bin$)"
+```
+
+**Fix:** Re-run `./install.sh` or manually add the symlink location to your PATH:
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc:
+export PATH="/usr/local/bin:$PATH"
+# Or if using ~/bin:
+export PATH="$HOME/bin:$PATH"
+```
+
+Then restart your terminal.
 
 ### Worktree Creation Fails
 
