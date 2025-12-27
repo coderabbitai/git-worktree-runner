@@ -58,8 +58,6 @@ detect_platform() {
 
 # Find the best installation directory
 find_install_dir() {
-  local platform="$1"
-
   # Option 1: Homebrew bin (if Homebrew is installed)
   if command -v brew >/dev/null 2>&1; then
     local brew_bin
@@ -106,7 +104,7 @@ main() {
 
   # Find installation directory
   local install_dir
-  install_dir="$(find_install_dir "$platform")"
+  install_dir="$(find_install_dir)"
   local symlink_path="$install_dir/git-gtr"
 
   log_info "Installation directory: $install_dir"
