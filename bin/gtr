@@ -811,6 +811,35 @@ cmd_list() {
 
 # Clean command (remove prunable worktrees)
 cmd_clean() {
+  local merged_mode=0
+  local yes_mode=0
+  local dry_run=0
+
+  # Parse flags
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --merged)
+        merged_mode=1
+        shift
+        ;;
+      --yes|-y)
+        yes_mode=1
+        shift
+        ;;
+      --dry-run|-n)
+        dry_run=1
+        shift
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
   log_step "Cleaning up stale worktrees..."
 
   # Run git worktree prune
@@ -850,6 +879,96 @@ EOF
     log_info "Cleanup complete ($cleaned director$([ "$cleaned" -eq 1 ] && echo 'y' || echo 'ies') removed)"
   else
     log_info "Cleanup complete (no empty directories found)"
+  fi
+
+  # --merged mode: remove worktrees with merged PRs (handles squash merges)
+  if [ "$merged_mode" -eq 1 ]; then
+    log_step "Checking for worktrees with merged PRs..."
+
+    # Ensure gh CLI is available
+    if ! command -v gh >/dev/null 2>&1; then
+      log_error "GitHub CLI (gh) not found. Install with: brew install gh"
+      exit 1
+    fi
+
+    # Fetch latest from origin
+    log_step "Fetching from origin..."
+    git fetch origin --prune 2>/dev/null || log_warn "Could not fetch from origin"
+
+    local removed=0
+    local skipped=0
+
+    # Get main repo branch to exclude it
+    local main_branch
+    main_branch=$(current_branch "$repo_root")
+
+    # Iterate through worktree directories
+    for dir in "$base_dir/${prefix}"*; do
+      [ -d "$dir" ] || continue
+
+      local branch
+      branch=$(current_branch "$dir")
+
+      if [ -z "$branch" ] || [ "$branch" = "(detached)" ]; then
+        log_warn "Skipping $dir (detached HEAD)"
+        skipped=$((skipped + 1))
+        continue
+      fi
+
+      # Skip if same as main repo branch
+      if [ "$branch" = "$main_branch" ]; then
+        continue
+      fi
+
+      # Check if worktree has uncommitted changes
+      if ! git -C "$dir" diff --quiet 2>/dev/null || \
+         ! git -C "$dir" diff --cached --quiet 2>/dev/null; then
+        log_warn "Skipping $branch (has uncommitted changes)"
+        skipped=$((skipped + 1))
+        continue
+      fi
+
+      # Check for untracked files
+      if [ -n "$(git -C "$dir" ls-files --others --exclude-standard 2>/dev/null)" ]; then
+        log_warn "Skipping $branch (has untracked files)"
+        skipped=$((skipped + 1))
+        continue
+      fi
+
+      # Check if branch has a merged PR on GitHub
+      local pr_state
+      pr_state=$(gh pr list --head "$branch" --state merged --json state --jq '.[0].state' 2>/dev/null || true)
+
+      if [ "$pr_state" = "MERGED" ]; then
+        if [ "$dry_run" -eq 1 ]; then
+          log_info "[dry-run] Would remove: $branch ($dir)"
+          removed=$((removed + 1))
+        elif [ "$yes_mode" -eq 1 ] || prompt_yes_no "Remove worktree '$branch'?"; then
+          log_step "Removing worktree: $branch"
+          if git worktree remove "$dir" 2>/dev/null; then
+            # Also delete the local branch
+            git branch -d "$branch" 2>/dev/null || git branch -D "$branch" 2>/dev/null || true
+            log_info "Removed: $branch"
+            removed=$((removed + 1))
+          else
+            log_error "Failed to remove worktree: $branch"
+          fi
+        else
+          log_warn "Skipped: $branch (user declined)"
+          skipped=$((skipped + 1))
+        fi
+      else
+        log_warn "Skipping $branch (no merged PR found)"
+        skipped=$((skipped + 1))
+      fi
+    done
+
+    echo ""
+    if [ "$dry_run" -eq 1 ]; then
+      log_info "Dry run complete. Would remove: $removed, Skipped: $skipped"
+    else
+      log_info "Merged cleanup complete. Removed: $removed, Skipped: $skipped"
+    fi
   fi
 }
 
@@ -1234,8 +1353,11 @@ SETUP & MAINTENANCE:
          List available editor & AI tool adapters
          Note: Any command in your PATH can be used (e.g., code-insiders, bunx)
 
-  clean
-         Remove stale/prunable worktrees
+  clean [options]
+         Remove stale/prunable worktrees and empty directories
+         --merged: also remove worktrees with merged PRs (uses gh CLI)
+         --yes, -y: skip confirmation prompts
+         --dry-run, -n: show what would be removed without removing
 
   version
          Show version
