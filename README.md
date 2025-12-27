@@ -29,18 +29,32 @@ cd git-worktree-runner
 sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
 ```
 
-**Use it (3 commands):**
+**Usage:**
 
 ```bash
-cd ~/your-repo                              # Navigate to git repo
-git gtr config set gtr.editor.default cursor    # One-time setup
-git gtr config set gtr.ai.default claude        # One-time setup
+# Navigate to your git repo
+cd ~/GitHub/my-project
+
+# One-time setup (per repository)
+git gtr config set gtr.editor.default cursor
+git gtr config set gtr.ai.default claude
 
 # Daily workflow
-git gtr new my-feature                          # Create worktree
-git gtr editor my-feature                       # Open in editor
-git gtr ai my-feature                           # Start AI tool
-git gtr rm my-feature                           # Remove when done
+git gtr new my-feature          # Create worktree folder: my-feature
+git gtr editor my-feature       # Open in cursor
+git gtr ai my-feature           # Start claude
+
+# Run commands in worktree
+git gtr run my-feature npm test # Run tests
+
+# Navigate to worktree (alternative)
+cd "$(git gtr go my-feature)"
+
+# List all worktrees
+git gtr list
+
+# Remove when done
+git gtr rm my-feature
 ```
 
 ## Why gtr?
@@ -71,58 +85,12 @@ While `git worktree` is powerful, it's verbose and manual. `git gtr` adds qualit
 - 🌍 **Cross-platform** - Works on macOS, Linux, and Windows (Git Bash)
 - 🎯 **Shell completions** - Tab completion for Bash, Zsh, and Fish
 
-## Quick Start
-
-```bash
-# Navigate to your git repo
-cd ~/GitHub/my-project
-
-# One-time setup (per repository)
-git gtr config set gtr.editor.default cursor
-git gtr config set gtr.ai.default claude
-
-# Daily workflow
-git gtr new my-feature          # Create worktree folder: my-feature
-git gtr editor my-feature       # Open in cursor
-git gtr ai my-feature           # Start claude
-
-# Run commands in worktree
-git gtr run my-feature npm test # Run tests
-
-# Navigate to worktree (alternative)
-cd "$(git gtr go my-feature)"
-
-# List all worktrees
-git gtr list
-
-# Remove when done
-git gtr rm my-feature
-```
-
 ## Requirements
 
 - **Git** 2.5+ (for `git worktree` support)
 - **Bash** 3.2+ (macOS ships 3.2; 4.0+ recommended for advanced features)
 
-## Installation
-
-### Quick Install (macOS/Linux)
-
-```bash
-# Clone the repository
-git clone https://github.com/coderabbitai/git-worktree-runner.git
-cd git-worktree-runner
-
-# Add to PATH (choose one)
-# Option 1: Symlink to /usr/local/bin
-sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
-
-# Option 2: Add to your shell profile
-echo 'export PATH="$PATH:'$(pwd)'/bin"' >> ~/.zshrc  # or ~/.bashrc
-source ~/.zshrc
-```
-
-### Shell Completions (Optional)
+## Shell Completions (Optional)
 
 **Bash** (requires `bash-completion` v2 and git completions):
 
@@ -249,6 +217,24 @@ git gtr rm my-feature --delete-branch --force      # Delete branch and force
 
 **Options:** `--delete-branch`, `--force`, `--yes`
 
+### `git gtr copy <target>... [options] [-- <pattern>...]`
+
+Copy files from main repo to existing worktree(s). Useful for syncing env files after worktree creation.
+
+```bash
+git gtr copy my-feature                       # Uses gtr.copy.include patterns
+git gtr copy my-feature -- ".env*"            # Explicit pattern
+git gtr copy my-feature -- ".env*" "*.json"   # Multiple patterns
+git gtr copy -a -- ".env*"                    # Copy to all worktrees
+git gtr copy my-feature -n -- "**/.env*"      # Dry-run preview
+```
+
+**Options:**
+
+- `-n, --dry-run`: Preview without copying
+- `-a, --all`: Copy to all worktrees
+- `--from <source>`: Copy from different worktree (default: main repo)
+
 ### `git gtr list [--porcelain]`
 
 List all worktrees. Use `--porcelain` for machine-readable output.
@@ -272,7 +258,44 @@ git gtr config get gtr.editor.default              # Get value
 
 ## Configuration
 
-All configuration is stored via `git config`, making it easy to manage per-repository or globally.
+All configuration is stored via `git config`, making it easy to manage per-repository or globally. You can also use a `.gtrconfig` file for team-shared settings.
+
+### Team Configuration with .gtrconfig
+
+Create a `.gtrconfig` file in your repository root to share configuration across your team:
+
+```gitconfig
+# .gtrconfig - commit this file to share settings with your team
+
+[copy]
+    include = **/.env.example
+    include = *.md
+    exclude = **/.env
+
+[copy]
+    includeDirs = node_modules
+    excludeDirs = node_modules/.cache
+
+[hooks]
+    postCreate = npm install
+    postCreate = cp .env.example .env
+
+[defaults]
+    editor = cursor
+    ai = claude
+```
+
+**Configuration precedence** (highest to lowest):
+
+1. `git config --local` (`.git/config`) - personal overrides
+2. `.gtrconfig` (repo root) - team defaults
+3. `git config --global` (`~/.gitconfig`) - user defaults
+4. `git config --system` (`/etc/gitconfig`) - system defaults
+5. Environment variables
+6. Default values
+
+> [!TIP]
+> See `templates/.gtrconfig.example` for a complete example with all available settings.
 
 ### Worktree Settings
 
@@ -328,15 +351,15 @@ gtr.ai.default = none
 
 **Supported AI Tools:**
 
-| Tool                                              | Install                                           | Use Case                             | Set as Default                               |
-| ------------------------------------------------- | ------------------------------------------------- | ------------------------------------ | -------------------------------------------- |
-| **[Aider](https://aider.chat)**                   | `pip install aider-chat`                          | Pair programming, edit files with AI | `git gtr config set gtr.ai.default aider`    |
-| **[Claude Code](https://claude.com/claude-code)** | Install from claude.com                           | Terminal-native coding agent         | `git gtr config set gtr.ai.default claude`   |
-| **[Codex CLI](https://github.com/openai/codex)**  | `npm install -g @openai/codex`                    | OpenAI coding assistant              | `git gtr config set gtr.ai.default codex`    |
-| **[Continue](https://continue.dev)**              | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent             | `git gtr config set gtr.ai.default continue` |
-| **[Cursor](https://cursor.com)**                  | Install from cursor.com                           | AI-powered editor with CLI agent     | `git gtr config set gtr.ai.default cursor`   |
-| **[Gemini](https://github.com/google-gemini/gemini-cli)** | `npm install -g @google/gemini-cli`                                | Open-source AI coding assistant powered by Google Gemini         | `git gtr config set gtr.ai.default gemini`   |
-| **[OpenCode](https://opencode.ai)**               | Install from opencode.ai                          | AI coding assistant                  | `git gtr config set gtr.ai.default opencode` |
+| Tool                                                      | Install                                           | Use Case                                                 | Set as Default                               |
+| --------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------- |
+| **[Aider](https://aider.chat)**                           | `pip install aider-chat`                          | Pair programming, edit files with AI                     | `git gtr config set gtr.ai.default aider`    |
+| **[Claude Code](https://claude.com/claude-code)**         | Install from claude.com                           | Terminal-native coding agent                             | `git gtr config set gtr.ai.default claude`   |
+| **[Codex CLI](https://github.com/openai/codex)**          | `npm install -g @openai/codex`                    | OpenAI coding assistant                                  | `git gtr config set gtr.ai.default codex`    |
+| **[Continue](https://continue.dev)**                      | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent                                 | `git gtr config set gtr.ai.default continue` |
+| **[Cursor](https://cursor.com)**                          | Install from cursor.com                           | AI-powered editor with CLI agent                         | `git gtr config set gtr.ai.default cursor`   |
+| **[Gemini](https://github.com/google-gemini/gemini-cli)** | `npm install -g @google/gemini-cli`               | Open-source AI coding assistant powered by Google Gemini | `git gtr config set gtr.ai.default gemini`   |
+| **[OpenCode](https://opencode.ai)**                       | Install from opencode.ai                          | AI coding assistant                                      | `git gtr config set gtr.ai.default opencode` |
 
 **Examples:**
 
@@ -431,21 +454,34 @@ git gtr config add gtr.copy.excludeDirs "*/.cache"             # Exclude .cache 
 
 ### Hooks
 
-Run custom commands after worktree operations:
+Run custom commands during worktree operations:
 
 ```bash
 # Post-create hooks (multi-valued, run in order)
 git gtr config add gtr.hook.postCreate "npm install"
 git gtr config add gtr.hook.postCreate "npm run build"
 
+# Pre-remove hooks (run before deletion, abort on failure)
+git gtr config add gtr.hook.preRemove "npm run cleanup"
+
 # Post-remove hooks
 git gtr config add gtr.hook.postRemove "echo 'Cleaned up!'"
 ```
 
+**Hook execution order:**
+
+| Hook | Timing | Use Case |
+|------|--------|----------|
+| `postCreate` | After worktree creation | Setup, install dependencies |
+| `preRemove` | Before worktree deletion | Cleanup requiring directory access |
+| `postRemove` | After worktree deletion | Notifications, logging |
+
+> **Note:** Pre-remove hooks abort removal on failure. Use `--force` to skip failed hooks.
+
 **Environment variables available in hooks:**
 
 - `REPO_ROOT` - Repository root path
-- `WORKTREE_PATH` - New worktree path
+- `WORKTREE_PATH` - Worktree path
 - `BRANCH` - Branch name
 
 **Examples for different build tools:**

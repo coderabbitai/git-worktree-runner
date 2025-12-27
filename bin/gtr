@@ -78,6 +78,9 @@ main() {
     ai)
       cmd_ai "$@"
       ;;
+    copy)
+      cmd_copy "$@"
+      ;;
     ls|list)
       cmd_list "$@"
       ;;
@@ -241,8 +244,9 @@ cmd_create() {
   # Copy files based on patterns
   if [ "$skip_copy" -eq 0 ]; then
     local includes excludes file_includes
-    includes=$(cfg_get_all gtr.copy.include)
-    excludes=$(cfg_get_all gtr.copy.exclude)
+    # Pass .gtrconfig keys as second argument for file-based config
+    includes=$(cfg_get_all gtr.copy.include copy.include)
+    excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
 
     # Read .worktreeinclude file if exists
     file_includes=$(parse_pattern_file "$repo_root/.worktreeinclude")
@@ -263,8 +267,9 @@ cmd_create() {
 
     # Copy directories (typically git-ignored dirs like node_modules, .venv)
     local dir_includes dir_excludes
-    dir_includes=$(cfg_get_all gtr.copy.includeDirs)
-    dir_excludes=$(cfg_get_all gtr.copy.excludeDirs)
+    # Pass .gtrconfig keys as second argument for file-based config
+    dir_includes=$(cfg_get_all gtr.copy.includeDirs copy.includeDirs)
+    dir_excludes=$(cfg_get_all gtr.copy.excludeDirs copy.excludeDirs)
 
     if [ -n "$dir_includes" ]; then
       log_step "Copying directories..."
@@ -344,7 +349,20 @@ cmd_remove() {
       continue
     fi
 
-    log_step "Removing worktree: $branch_name"
+    log_step "Removing worktree: $(basename "$worktree_path")"
+
+    # Run pre-remove hooks (abort on failure unless --force)
+    if ! run_hooks_in preRemove "$worktree_path" \
+      REPO_ROOT="$repo_root" \
+      WORKTREE_PATH="$worktree_path" \
+      BRANCH="$branch_name"; then
+      if [ "$force" -eq 0 ]; then
+        log_error "Pre-remove hook failed for $branch_name. Use --force to skip hooks."
+        continue
+      else
+        log_warn "Pre-remove hook failed, continuing due to --force"
+      fi
+    fi
 
     # Remove the worktree
     if ! remove_worktree "$worktree_path" "$force"; then
@@ -465,6 +483,130 @@ cmd_run() {
   (cd "$worktree_path" && "${run_args[@]}")
 }
 
+# Copy command (copy files between worktrees)
+cmd_copy() {
+  local source="1"  # Default: main repo
+  local targets=""
+  local patterns=""
+  local all_mode=0
+  local dry_run=0
+
+  # Parse arguments (patterns come after -- separator, like git pathspec)
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --from)
+        source="$2"
+        shift 2
+        ;;
+      -n|--dry-run)
+        dry_run=1
+        shift
+        ;;
+      -a|--all)
+        all_mode=1
+        shift
+        ;;
+      --)
+        shift
+        # Remaining args are patterns (like git pathspec)
+        while [ $# -gt 0 ]; do
+          if [ -n "$patterns" ]; then
+            patterns="$patterns"$'\n'"$1"
+          else
+            patterns="$1"
+          fi
+          shift
+        done
+        break
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        targets="$targets $1"
+        shift
+        ;;
+    esac
+  done
+
+  # Validation
+  if [ "$all_mode" -eq 0 ] && [ -z "$targets" ]; then
+    log_error "Usage: git gtr copy <target>... [-n] [-a] [--from <source>] [-- <pattern>...]"
+    exit 1
+  fi
+
+  # Get repo context
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+  # Resolve source path
+  local src_target src_path
+  src_target=$(resolve_target "$source" "$repo_root" "$base_dir" "$prefix") || exit 1
+  src_path=$(echo "$src_target" | cut -f2)
+
+  # Get patterns (flag > config)
+  if [ -z "$patterns" ]; then
+    patterns=$(cfg_get_all gtr.copy.include copy.include)
+    # Also check .worktreeinclude
+    if [ -f "$repo_root/.worktreeinclude" ]; then
+      local file_patterns
+      file_patterns=$(parse_pattern_file "$repo_root/.worktreeinclude")
+      if [ -n "$file_patterns" ]; then
+        if [ -n "$patterns" ]; then
+          patterns="$patterns"$'\n'"$file_patterns"
+        else
+          patterns="$file_patterns"
+        fi
+      fi
+    fi
+  fi
+
+  if [ -z "$patterns" ]; then
+    log_error "No patterns specified. Use '-- <pattern>...' or configure gtr.copy.include"
+    exit 1
+  fi
+
+  local excludes
+  excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
+
+  # Build target list for --all mode
+  if [ "$all_mode" -eq 1 ]; then
+    targets=$(list_worktree_branches "$base_dir" "$prefix")
+    if [ -z "$targets" ]; then
+      log_error "No worktrees found"
+      exit 1
+    fi
+  fi
+
+  # Process each target
+  local copied_any=0
+  for target_id in $targets; do
+    local dst_target dst_path dst_branch
+    dst_target=$(resolve_target "$target_id" "$repo_root" "$base_dir" "$prefix") || continue
+    dst_path=$(echo "$dst_target" | cut -f2)
+    dst_branch=$(echo "$dst_target" | cut -f3)
+
+    # Skip if source == destination
+    [ "$src_path" = "$dst_path" ] && continue
+
+    if [ "$dry_run" -eq 1 ]; then
+      log_step "[dry-run] Would copy to: $dst_branch"
+      copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true" "true"
+    else
+      log_step "Copying to: $dst_branch"
+      copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true"
+    fi
+    copied_any=1
+  done
+
+  if [ "$copied_any" -eq 0 ]; then
+    log_warn "No files copied (source and target may be the same)"
+  fi
+}
+
 # Editor command
 cmd_editor() {
   local identifier=""
@@ -495,9 +637,9 @@ cmd_editor() {
     exit 1
   fi
 
-  # Get editor from flag or config
+  # Get editor from flag or config (with .gtrconfig support)
   if [ -z "$editor" ]; then
-    editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
+    editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor)
   fi
 
   local repo_root base_dir prefix
@@ -559,9 +701,9 @@ cmd_ai() {
     exit 1
   fi
 
-  # Get AI tool from flag or config
+  # Get AI tool from flag or config (with .gtrconfig support)
   if [ -z "$ai_tool" ]; then
-    ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none")
+    ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none" defaults.ai)
   fi
 
   # Check if AI tool is configured
@@ -869,9 +1011,9 @@ cmd_doctor() {
     issues=$((issues + 1))
   fi
 
-  # Check configured editor
+  # Check configured editor (with .gtrconfig support)
   local editor
-  editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none")
+  editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor)
   if [ "$editor" != "none" ]; then
     # Check if adapter exists
     local editor_adapter="$GTR_DIR/adapters/editor/${editor}.sh"
@@ -889,9 +1031,9 @@ cmd_doctor() {
     echo "[i] Editor: none configured"
   fi
 
-  # Check configured AI tool
+  # Check configured AI tool (with .gtrconfig support)
   local ai_tool
-  ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none")
+  ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none" defaults.ai)
   if [ "$ai_tool" != "none" ]; then
     # Check if adapter exists
     local adapter_file="$GTR_DIR/adapters/ai/${ai_tool}.sh"
@@ -1017,7 +1159,7 @@ cmd_config() {
         log_error "Usage: git gtr config get <key> [--global]"
         exit 1
       fi
-      cfg_get "$key" "$scope"
+      cfg_get_all "$key" "" "$scope"
       ;;
     set)
       if [ -z "$key" ] || [ -z "$value" ]; then
@@ -1096,7 +1238,7 @@ load_ai_adapter() {
 
   if ! command -v "$cmd_name" >/dev/null 2>&1; then
     log_error "AI tool '$ai_tool' not found"
-    log_info "Built-in adapters: aider, claude, codex, continue, cursor, gemini, opencode"
+    log_info "Built-in adapters: aider, claude, codex, continue, copilot, cursor, gemini, opencode"
     log_info "Or use any AI tool command available in your PATH (e.g., bunx, gpt)"
     exit 1
   fi
@@ -1179,6 +1321,20 @@ CORE COMMANDS (daily workflow):
          --force: force removal (dirty worktree)
          --yes: skip confirmation
 
+  copy <target>... [options] [-- <pattern>...]
+         Copy files from main repo to worktree(s)
+         -n, --dry-run: preview without copying
+         -a, --all: copy to all worktrees
+         --from <source>: copy from different worktree (default: main repo)
+         Patterns after -- override gtr.copy.include config
+
+         Examples:
+           git gtr copy my-feature                       # Uses configured patterns
+           git gtr copy my-feature -- ".env*"            # Explicit pattern
+           git gtr copy my-feature -- ".env*" "*.json"   # Multiple patterns
+           git gtr copy -a -- ".env*"                    # Update all worktrees
+           git gtr copy my-feature -n -- "**/.env*"      # Dry-run preview
+
 ────────────────────────────────────────────────────────────────────────────────
 
 SETUP & MAINTENANCE:
@@ -1259,7 +1415,7 @@ CONFIGURATION OPTIONS:
                            atom, none
   gtr.ai.default           Default AI tool
                            Options: aider, claude, codex, continue,
-                           cursor, gemini, opencode, none
+                           copilot, cursor, gemini, opencode, none
   gtr.copy.include         Files to copy (multi-valued)
   gtr.copy.exclude         Files to exclude (multi-valued)
   gtr.copy.includeDirs     Directories to copy (multi-valued)
@@ -1269,6 +1425,7 @@ CONFIGURATION OPTIONS:
   gtr.copy.excludeDirs     Directories to exclude (multi-valued)
                            Supports glob patterns (e.g., "node_modules/.cache", "*/.npm")
   gtr.hook.postCreate      Post-create hooks (multi-valued)
+  gtr.hook.preRemove       Pre-remove hooks (multi-valued, abort on failure)
   gtr.hook.postRemove      Post-remove hooks (multi-valued)
 
 ────────────────────────────────────────────────────────────────────────────────

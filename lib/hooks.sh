@@ -8,8 +8,9 @@ run_hooks() {
   local phase="$1"
   shift
 
+  # Get hooks from git config and .gtrconfig file
   local hooks
-  hooks=$(cfg_get_all "gtr.hook.$phase")
+  hooks=$(cfg_get_all "gtr.hook.$phase" "hooks.$phase")
 
   if [ -z "$hooks" ]; then
     # No hooks configured for this phase

@@ -35,6 +35,7 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a new -d 'Create a new wor
 complete -f -c git -n '__fish_git_gtr_needs_command' -a go -d 'Navigate to worktree'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a run -d 'Execute command in worktree'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a rm -d 'Remove worktree(s)'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a copy -d 'Copy files between worktrees'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a editor -d 'Open worktree in editor'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a ai -d 'Start AI coding tool'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a ls -d 'List all worktrees'
@@ -61,6 +62,11 @@ complete -c git -n '__fish_git_gtr_using_command rm' -l delete-branch -d 'Delete
 complete -c git -n '__fish_git_gtr_using_command rm' -l force -d 'Force removal even if dirty'
 complete -c git -n '__fish_git_gtr_using_command rm' -l yes -d 'Non-interactive mode'
 
+# Copy command options
+complete -c git -n '__fish_git_gtr_using_command copy' -s n -l dry-run -d 'Preview without copying'
+complete -c git -n '__fish_git_gtr_using_command copy' -s a -l all -d 'Copy to all worktrees'
+complete -c git -n '__fish_git_gtr_using_command copy' -l from -d 'Source worktree' -r
+
 # Config command
 complete -f -c git -n '__fish_git_gtr_using_command config' -a 'get set add unset'
 complete -f -c git -n '__fish_git_gtr_using_command config' -a "
@@ -74,6 +80,7 @@ complete -f -c git -n '__fish_git_gtr_using_command config' -a "
   gtr.copy.includeDirs\t'Directories to copy (e.g., node_modules)'
   gtr.copy.excludeDirs\t'Directories to exclude'
   gtr.hook.postCreate\t'Post-create hook'
+  gtr.hook.preRemove\t'Pre-remove hook (abort on failure)'
   gtr.hook.postRemove\t'Post-remove hook'
 "
 
@@ -88,6 +95,7 @@ end
 # Complete branch names for commands that need them
 complete -f -c git -n '__fish_git_gtr_using_command go' -a '(__gtr_worktree_branches)'
 complete -f -c git -n '__fish_git_gtr_using_command run' -a '(__gtr_worktree_branches)'
+complete -f -c git -n '__fish_git_gtr_using_command copy' -a '(__gtr_worktree_branches)'
 complete -f -c git -n '__fish_git_gtr_using_command editor' -a '(__gtr_worktree_branches)'
 complete -f -c git -n '__fish_git_gtr_using_command ai' -a '(__gtr_worktree_branches)'
 complete -f -c git -n '__fish_git_gtr_using_command rm' -a '(__gtr_worktree_branches)'

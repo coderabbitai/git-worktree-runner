@@ -59,6 +59,9 @@
 # gtr.hook.postCreate = npm install
 # gtr.hook.postCreate = npm run build
 
+# Commands to run before removing a worktree (abort on failure, use --force to skip)
+# gtr.hook.preRemove = npm run cleanup
+
 # Commands to run after removing a worktree
 # gtr.hook.postRemove = echo "Cleaned up worktree"
 

@@ -22,7 +22,7 @@ _git_gtr() {
 
   # If we're completing the first argument after 'git gtr'
   if [ "$cword" -eq 2 ]; then
-    COMPREPLY=($(compgen -W "new go run editor ai rm ls list clean doctor adapter config help version" -- "$cur"))
+    COMPREPLY=($(compgen -W "new go run copy editor ai rm ls list clean doctor adapter config help version" -- "$cur"))
     return 0
   fi
 
@@ -45,6 +45,17 @@ _git_gtr() {
         esac
       fi
       ;;
+    copy)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "-n --dry-run -a --all --from" -- "$cur"))
+      else
+        # Complete with branch names and special ID '1' for main repo
+        local branches all_options
+        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
+        all_options="1 $branches"
+        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+      fi
+      ;;
     new)
       # Complete flags
       if [[ "$cur" == -* ]]; then
@@ -57,7 +68,7 @@ _git_gtr() {
       if [ "$cword" -eq 3 ]; then
         COMPREPLY=($(compgen -W "get set add unset" -- "$cur"))
       elif [ "$cword" -eq 4 ]; then
-        COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.postRemove" -- "$cur"))
+        COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove" -- "$cur"))
       fi
       ;;
   esac

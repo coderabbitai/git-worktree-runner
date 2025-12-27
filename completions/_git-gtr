@@ -19,6 +19,7 @@ _git-gtr() {
     'new:Create a new worktree'
     'go:Navigate to worktree'
     'run:Execute command in worktree'
+    'copy:Copy files between worktrees'
     'rm:Remove worktree(s)'
     'editor:Open worktree in editor'
     'ai:Start AI coding tool'
@@ -65,7 +66,7 @@ _git-gtr() {
   # Complete arguments to the subcommand
   elif (( CURRENT == 4 )); then
     case "$words[3]" in
-      go|run|rm)
+      go|run|rm|copy)
         _describe 'branch names' all_options
         ;;
       editor)
@@ -85,7 +86,7 @@ _git-gtr() {
         _arguments '--editor[Editor to use]:editor:(cursor vscode zed idea pycharm webstorm vim nvim emacs sublime nano atom none)'
         ;;
       ai)
-        _arguments '--ai[AI tool to use]:tool:(aider claude codex continue cursor gemini opencode none)'
+        _arguments '--ai[AI tool to use]:tool:(aider claude codex continue copilot cursor gemini opencode none)'
         ;;
       rm)
         _arguments \
@@ -93,12 +94,24 @@ _git-gtr() {
           '--force[Force removal even if dirty]' \
           '--yes[Non-interactive mode]'
         ;;
+      copy)
+        _arguments \
+          '-n[Dry-run preview]' \
+          '--dry-run[Preview without copying]' \
+          '-a[Copy to all worktrees]' \
+          '--all[Copy to all worktrees]' \
+          '--from[Source worktree]:source:->worktrees' \
+          '*:target:->worktrees'
+        case "$state" in
+          worktrees) _describe 'branch names' all_options ;;
+        esac
+        ;;
       config)
         case "$words[4]" in
           get|set|add|unset)
             _arguments \
               '--global[Use global git config]' \
-              '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.postRemove)'
+              '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove)'
             ;;
         esac
         ;;

@@ -24,7 +24,7 @@ sanitize_branch_name() {
 
   # Replace slashes, spaces, and other problematic chars with hyphens
   # Remove any leading/trailing hyphens
-  printf "%s" "$branch" | sed -e 's/[\/\\ :*?"<>|]/-/g' -e 's/^-*//' -e 's/-*$//'
+  printf "%s" "$branch" | sed -e 's/[\/\\ :*?"<>|#]/-/g' -e 's/^-*//' -e 's/-*$//'
 }
 
 # Canonicalize a path to its absolute form, resolving symlinks
@@ -375,7 +375,7 @@ create_worktree() {
         log_step "Branch '$branch_name' exists on remote"
 
         # Create tracking branch first for explicit upstream configuration
-        if git branch --track "$branch_name" "origin/$branch_name" 2>/dev/null; then
+        if git branch --track "$branch_name" "origin/$branch_name" >/dev/null 2>&1; then
           log_info "Created local branch tracking origin/$branch_name"
         fi
 
@@ -423,11 +423,16 @@ remove_worktree() {
     force_flag="--force"
   fi
 
-  if git worktree remove $force_flag "$worktree_path" 2>/dev/null; then
+  local remove_output
+  if remove_output=$(git worktree remove $force_flag "$worktree_path" 2>&1); then
     log_info "Worktree removed: $worktree_path"
     return 0
   else
-    log_error "Failed to remove worktree"
+    if [ -n "$remove_output" ]; then
+      log_error "Failed to remove worktree: $remove_output"
+    else
+      log_error "Failed to remove worktree"
+    fi
     return 1
   fi
 }
@@ -435,4 +440,21 @@ remove_worktree() {
 # List all worktrees
 list_worktrees() {
   git worktree list
+}
+
+# List all worktree branch names (excluding main repo)
+# Usage: list_worktree_branches base_dir prefix
+# Returns: newline-separated list of branch names
+list_worktree_branches() {
+  local base_dir="$1"
+  local prefix="$2"
+
+  [ ! -d "$base_dir" ] && return 0
+
+  for dir in "$base_dir/${prefix}"*; do
+    [ -d "$dir" ] || continue
+    local branch
+    branch=$(current_branch "$dir")
+    [ -n "$branch" ] && echo "$branch"
+  done
 }
