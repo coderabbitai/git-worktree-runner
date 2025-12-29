@@ -68,7 +68,36 @@ complete -c git -n '__fish_git_gtr_using_command copy' -s a -l all -d 'Copy to a
 complete -c git -n '__fish_git_gtr_using_command copy' -l from -d 'Source worktree' -r
 
 # Config command
-complete -f -c git -n '__fish_git_gtr_using_command config' -a 'get set add unset'
+complete -f -c git -n '__fish_git_gtr_using_command config' -a 'list get set add unset'
+
+# Helper to check if config action is a read operation (list or get)
+function __fish_git_gtr_config_is_read
+  set -l cmd (commandline -opc)
+  for i in $cmd
+    if test "$i" = "list" -o "$i" = "get"
+      return 0
+    end
+  end
+  return 1
+end
+
+# Helper to check if config action is a write operation (set, add, unset)
+function __fish_git_gtr_config_is_write
+  set -l cmd (commandline -opc)
+  for i in $cmd
+    if test "$i" = "set" -o "$i" = "add" -o "$i" = "unset"
+      return 0
+    end
+  end
+  return 1
+end
+
+# Scope flags for config command
+# --local and --global available for all operations
+complete -f -c git -n '__fish_git_gtr_using_command config' -l local -d 'Use local git config'
+complete -f -c git -n '__fish_git_gtr_using_command config' -l global -d 'Use global git config'
+# --system only for read operations (list, get) - write requires root
+complete -f -c git -n '__fish_git_gtr_using_command config; and __fish_git_gtr_config_is_read' -l system -d 'Use system git config'
 complete -f -c git -n '__fish_git_gtr_using_command config' -a "
   gtr.worktrees.dir\t'Worktrees base directory'
   gtr.worktrees.prefix\t'Worktree folder prefix'

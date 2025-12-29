@@ -77,15 +77,43 @@ cfg_get() {
   git config $flag --get "$key" 2>/dev/null || true
 }
 
+# Map a gtr.* config key to its .gtrconfig equivalent
+# Usage: cfg_map_to_file_key <key>
+# Returns: mapped key for .gtrconfig or empty if no mapping exists
+cfg_map_to_file_key() {
+  local key="$1"
+  case "$key" in
+    gtr.copy.include)     echo "copy.include" ;;
+    gtr.copy.exclude)     echo "copy.exclude" ;;
+    gtr.copy.includeDirs) echo "copy.includeDirs" ;;
+    gtr.copy.excludeDirs) echo "copy.excludeDirs" ;;
+    gtr.hook.postCreate)  echo "hooks.postCreate" ;;
+    gtr.hook.preRemove)   echo "hooks.preRemove" ;;
+    gtr.hook.postRemove)  echo "hooks.postRemove" ;;
+    gtr.editor.default)   echo "defaults.editor" ;;
+    gtr.ai.default)       echo "defaults.ai" ;;
+    gtr.worktrees.dir)    echo "worktrees.dir" ;;
+    gtr.worktrees.prefix) echo "worktrees.prefix" ;;
+    gtr.defaultBranch)    echo "defaults.branch" ;;
+    *)                    echo "" ;;
+  esac
+}
+
 # Get all values for a multi-valued config key
 # Usage: cfg_get_all key [file_key] [scope]
 # file_key: optional key name in .gtrconfig (e.g., "copy.include" for gtr.copy.include)
+#           If empty and key starts with "gtr.", auto-maps to .gtrconfig key
 # scope: auto (default), local, global, or system
 # auto merges local + .gtrconfig + global + system and deduplicates
 cfg_get_all() {
   local key="$1"
   local file_key="${2:-}"
   local scope="${3:-auto}"
+
+  # Auto-map file_key if not provided and key is a gtr.* key
+  if [ -z "$file_key" ] && [[ "$key" == gtr.* ]]; then
+    file_key=$(cfg_map_to_file_key "$key")
+  fi
 
   case "$scope" in
     local)
@@ -184,6 +212,185 @@ cfg_unset() {
   esac
 
   git config $flag --unset-all "$key" 2>/dev/null || true
+}
+
+# List all gtr.* config values
+# Usage: cfg_list [scope]
+# scope: auto (default), local, global, system
+# auto shows merged config from all sources with origin labels
+# Returns formatted key = value output, or message if empty
+# Note: Shows ALL values for multi-valued keys (copy patterns, hooks, etc.)
+cfg_list() {
+  local scope="${1:-auto}"
+  local output=""
+  local config_file
+  config_file=$(_gtrconfig_path)
+
+  case "$scope" in
+    local)
+      output=$(git config --local --get-regexp '^gtr\.' 2>/dev/null || true)
+      ;;
+    global)
+      output=$(git config --global --get-regexp '^gtr\.' 2>/dev/null || true)
+      ;;
+    system)
+      output=$(git config --system --get-regexp '^gtr\.' 2>/dev/null || true)
+      ;;
+    auto)
+      # Merge all sources with origin labels
+      # Deduplicates by key+value combo, preserving all multi-values from highest priority source
+      local seen_keys=""
+      local result=""
+      local key value line
+
+      # Set up cleanup trap for helper function (protects against early exit/return)
+      trap 'unset -f _cfg_list_add_entry 2>/dev/null' RETURN
+
+      # Helper function to add entries with origin (inline to avoid Bash 3.2 nameref issues)
+      # Uses Unit Separator ($'\x1f') as delimiter to avoid conflicts with any values
+      _cfg_list_add_entry() {
+        local origin="$1"
+        local entry_key="$2"
+        local entry_value="$3"
+
+        # For multi-valued keys: check if key+value combo already seen
+        # This allows multiple values for the same key from the same source
+        # Use Unit Separator as delimiter in seen_keys to avoid collision with any value content
+        local id=$'\x1f'"${entry_key}=${entry_value}"$'\x1f'
+        # Use [[ ]] for literal string matching (no glob interpretation)
+        if [[ "$seen_keys" == *"$id"* ]]; then
+          return 0
+        fi
+
+        seen_keys="${seen_keys}${id}"
+        # Use Unit Separator ($'\x1f') as delimiter - won't appear in normal values
+        result="${result}${entry_key}"$'\x1f'"${entry_value}"$'\x1f'"${origin}"$'\n'
+      }
+
+      # Process in priority order: local > .gtrconfig > global > system
+      local local_entries global_entries system_entries
+
+      # 1. Local git config (highest priority)
+      local_entries=$(git config --local --get-regexp '^gtr\.' 2>/dev/null || true)
+      while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        key="${line%% *}"
+        # Handle empty values (no space in line means value is empty)
+        if [[ "$line" == *" "* ]]; then
+          value="${line#* }"
+        else
+          value=""
+        fi
+        _cfg_list_add_entry "local" "$key" "$value"
+      done <<< "$local_entries"
+
+      # 2. .gtrconfig file (team defaults)
+      if [ -n "$config_file" ] && [ -f "$config_file" ]; then
+        while IFS= read -r line; do
+          [ -z "$line" ] && continue
+          local fkey fvalue mapped_key
+          fkey="${line%% *}"
+          # Handle empty values (no space in line means value is empty)
+          if [[ "$line" == *" "* ]]; then
+            fvalue="${line#* }"
+          else
+            fvalue=""
+          fi
+          # Map .gtrconfig keys to gtr.* format
+          case "$fkey" in
+            copy.include)     mapped_key="gtr.copy.include" ;;
+            copy.exclude)     mapped_key="gtr.copy.exclude" ;;
+            copy.includeDirs) mapped_key="gtr.copy.includeDirs" ;;
+            copy.excludeDirs) mapped_key="gtr.copy.excludeDirs" ;;
+            hooks.postCreate) mapped_key="gtr.hook.postCreate" ;;
+            hooks.preRemove)  mapped_key="gtr.hook.preRemove" ;;
+            hooks.postRemove) mapped_key="gtr.hook.postRemove" ;;
+            defaults.editor)  mapped_key="gtr.editor.default" ;;
+            defaults.ai)      mapped_key="gtr.ai.default" ;;
+            defaults.branch)  mapped_key="gtr.defaultBranch" ;;
+            worktrees.dir)    mapped_key="gtr.worktrees.dir" ;;
+            worktrees.prefix) mapped_key="gtr.worktrees.prefix" ;;
+            gtr.*)            mapped_key="$fkey" ;;
+            *)                continue ;;  # Skip unmapped keys
+          esac
+          _cfg_list_add_entry ".gtrconfig" "$mapped_key" "$fvalue"
+        done < <(git config -f "$config_file" --get-regexp '.' 2>/dev/null || true)
+      fi
+
+      # 3. Global git config
+      global_entries=$(git config --global --get-regexp '^gtr\.' 2>/dev/null || true)
+      while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        key="${line%% *}"
+        # Handle empty values (no space in line means value is empty)
+        if [[ "$line" == *" "* ]]; then
+          value="${line#* }"
+        else
+          value=""
+        fi
+        _cfg_list_add_entry "global" "$key" "$value"
+      done <<< "$global_entries"
+
+      # 4. System git config (lowest priority)
+      system_entries=$(git config --system --get-regexp '^gtr\.' 2>/dev/null || true)
+      while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        key="${line%% *}"
+        # Handle empty values (no space in line means value is empty)
+        if [[ "$line" == *" "* ]]; then
+          value="${line#* }"
+        else
+          value=""
+        fi
+        _cfg_list_add_entry "system" "$key" "$value"
+      done <<< "$system_entries"
+
+      # Clean up helper function and clear trap (trap handles early exit cases)
+      unset -f _cfg_list_add_entry
+      trap - RETURN
+
+      output="$result"
+      ;;
+    *)
+      # Unknown scope - warn and fall back to auto
+      log_warn "Unknown scope '$scope', using 'auto'"
+      cfg_list "auto"
+      return $?
+      ;;
+  esac
+
+  # Format and display output
+  if [ -z "$output" ]; then
+    echo "No gtr configuration found"
+    return 0
+  fi
+
+  # Format output with alignment
+  # Use printf '%s\n' instead of echo for safety with special characters
+  printf '%s\n' "$output" | while IFS= read -r line; do
+    [ -z "$line" ] && continue
+
+    local key value origin rest
+    # Check if line uses Unit Separator delimiter (auto mode with origin)
+    if [[ "$line" == *$'\x1f'* ]]; then
+      # Format: key<US>value<US>origin
+      key="${line%%$'\x1f'*}"
+      rest="${line#*$'\x1f'}"
+      value="${rest%%$'\x1f'*}"
+      origin="${rest#*$'\x1f'}"
+      printf "%-35s = %-25s [%s]\n" "$key" "$value" "$origin"
+    else
+      # Format: key value (no origin, for scoped queries)
+      key="${line%% *}"
+      # Handle empty values (no space in line means value is empty)
+      if [[ "$line" == *" "* ]]; then
+        value="${line#* }"
+      else
+        value=""
+      fi
+      printf "%-35s = %s\n" "$key" "$value"
+    fi
+  done
 }
 
 # Get config value with environment variable fallback
