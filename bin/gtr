@@ -887,7 +887,13 @@ EOF
 
     # Ensure gh CLI is available
     if ! command -v gh >/dev/null 2>&1; then
-      log_error "GitHub CLI (gh) not found. Install with: brew install gh"
+      log_error "GitHub CLI (gh) not found. Install from: https://cli.github.com/"
+      exit 1
+    fi
+
+    # Ensure we're in a GitHub repo and authenticated
+    if ! gh repo view >/dev/null 2>&1; then
+      log_error "Not a GitHub repo or gh not authenticated (run: gh auth status)"
       exit 1
     fi
 
@@ -943,7 +949,7 @@ EOF
         if [ "$dry_run" -eq 1 ]; then
           log_info "[dry-run] Would remove: $branch ($dir)"
           removed=$((removed + 1))
-        elif [ "$yes_mode" -eq 1 ] || prompt_yes_no "Remove worktree '$branch'?"; then
+        elif [ "$yes_mode" -eq 1 ] || prompt_yes_no "Remove worktree and delete branch '$branch'?"; then
           log_step "Removing worktree: $branch"
           if git worktree remove "$dir" 2>/dev/null; then
             # Also delete the local branch
