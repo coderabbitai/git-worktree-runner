@@ -891,9 +891,9 @@ EOF
       exit 1
     fi
 
-    # Ensure we're in a GitHub repo and authenticated
-    if ! gh repo view >/dev/null 2>&1; then
-      log_error "Not a GitHub repo or gh not authenticated (run: gh auth status)"
+    # Ensure gh CLI is available
+    if ! command -v gh >/dev/null 2>&1; then
+      log_error "GitHub CLI (gh) not found. Visit https://cli.github.com to install"
       exit 1
     fi
 
