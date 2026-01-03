@@ -133,7 +133,7 @@ source ~/.zshrc
 **Fish:**
 
 ```bash
-ln -s /path/to/git-worktree-runner/completions/gtr.fish ~/.config/fish/completions/
+ln -s /path/to/git-worktree-runner/completions/git-gtr.fish ~/.config/fish/completions/
 ```
 
 ## Commands
