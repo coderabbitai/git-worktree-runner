@@ -725,7 +725,7 @@ git gtr ai feature-auth-tests -- --message "Write integration tests"
 This error means `git-gtr` is not in your PATH. Verify installation:
 
 ```bash
-# Check if symlink exists
+# Check if symlink exists (if neither exists, re-run ./install.sh)
 ls -la /usr/local/bin/git-gtr 2>/dev/null || ls -la ~/bin/git-gtr 2>/dev/null
 
 # Check if git-gtr is findable
