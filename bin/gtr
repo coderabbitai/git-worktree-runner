@@ -891,6 +891,13 @@ EOF
       exit 1
     fi
 
+    # Ensure gh is authenticated and this is a GitHub repository
+    if ! gh repo view >/dev/null 2>&1; then
+      log_error "Not authenticated with GitHub or not a GitHub repository"
+      log_info "Run: gh auth login"
+      exit 1
+    fi
+
     # Fetch latest from origin
     log_step "Fetching from origin..."
     git fetch origin --prune 2>/dev/null || log_warn "Could not fetch from origin"
@@ -945,22 +952,25 @@ EOF
           removed=$((removed + 1))
         elif [ "$yes_mode" -eq 1 ] || prompt_yes_no "Remove worktree and delete branch '$branch'?"; then
           log_step "Removing worktree: $branch"
-          if git worktree remove "$dir" 2>/dev/null; then
+          local remove_output
+          if remove_output=$(git worktree remove "$dir" 2>&1); then
             # Also delete the local branch
             git branch -d "$branch" 2>/dev/null || git branch -D "$branch" 2>/dev/null || true
             log_info "Removed: $branch"
             removed=$((removed + 1))
           else
-            log_error "Failed to remove worktree: $branch"
+            if [ -n "$remove_output" ]; then
+              log_error "Failed to remove worktree: $remove_output"
+            else
+              log_error "Failed to remove worktree: $branch"
+            fi
           fi
         else
           log_warn "Skipped: $branch (user declined)"
           skipped=$((skipped + 1))
         fi
-      else
-        log_warn "Skipping $branch (no merged PR found)"
-        skipped=$((skipped + 1))
       fi
+      # Branches without merged PRs are silently skipped (this is the normal case)
     done
 
     echo ""
