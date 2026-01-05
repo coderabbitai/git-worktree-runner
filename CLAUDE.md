@@ -403,7 +403,7 @@ When adding new commands or flags, update all three completion files:
 
 - `completions/gtr.bash` (Bash)
 - `completions/_git-gtr` (Zsh)
-- `completions/gtr.fish` (Fish)
+- `completions/git-gtr.fish` (Fish)
 
 ### Git Version Compatibility
 
