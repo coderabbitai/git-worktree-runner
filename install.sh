@@ -68,9 +68,9 @@ install_windows() {
   echo
   echo "  Option 3: Copy the script directly"
   echo "  ─────────────────────────────────────────────────────"
-  echo "  Copy git-gtr to a directory already in your PATH:"
+  echo "  Copy git-gtr to your local bin directory:"
   echo
-  echo "    cp \"$GIT_GTR_PATH\" /usr/bin/git-gtr"
+  echo "    mkdir -p ~/bin && cp \"$GIT_GTR_PATH\" ~/bin/git-gtr"
   echo
 
   # Check if bin_dir is already in PATH
