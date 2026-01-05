@@ -138,6 +138,12 @@ main() {
     exit 1
   fi
 
+  # Ensure git-gtr is executable (auto-fix if needed)
+  if [ ! -x "$GIT_GTR_PATH" ]; then
+    log_warn "git-gtr is not executable, fixing permissions..."
+    chmod +x "$GIT_GTR_PATH"
+  fi
+
   # Detect platform
   local platform
   platform="$(detect_platform)"
