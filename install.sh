@@ -38,11 +38,6 @@ in_path() {
   echo "$PATH" | tr ':' '\n' | grep -Fqx "$1"
 }
 
-# Check if running on Windows (Git Bash, MSYS, Cygwin)
-is_windows() {
-  [ "$(detect_platform)" = "windows" ]
-}
-
 # Windows-specific installation guidance
 # Symlinks and sudo don't work reliably in Git Bash/MSYS/Cygwin
 install_windows() {
