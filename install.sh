@@ -35,7 +35,53 @@ log_error() {
 
 # Check if a directory is in PATH
 in_path() {
-  echo "$PATH" | tr ':' '\n' | grep -qx "$1"
+  echo "$PATH" | tr ':' '\n' | grep -Fqx "$1"
+}
+
+# Check if running on Windows (Git Bash, MSYS, Cygwin)
+is_windows() {
+  [ "$(detect_platform)" = "windows" ]
+}
+
+# Windows-specific installation guidance
+# Symlinks and sudo don't work reliably in Git Bash/MSYS/Cygwin
+install_windows() {
+  local bin_dir="$SCRIPT_DIR/bin"
+
+  log_warn "Automatic symlink creation is not supported on Windows Git Bash."
+  echo
+  log_info "Windows installation options:"
+  echo
+  echo "  Option 1: Add git-gtr's bin directory to your PATH"
+  echo "  ─────────────────────────────────────────────────────"
+  echo "  Add this line to your ~/.bashrc or ~/.bash_profile:"
+  echo
+  echo "    export PATH=\"$bin_dir:\$PATH\""
+  echo
+  echo "  Then restart your terminal or run: source ~/.bashrc"
+  echo
+  echo "  Option 2: Create a symlink manually (requires admin)"
+  echo "  ─────────────────────────────────────────────────────"
+  echo "  Open an Administrator Command Prompt and run:"
+  echo
+  echo "    mklink \"C:\\Program Files\\Git\\usr\\bin\\git-gtr\" \"$(cygpath -w "$GIT_GTR_PATH" 2>/dev/null || echo "$GIT_GTR_PATH")\""
+  echo
+  echo "  Option 3: Copy the script directly"
+  echo "  ─────────────────────────────────────────────────────"
+  echo "  Copy git-gtr to a directory already in your PATH:"
+  echo
+  echo "    cp \"$GIT_GTR_PATH\" /usr/bin/git-gtr"
+  echo
+
+  # Check if bin_dir is already in PATH
+  if in_path "$bin_dir"; then
+    log_success "Good news: $bin_dir is already in your PATH!"
+    verify_installation
+  else
+    echo
+    log_info "After completing one of the options above, verify with:"
+    echo "    git gtr version"
+  fi
 }
 
 # Detect platform
@@ -101,6 +147,12 @@ main() {
   local platform
   platform="$(detect_platform)"
   log_info "Detected platform: $platform"
+
+  # Windows requires manual installation (symlinks/sudo don't work in Git Bash)
+  if [ "$platform" = "windows" ]; then
+    install_windows
+    exit 0
+  fi
 
   # Find installation directory
   local install_dir
