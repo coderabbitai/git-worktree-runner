@@ -275,7 +275,7 @@ All configuration is stored via `git config`. For team settings, create a `.gtrc
 # Set your editor (cursor, vscode, zed)
 git gtr config set gtr.editor.default cursor
 
-# Set your AI tool (aider, claude, codex, gemini)
+# Set your AI tool (aider, claude, codex, continue, copilot, cursor, gemini, opencode)
 git gtr config set gtr.ai.default claude
 
 # Copy env files to new worktrees
