@@ -65,10 +65,38 @@ _git_gtr() {
       fi
       ;;
     config)
-      if [ "$cword" -eq 3 ]; then
-        COMPREPLY=($(compgen -W "get set add unset" -- "$cur"))
-      elif [ "$cword" -eq 4 ]; then
-        COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove" -- "$cur"))
+      # Find action by scanning all config args (handles flexible flag positioning)
+      local config_action=""
+      local i
+      for (( i=3; i < cword; i++ )); do
+        case "${words[i]}" in
+          list|get|set|add|unset) config_action="${words[i]}" ;;
+        esac
+      done
+
+      if [ -z "$config_action" ]; then
+        # Still need to complete action or scope
+        COMPREPLY=($(compgen -W "list get set add unset --local --global --system" -- "$cur"))
+      else
+        # Have action, complete based on it
+        case "$config_action" in
+          list|get)
+            # Read operations support all scopes including --system
+            if [[ "$cur" == -* ]]; then
+              COMPREPLY=($(compgen -W "--local --global --system" -- "$cur"))
+            else
+              COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove" -- "$cur"))
+            fi
+            ;;
+          set|add|unset)
+            # Write operations only support --local and --global (--system requires root)
+            if [[ "$cur" == -* ]]; then
+              COMPREPLY=($(compgen -W "--local --global" -- "$cur"))
+            else
+              COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove" -- "$cur"))
+            fi
+            ;;
+        esac
       fi
       ;;
   esac

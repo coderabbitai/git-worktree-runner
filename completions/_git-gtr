@@ -76,7 +76,8 @@ _git-gtr() {
         _describe 'branch names' all_options
         ;;
       config)
-        _values 'config action' get set add unset
+        # Complete action or scope flags
+        _values 'config action' list get set add unset --local --global --system
         ;;
     esac
   # Complete subsequent arguments
@@ -107,13 +108,42 @@ _git-gtr() {
         esac
         ;;
       config)
-        case "$words[4]" in
-          get|set|add|unset)
-            _arguments \
-              '--global[Use global git config]' \
-              '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove)'
-            ;;
-        esac
+        # Find action by scanning all config args (handles flexible flag positioning)
+        # Use offset 3 to start from words[4] (first arg after 'config')
+        # Zsh uses 0-based offset: ${array[@]:3} = elements starting from 4th position
+        local config_action=""
+        local arg
+        for arg in "${words[@]:3}"; do
+          case "$arg" in
+            list|get|set|add|unset)
+              [[ -z "$config_action" ]] && config_action="$arg"
+              ;;
+          esac
+        done
+
+        if [[ -z "$config_action" ]]; then
+          # Still need action or scope
+          _values 'config action' list get set add unset --local --global --system
+        else
+          case "$config_action" in
+            list|get)
+              # Read operations support all scopes including --system
+              _arguments \
+                '--local[Use local git config]' \
+                '--global[Use global git config]' \
+                '--system[Use system git config]' \
+                '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove)'
+              ;;
+            set|add|unset)
+              # Write operations only support --local and --global
+              # (--system may require root or appropriate file permissions)
+              _arguments \
+                '--local[Use local git config]' \
+                '--global[Use global git config]' \
+                '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove)'
+              ;;
+          esac
+        fi
         ;;
     esac
   fi
