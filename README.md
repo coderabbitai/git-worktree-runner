@@ -68,6 +68,9 @@ git gtr config set gtr.ai.default claude
 
 # Daily workflow
 git gtr new my-feature          # Create worktree folder: my-feature
+git gtr new my-feature --editor # Create and open in editor
+git gtr new my-feature --ai     # Create and start AI tool
+git gtr new my-feature -e -a    # Create, open editor, then start AI
 git gtr editor my-feature       # Open in cursor
 git gtr ai my-feature           # Start claude
 
@@ -91,6 +94,7 @@ While `git worktree` is powerful, it's verbose and manual. `git gtr` adds qualit
 | Task              | With `git worktree`                        | With `git gtr`                           |
 | ----------------- | ------------------------------------------ | ---------------------------------------- |
 | Create worktree   | `git worktree add ../repo-feature feature` | `git gtr new feature`                    |
+| Create + open     | `git worktree add ... && cursor .`         | `git gtr new feature --editor`           |
 | Open in editor    | `cd ../repo-feature && cursor .`           | `git gtr editor feature`                 |
 | Start AI tool     | `cd ../repo-feature && aider`              | `git gtr ai feature`                     |
 | Copy config files | Manual copy/paste                          | Auto-copy via `gtr.copy.include`         |

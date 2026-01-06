@@ -121,6 +121,8 @@ cmd_create() {
   local yes_mode=0
   local force=0
   local custom_name=""
+  local open_editor=0
+  local start_ai=0
 
   # Parse flags and arguments
   while [ $# -gt 0 ]; do
@@ -156,6 +158,14 @@ cmd_create() {
       --name)
         custom_name="$2"
         shift 2
+        ;;
+      --editor|-e)
+        open_editor=1
+        shift
+        ;;
+      --ai|-a)
+        start_ai=1
+        shift
         ;;
       -*)
         log_error "Unknown flag: $1"
@@ -285,11 +295,42 @@ cmd_create() {
 
   echo ""
   log_info "Worktree created: $worktree_path"
-  echo ""
-  echo "Next steps:"
-  echo "  git gtr editor $branch_name  # Open in editor"
-  echo "  git gtr ai $branch_name      # Start AI tool"
-  echo "  cd \"\$(git gtr go $branch_name)\"  # Navigate to worktree"
+
+  # Auto-launch editor if requested
+  if [ "$open_editor" -eq 1 ]; then
+    local editor
+    editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor)
+    if [ "$editor" != "none" ]; then
+      load_editor_adapter "$editor"
+      log_step "Opening in $editor..."
+      editor_open "$worktree_path"
+    else
+      open_in_gui "$worktree_path"
+      log_info "Opened in file browser (no editor configured)"
+    fi
+  fi
+
+  # Auto-launch AI tool if requested
+  if [ "$start_ai" -eq 1 ]; then
+    local ai_tool
+    ai_tool=$(cfg_default gtr.ai.default GTR_AI_DEFAULT "none" defaults.ai)
+    if [ "$ai_tool" = "none" ]; then
+      log_warn "No AI tool configured. Set with: git gtr config set gtr.ai.default claude"
+    else
+      load_ai_adapter "$ai_tool"
+      log_step "Starting $ai_tool..."
+      ai_start "$worktree_path"
+    fi
+  fi
+
+  # Show next steps only if no auto-launch flags were used
+  if [ "$open_editor" -eq 0 ] && [ "$start_ai" -eq 0 ]; then
+    echo ""
+    echo "Next steps:"
+    echo "  git gtr editor $branch_name  # Open in editor"
+    echo "  git gtr ai $branch_name      # Start AI tool"
+    echo "  cd \"\$(git gtr go $branch_name)\"  # Navigate to worktree"
+  fi
 }
 
 # Remove command
@@ -1358,6 +1399,8 @@ CORE COMMANDS (daily workflow):
          --force: allow same branch in multiple worktrees (requires --name)
          --name <suffix>: custom folder name suffix (e.g., backend, frontend)
          --yes: non-interactive mode
+         -e, --editor: open in editor after creation
+         -a, --ai: start AI tool after creation
 
   editor <branch> [--editor <name>]
          Open worktree in editor (uses gtr.editor.default or --editor)

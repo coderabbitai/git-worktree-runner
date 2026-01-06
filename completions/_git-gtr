@@ -50,7 +50,11 @@ _git-gtr() {
       '--no-fetch[Skip git fetch]' \
       '--force[Allow same branch in multiple worktrees]' \
       '--name[Custom folder name suffix]:name:' \
-      '--yes[Non-interactive mode]'
+      '--yes[Non-interactive mode]' \
+      '--editor[Open in editor after creation]' \
+      '-e[Open in editor after creation]' \
+      '--ai[Start AI tool after creation]' \
+      '-a[Start AI tool after creation]'
     return
   fi
 
