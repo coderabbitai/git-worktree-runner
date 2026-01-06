@@ -373,12 +373,6 @@ Contributions welcome! Areas where help is appreciated:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards.
 
-## Related Projects
-
-- [git-worktree](https://git-scm.com/docs/git-worktree) - Official git documentation
-- [Aider](https://aider.chat) - AI pair programming in your terminal
-- [Cursor](https://cursor.com) - AI-powered code editor
-
 ## License
 
 This project is licensed under the [Apache License 2.0](LICENSE.txt).
