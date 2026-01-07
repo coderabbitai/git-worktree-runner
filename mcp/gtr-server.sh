@@ -15,14 +15,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GTR_BIN="${SCRIPT_DIR}/../bin/gtr"
 
-# Verify dependencies
+# Verify dependencies (errors go to stdout for MCP protocol compliance)
 if ! command -v jq >/dev/null 2>&1; then
-  echo '{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"jq is required but not installed"}}' >&2
+  echo '{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"jq is required but not installed"}}'
   exit 1
 fi
 
 if [[ ! -x "$GTR_BIN" ]]; then
-  echo '{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"gtr script not found at '"$GTR_BIN"'"}}' >&2
+  echo '{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"gtr script not found at '"$GTR_BIN"'"}}'
   exit 1
 fi
 
@@ -62,22 +62,18 @@ tool_gtr_list() {
   local output
   output=$("$GTR_BIN" list --porcelain 2>&1) || true
 
-  # Convert porcelain format (path\tbranch\tstatus) to JSON array
-  local json="["
-  local first=true
+  # Convert porcelain format (path\tbranch\tstatus) to JSON array using jq
+  local json_array="[]"
   while IFS=$'\t' read -r path branch status; do
     [[ -z "$path" ]] && continue
-    $first || json+=","
-    first=false
-    # Escape values for JSON
-    local escaped_path escaped_branch escaped_status
-    escaped_path=$(printf '%s' "$path" | jq -Rs . | sed 's/^"//;s/"$//')
-    escaped_branch=$(printf '%s' "$branch" | jq -Rs . | sed 's/^"//;s/"$//')
-    escaped_status=$(printf '%s' "$status" | jq -Rs . | sed 's/^"//;s/"$//')
-    json+="{\"path\":\"$escaped_path\",\"branch\":\"$escaped_branch\",\"status\":\"$escaped_status\"}"
+    # Use jq to safely build JSON objects (handles special characters properly)
+    json_array=$(echo "$json_array" | jq -c \
+      --arg path "$path" \
+      --arg branch "$branch" \
+      --arg status "$status" \
+      '. + [{path: $path, branch: $branch, status: $status}]')
   done <<< "$output"
-  json+="]"
-  echo "$json"
+  echo "$json_array"
 }
 
 tool_gtr_new() {
@@ -176,16 +172,17 @@ tool_gtr_doctor() {
 
 tool_gtr_copy() {
   local params="$1"
-  local target from dryRun all patterns
+  local target from dryRun all
 
   target=$(echo "$params" | jq -r '.target // empty')
   from=$(echo "$params" | jq -r '.from // empty')
   dryRun=$(echo "$params" | jq -r '.dryRun // false')
   all=$(echo "$params" | jq -r '.all // false')
-  patterns=$(echo "$params" | jq -r '.patterns // []')
 
-  # Patterns is required
-  if [[ "$patterns" == "[]" ]]; then
+  # Check patterns using jq length (more robust than string comparison)
+  local patterns_count
+  patterns_count=$(echo "$params" | jq '.patterns // [] | length')
+  if [[ "$patterns_count" -eq 0 ]]; then
     echo "Error: 'patterns' parameter is required (array of glob patterns)"
     return 1
   fi
@@ -211,7 +208,7 @@ tool_gtr_copy() {
   # Parse patterns array and add each
   while IFS= read -r pattern; do
     [[ -n "$pattern" ]] && cmd+=("$pattern")
-  done < <(echo "$patterns" | jq -r '.[]')
+  done < <(echo "$params" | jq -r '.patterns // [] | .[]')
 
   "${cmd[@]}" 2>&1
 }
