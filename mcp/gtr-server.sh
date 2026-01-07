@@ -205,10 +205,12 @@ tool_gtr_copy() {
   # Add patterns after --
   cmd+=(--)
 
-  # Parse patterns array and add each
+  # Parse patterns array and add each (using here-string for Bash 3.2 compatibility)
+  local patterns_list
+  patterns_list=$(echo "$params" | jq -r '.patterns // [] | .[]')
   while IFS= read -r pattern; do
     [[ -n "$pattern" ]] && cmd+=("$pattern")
-  done < <(echo "$params" | jq -r '.patterns // [] | .[]')
+  done <<< "$patterns_list"
 
   "${cmd[@]}" 2>&1
 }
@@ -433,7 +435,7 @@ handle_message() {
           output=$(tool_gtr_rm "$tool_args") || is_error="true"
           ;;
         "gtr_doctor")
-          output=$(tool_gtr_doctor)
+          output=$(tool_gtr_doctor) || is_error="true"
           ;;
         "gtr_copy")
           output=$(tool_gtr_copy "$tool_args") || is_error="true"
