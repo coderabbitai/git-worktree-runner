@@ -20,6 +20,7 @@
 - [Configuration](#configuration)
 - [Shell Completions](#shell-completions-optional)
 - [Platform Support](#platform-support)
+- [MCP Server](#mcp-server)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -361,6 +362,42 @@ For advanced workflows including:
 - **Working with multiple repositories**
 
 See [docs/advanced-usage.md](docs/advanced-usage.md)
+
+## MCP Server
+
+git-worktree-runner includes an [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) server for AI agent integration. This allows AI assistants like Claude, ChatGPT, and Cursor to manage worktrees autonomously.
+
+**Requirements:** `jq` (`brew install jq` or `apt install jq`)
+
+**Setup (Claude Desktop):**
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "gtr": {
+      "command": "bash",
+      "args": ["/path/to/git-worktree-runner/mcp/gtr-server.sh"],
+      "cwd": "/path/to/your/repository"
+    }
+  }
+}
+```
+
+**Available Tools:**
+
+| Tool         | Description                             |
+| ------------ | --------------------------------------- |
+| `gtr_list`   | List all worktrees with status          |
+| `gtr_new`    | Create a worktree                       |
+| `gtr_go`     | Get worktree path                       |
+| `gtr_run`    | Run command in worktree                 |
+| `gtr_rm`     | Remove worktree (requires confirmation) |
+| `gtr_doctor` | Health check                            |
+| `gtr_copy`   | Copy files to worktrees                 |
+
+See [mcp/README.md](mcp/README.md) for full setup instructions and usage examples.
 
 ## Contributing
 
