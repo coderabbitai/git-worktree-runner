@@ -263,22 +263,22 @@ git gtr config list                                # List all gtr config
 
 ### `git gtr clean [options]`
 
-Remove stale worktrees or worktrees with merged PRs.
+Remove worktrees: clean up empty directories, or remove those with merged GitHub PRs.
 
 ```bash
-git gtr clean                                  # Remove empty directories and prune
-git gtr clean --merged                         # Remove worktrees with merged PRs
-git gtr clean --merged --dry-run               # Preview what would be removed
-git gtr clean --merged --yes                   # Non-interactive mode
+git gtr clean                                  # Remove empty worktree directories and prune
+git gtr clean --merged                         # Remove worktrees for merged PRs (GitHub CLI required)
+git gtr clean --merged --dry-run               # Preview which worktrees would be removed
+git gtr clean --merged --yes                   # Remove without confirmation prompts
 ```
 
 **Options:**
 
-- `--merged`: Remove worktrees whose PRs are merged on GitHub
+- `--merged`: Remove worktrees whose branches have merged PRs on GitHub (also deletes the branch)
 - `--dry-run`, `-n`: Preview changes without removing
 - `--yes`, `-y`: Non-interactive mode (skip confirmation prompts)
 
-**Note:** The `--merged` mode requires the GitHub CLI (`gh`) to be installed and authenticated. It checks GitHub PRs to identify merged branches and removes their worktrees (and deletes the branches locally).
+**Note:** The `--merged` mode requires the GitHub CLI (`gh`) to be installed and authenticated. It checks GitHub PRs (e.g., PRs merged into the default branch `main`) using the GitHub CLI to inspect merge state and removes their worktrees (and deletes the branches locally).
 
 ### Other Commands
 
