@@ -106,6 +106,9 @@ git gtr list
 
 # Remove when done
 git gtr rm my-feature
+
+# Or Remove all worktrees with merged PRs
+git gtr clean --merged
 ```
 
 ## Why gtr?
