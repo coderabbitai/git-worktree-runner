@@ -54,6 +54,13 @@
     # Available: cursor, vscode, zed, windsurf, or custom via GTR_EDITOR_CMD
     # editor = cursor
 
+    # Workspace file for VS Code/Cursor (relative path from worktree root)
+    # If set, opens the workspace file instead of the folder
+    # If not set, auto-detects *.code-workspace files in worktree root
+    # Set to "none" to disable workspace lookup entirely
+    # workspace = project.code-workspace
+    # workspace = none
+
     # Default AI tool for 'git gtr ai' command
     # Available: aider, claude, codex, gemini, or custom via GTR_AI_CMD
     # ai = claude

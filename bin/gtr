@@ -36,9 +36,18 @@ editor_can_open() {
 }
 
 editor_open() {
+  local path="$1"
+  local workspace="${2:-}"
+  local target="$path"
+
+  # Use workspace file if provided and exists
+  if [ -n "$workspace" ] && [ -f "$workspace" ]; then
+    target="$workspace"
+  fi
+
   # $GTR_EDITOR_CMD may contain arguments (e.g., "code --wait")
   # Using eval here is necessary to handle multi-word commands properly
-  eval "$GTR_EDITOR_CMD \"\$1\""
+  eval "$GTR_EDITOR_CMD \"\$target\""
 }
 
 # Globals set by load_ai_adapter: GTR_AI_CMD, GTR_AI_CMD_NAME
@@ -302,8 +311,10 @@ cmd_create() {
     editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor)
     if [ "$editor" != "none" ]; then
       load_editor_adapter "$editor"
+      local workspace_file
+      workspace_file=$(resolve_workspace_file "$worktree_path")
       log_step "Opening in $editor..."
-      editor_open "$worktree_path"
+      editor_open "$worktree_path" "$workspace_file"
     else
       open_in_gui "$worktree_path"
       log_info "Opened in file browser (no editor configured)"
@@ -701,8 +712,10 @@ cmd_editor() {
   else
     # Load editor adapter and open
     load_editor_adapter "$editor"
+    local workspace_file
+    workspace_file=$(resolve_workspace_file "$worktree_path")
     log_step "Opening in $editor..."
-    editor_open "$worktree_path"
+    editor_open "$worktree_path" "$workspace_file"
   fi
 }
 
@@ -1301,6 +1314,36 @@ cmd_config() {
       exit 1
       ;;
   esac
+}
+
+# Resolve workspace file for VS Code/Cursor editors
+# Returns the workspace file path if found, empty otherwise
+resolve_workspace_file() {
+  local worktree_path="$1"
+
+  # Check config first (gtr.editor.workspace or defaults.workspace in .gtrconfig)
+  local configured
+  configured=$(cfg_default gtr.editor.workspace "" "" defaults.workspace)
+
+  # Opt-out: "none" disables workspace lookup entirely
+  if [ "$configured" = "none" ]; then
+    return 0
+  fi
+
+  if [ -n "$configured" ]; then
+    local full_path="$worktree_path/$configured"
+    if [ -f "$full_path" ]; then
+      echo "$full_path"
+      return 0
+    fi
+  fi
+
+  # Auto-detect: find first .code-workspace in worktree root
+  local ws_file
+  ws_file=$(find "$worktree_path" -maxdepth 1 -name "*.code-workspace" -type f 2>/dev/null | head -1)
+  if [ -n "$ws_file" ]; then
+    echo "$ws_file"
+  fi
 }
 
 # Load editor adapter

@@ -443,6 +443,7 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 - `gtr.worktrees.prefix`: Folder prefix for worktrees (default: `""`)
 - `gtr.defaultBranch`: Default branch name (default: auto-detect)
 - `gtr.editor.default`: Default editor (cursor, vscode, zed, etc.)
+- `gtr.editor.workspace`: Workspace file path for VS Code/Cursor (relative to worktree root, auto-detects if not set)
 - `gtr.ai.default`: Default AI tool (aider, claude, codex, etc.)
 - `gtr.copy.include`: Multi-valued glob patterns for files to copy
 - `gtr.copy.exclude`: Multi-valued glob patterns for files to exclude
@@ -459,17 +460,18 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 
 #### .gtrconfig Key Mapping
 
-| Git Config Key         | .gtrconfig Key     |
-| ---------------------- | ------------------ |
-| `gtr.copy.include`     | `copy.include`     |
-| `gtr.copy.exclude`     | `copy.exclude`     |
-| `gtr.copy.includeDirs` | `copy.includeDirs` |
-| `gtr.copy.excludeDirs` | `copy.excludeDirs` |
-| `gtr.hook.postCreate`  | `hooks.postCreate` |
-| `gtr.hook.preRemove`   | `hooks.preRemove`  |
-| `gtr.hook.postRemove`  | `hooks.postRemove` |
-| `gtr.editor.default`   | `defaults.editor`  |
-| `gtr.ai.default`       | `defaults.ai`      |
+| Git Config Key         | .gtrconfig Key       |
+| ---------------------- | -------------------- |
+| `gtr.copy.include`     | `copy.include`       |
+| `gtr.copy.exclude`     | `copy.exclude`       |
+| `gtr.copy.includeDirs` | `copy.includeDirs`   |
+| `gtr.copy.excludeDirs` | `copy.excludeDirs`   |
+| `gtr.hook.postCreate`  | `hooks.postCreate`   |
+| `gtr.hook.preRemove`   | `hooks.preRemove`    |
+| `gtr.hook.postRemove`  | `hooks.postRemove`   |
+| `gtr.editor.default`   | `defaults.editor`    |
+| `gtr.editor.workspace` | `defaults.workspace` |
+| `gtr.ai.default`       | `defaults.ai`        |
 
 ## Environment Variables
 
