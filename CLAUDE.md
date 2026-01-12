@@ -460,18 +460,18 @@ All config keys use `gtr.*` prefix and are managed via `git config`. Configurati
 
 #### .gtrconfig Key Mapping
 
-| Git Config Key         | .gtrconfig Key       |
-| ---------------------- | -------------------- |
-| `gtr.copy.include`     | `copy.include`       |
-| `gtr.copy.exclude`     | `copy.exclude`       |
-| `gtr.copy.includeDirs` | `copy.includeDirs`   |
-| `gtr.copy.excludeDirs` | `copy.excludeDirs`   |
-| `gtr.hook.postCreate`  | `hooks.postCreate`   |
-| `gtr.hook.preRemove`   | `hooks.preRemove`    |
-| `gtr.hook.postRemove`  | `hooks.postRemove`   |
-| `gtr.editor.default`   | `defaults.editor`    |
-| `gtr.editor.workspace` | `defaults.workspace` |
-| `gtr.ai.default`       | `defaults.ai`        |
+| Git Config Key         | .gtrconfig Key     |
+| ---------------------- | ------------------ |
+| `gtr.copy.include`     | `copy.include`     |
+| `gtr.copy.exclude`     | `copy.exclude`     |
+| `gtr.copy.includeDirs` | `copy.includeDirs` |
+| `gtr.copy.excludeDirs` | `copy.excludeDirs` |
+| `gtr.hook.postCreate`  | `hooks.postCreate` |
+| `gtr.hook.preRemove`   | `hooks.preRemove`  |
+| `gtr.hook.postRemove`  | `hooks.postRemove` |
+| `gtr.editor.default`   | `defaults.editor`  |
+| `gtr.editor.workspace` | `editor.workspace` |
+| `gtr.ai.default`       | `defaults.ai`      |
 
 ## Environment Variables
 

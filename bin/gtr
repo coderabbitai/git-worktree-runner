@@ -1321,9 +1321,9 @@ cmd_config() {
 resolve_workspace_file() {
   local worktree_path="$1"
 
-  # Check config first (gtr.editor.workspace or defaults.workspace in .gtrconfig)
+  # Check config first (gtr.editor.workspace or editor.workspace in .gtrconfig)
   local configured
-  configured=$(cfg_default gtr.editor.workspace "" "" defaults.workspace)
+  configured=$(cfg_default gtr.editor.workspace "" "" editor.workspace)
 
   # Opt-out: "none" disables workspace lookup entirely
   if [ "$configured" = "none" ]; then
@@ -1334,8 +1334,9 @@ resolve_workspace_file() {
     local full_path="$worktree_path/$configured"
     if [ -f "$full_path" ]; then
       echo "$full_path"
-      return 0
     fi
+    # Explicit config set - don't fall through to auto-detect
+    return 0
   fi
 
   # Auto-detect: find first .code-workspace in worktree root

@@ -120,7 +120,7 @@ While `git worktree` is powerful, it's verbose and manual. `git gtr` adds qualit
 | Create worktree   | `git worktree add ../repo-feature feature` | `git gtr new feature`                    |
 | Create + open     | `git worktree add ... && cursor .`         | `git gtr new feature --editor`           |
 | Open in editor    | `cd ../repo-feature && cursor .`           | `git gtr editor feature`                 |
-| Start AI tool     | `cd ../repo-feature && aider`              | `git gtr ai feature`                     |
+| Start AI tool     | `cd ../repo-feature && claude`             | `git gtr ai feature`                     |
 | Copy config files | Manual copy/paste                          | Auto-copy via `gtr.copy.include`         |
 | Run build steps   | Manual `npm install && npm run build`      | Auto-run via `gtr.hook.postCreate`       |
 | List worktrees    | `git worktree list` (shows paths)          | `git gtr list` (shows branches + status) |
@@ -191,7 +191,7 @@ Start AI coding tool (uses `gtr.ai.default` or `--ai` flag).
 
 ```bash
 git gtr ai my-feature                      # Uses configured AI tool
-git gtr ai my-feature --ai aider          # Override with aider
+git gtr ai my-feature --ai codex          # Override with different tool
 git gtr ai my-feature -- --model gpt-4    # Pass arguments to tool
 git gtr ai 1                              # Use AI in main repo
 ```
@@ -296,7 +296,7 @@ All configuration is stored via `git config`. For team settings, create a `.gtrc
 # Set your editor (cursor, vscode, zed)
 git gtr config set gtr.editor.default cursor
 
-# Set your AI tool (aider, claude, codex, continue, copilot, cursor, gemini, opencode)
+# Set your AI tool (claude, codex, copilot, cursor, gemini, opencode, aider, continue)
 git gtr config set gtr.ai.default claude
 
 # Copy env files to new worktrees

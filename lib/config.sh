@@ -91,6 +91,7 @@ cfg_map_to_file_key() {
     gtr.hook.preRemove)   echo "hooks.preRemove" ;;
     gtr.hook.postRemove)  echo "hooks.postRemove" ;;
     gtr.editor.default)   echo "defaults.editor" ;;
+    gtr.editor.workspace) echo "editor.workspace" ;;
     gtr.ai.default)       echo "defaults.ai" ;;
     gtr.worktrees.dir)    echo "worktrees.dir" ;;
     gtr.worktrees.prefix) echo "worktrees.prefix" ;;
@@ -306,6 +307,7 @@ cfg_list() {
             hooks.preRemove)  mapped_key="gtr.hook.preRemove" ;;
             hooks.postRemove) mapped_key="gtr.hook.postRemove" ;;
             defaults.editor)  mapped_key="gtr.editor.default" ;;
+            editor.workspace) mapped_key="gtr.editor.workspace" ;;
             defaults.ai)      mapped_key="gtr.ai.default" ;;
             defaults.branch)  mapped_key="gtr.defaultBranch" ;;
             worktrees.dir)    mapped_key="gtr.worktrees.dir" ;;
