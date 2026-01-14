@@ -22,26 +22,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ### Added
 
-- `.code-workspace` file support for VS Code/Cursor editors (#78)
-- `--editor` and `--ai` flags to `new` command for immediate editor/AI tool launch (#72)
-- `config list` action with improved scope handling (#68)
-- `--merged` flag to `clean` command for squash-merged PR detection (#64)
-- GitHub Copilot CLI adapter (#56)
-- `preRemove` hooks to run commands before worktree removal, with abort on failure unless `--force` (#48)
-- `copy` command for syncing files to existing worktrees with `--all` and `--dry-run` options (#39)
-- `.gtrconfig` file support for declarative team configuration using gitconfig syntax (#38)
-- `.worktreeinclude` file support for pattern-based file copying (#28)
-- Install script with platform detection (#63)
+- `.code-workspace` file support for VS Code/Cursor editors ([#78](https://github.com/coderabbitai/git-worktree-runner/pull/78))
+- `--editor` and `--ai` flags to `new` command for immediate editor/AI tool launch ([#72](https://github.com/coderabbitai/git-worktree-runner/pull/72))
+- `config list` action with improved scope handling ([#68](https://github.com/coderabbitai/git-worktree-runner/pull/68))
+- `--merged` flag to `clean` command for squash-merged PR detection ([#64](https://github.com/coderabbitai/git-worktree-runner/pull/64))
+- GitHub Copilot CLI adapter ([#56](https://github.com/coderabbitai/git-worktree-runner/pull/56))
+- `preRemove` hooks to run commands before worktree removal, with abort on failure unless `--force` ([#48](https://github.com/coderabbitai/git-worktree-runner/pull/48))
+- `copy` command for syncing files to existing worktrees with `--all` and `--dry-run` options ([#39](https://github.com/coderabbitai/git-worktree-runner/pull/39))
+- `.gtrconfig` file support for declarative team configuration using gitconfig syntax ([#38](https://github.com/coderabbitai/git-worktree-runner/pull/38))
+- `.worktreeinclude` file support for pattern-based file copying ([#28](https://github.com/coderabbitai/git-worktree-runner/pull/28))
+- Install script with platform detection ([#63](https://github.com/coderabbitai/git-worktree-runner/pull/63))
 
 ### Fixed
 
-- Fish completion renamed to `git-gtr.fish` for proper git subcommand detection (#71)
-- Git error messages now surfaced on worktree removal failure (#55)
-- `rm` command now displays folder name instead of branch name for clarity (#53)
-- Branch names with `#` now sanitized to prevent shebang issues in folder names (#44)
-- Symlinks preserved when copying directories (#46)
-- `config get/unset` now handle multi-value keys correctly (#37)
-- Branch track output silenced in auto mode (#33)
+- Fish completion renamed to `git-gtr.fish` for proper git subcommand detection ([#71](https://github.com/coderabbitai/git-worktree-runner/pull/71))
+- Git error messages now surfaced on worktree removal failure ([#55](https://github.com/coderabbitai/git-worktree-runner/pull/55))
+- `rm` command now displays folder name instead of branch name for clarity ([#53](https://github.com/coderabbitai/git-worktree-runner/pull/53))
+- Branch names with `#` now sanitized to prevent shebang issues in folder names ([#44](https://github.com/coderabbitai/git-worktree-runner/pull/44))
+- Symlinks preserved when copying directories ([#46](https://github.com/coderabbitai/git-worktree-runner/pull/46))
+- `config get/unset` now handle multi-value keys correctly ([#37](https://github.com/coderabbitai/git-worktree-runner/pull/37))
+- Branch track output silenced in auto mode ([#33](https://github.com/coderabbitai/git-worktree-runner/pull/33))
 
 ## [2.0.0] - 2025-11-24
 
