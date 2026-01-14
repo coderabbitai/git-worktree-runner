@@ -18,6 +18,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ### Security
 
+## [2.1.0] - 2026-01-14
+
+### Added
+
+- `.code-workspace` file support for VS Code/Cursor editors (#78)
+- `--editor` and `--ai` flags to `new` command for immediate editor/AI tool launch (#72)
+- `config list` action with improved scope handling (#68)
+- `--merged` flag to `clean` command for squash-merged PR detection (#64)
+- GitHub Copilot CLI adapter (#56)
+- `preRemove` hooks to run commands before worktree removal, with abort on failure unless `--force` (#48)
+- `copy` command for syncing files to existing worktrees with `--all` and `--dry-run` options (#39)
+- `.gtrconfig` file support for declarative team configuration using gitconfig syntax (#38)
+- `.worktreeinclude` file support for pattern-based file copying (#28)
+- Install script with platform detection (#63)
+
+### Fixed
+
+- Fish completion renamed to `git-gtr.fish` for proper git subcommand detection (#71)
+- Git error messages now surfaced on worktree removal failure (#55)
+- `rm` command now displays folder name instead of branch name for clarity (#53)
+- Branch names with `#` now sanitized to prevent shebang issues in folder names (#44)
+- Symlinks preserved when copying directories (#46)
+- `config get/unset` now handle multi-value keys correctly (#37)
+- Branch track output silenced in auto mode (#33)
+
 ## [2.0.0] - 2025-11-24
 
 ### Added
@@ -73,6 +98,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 - Improved base directory resolution logic to distinguish `.` (repo root), `./path` (repo-internal) from other relative values (sibling directories)
 
-[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/coderabbitai/git-worktree-runner/releases/tag/v1.0.0
