@@ -299,6 +299,16 @@ create_worktree() {
     sanitized_name=$(sanitize_branch_name "$branch_name")
   fi
 
+  # Validate sanitized name is not empty or path traversal attempt
+  if [ -z "$sanitized_name" ] || [ "$sanitized_name" = "." ] || [ "$sanitized_name" = ".." ]; then
+    if [ -n "$folder_override" ]; then
+      log_error "Invalid --folder value: $folder_override"
+    else
+      log_error "Invalid worktree folder name derived from branch: $branch_name"
+    fi
+    return 1
+  fi
+
   worktree_path="$base_dir/${prefix}${sanitized_name}"
   local force_flag=""
 
