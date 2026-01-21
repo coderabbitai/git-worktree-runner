@@ -352,9 +352,24 @@ cmd_create() {
   if [ "$open_editor" -eq 0 ] && [ "$start_ai" -eq 0 ]; then
     # Determine identifier to show in next steps
     # Use custom folder when --folder specified, otherwise use original branch name
+    # Guard against collision where folder name resolves to main repo
     local next_steps_id
     if [ -n "$folder_override" ]; then
-      next_steps_id="$folder_name"
+      # Check if folder_name would resolve to main repo (collision with current branch)
+      local resolve_result
+      if resolve_result=$(resolve_target "$folder_name" "$repo_root" "$base_dir" "$prefix" 2>/dev/null); then
+        local is_main
+        is_main=$(printf "%s" "$resolve_result" | cut -f1)
+        if [ "$is_main" = "1" ]; then
+          # Collision: folder name matches current branch, use branch name instead
+          next_steps_id="$branch_name"
+        else
+          next_steps_id="$folder_name"
+        fi
+      else
+        # resolve_target failed (shouldn't happen for new worktree), fall back to folder_name
+        next_steps_id="$folder_name"
+      fi
     else
       next_steps_id="$branch_name"
     fi
