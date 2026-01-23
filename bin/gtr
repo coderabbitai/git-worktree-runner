@@ -823,7 +823,10 @@ cmd_list() {
 
     if [ -d "$base_dir" ]; then
       # Find all worktree directories and output: path<tab>branch<tab>status
+      # Exclude the base directory itself to avoid matching when prefix is empty
       find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | while IFS= read -r dir; do
+        # Skip the base directory itself
+        [ "$dir" = "$base_dir" ] && continue
         local branch status
         branch=$(current_branch "$dir")
         [ -z "$branch" ] && branch="(detached)"
@@ -851,6 +854,8 @@ cmd_list() {
   # Show worktrees sorted by branch name
   if [ -d "$base_dir" ]; then
     find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | while IFS= read -r dir; do
+      # Skip the base directory itself
+      [ "$dir" = "$base_dir" ] && continue
       local branch
       branch=$(current_branch "$dir")
       [ -z "$branch" ] && branch="(detached)"
