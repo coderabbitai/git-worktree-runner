@@ -341,25 +341,24 @@ Enable tab completion for your shell:
 **Bash:**
 
 ```bash
-echo 'source /path/to/git-worktree-runner/completions/gtr.bash' >> ~/.bashrc
+# Add to ~/.bashrc
+source <(git gtr completion bash)
 ```
 
 **Zsh:**
 
 ```bash
-mkdir -p ~/.zsh/completions
-cp /path/to/git-worktree-runner/completions/_git-gtr ~/.zsh/completions/
-# Add to ~/.zshrc: fpath=(~/.zsh/completions $fpath) && autoload -Uz compinit && compinit
-# Then: source ~/.zsh/completions/_git-gtr
+# Add to ~/.zshrc BEFORE any existing compinit call
+eval "$(git gtr completion zsh)"
 ```
 
 **Fish:**
 
 ```bash
-ln -s /path/to/git-worktree-runner/completions/git-gtr.fish ~/.config/fish/completions/
+git gtr completion fish > ~/.config/fish/completions/git-gtr.fish
 ```
 
-> For detailed setup (bash-completion requirements, troubleshooting), see [docs/configuration.md#shell-completions](docs/configuration.md#shell-completions)
+> For detailed setup and troubleshooting, see [docs/configuration.md#shell-completions](docs/configuration.md#shell-completions)
 
 ## Platform Support
 
