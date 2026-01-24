@@ -336,29 +336,18 @@ git gtr config add gtr.hook.postCreate "npm install"
 
 ## Shell Completions (Optional)
 
-Enable tab completion for your shell:
-
-**Bash:**
-
 ```bash
-# Add to ~/.bashrc
+# Bash (~/.bashrc)
 source <(git gtr completion bash)
-```
 
-**Zsh:**
-
-```bash
-# Add to ~/.zshrc BEFORE any existing compinit call
+# Zsh (~/.zshrc) - must be before compinit
 eval "$(git gtr completion zsh)"
-```
 
-**Fish:**
-
-```bash
+# Fish
 git gtr completion fish > ~/.config/fish/completions/git-gtr.fish
 ```
 
-> For detailed setup and troubleshooting, see [docs/configuration.md#shell-completions](docs/configuration.md#shell-completions)
+> For troubleshooting, see [docs/configuration.md#shell-completions](docs/configuration.md#shell-completions)
 
 ## Platform Support
 
