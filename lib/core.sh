@@ -272,11 +272,12 @@ resolve_target() {
 }
 
 # Create a new git worktree
-# Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name]
+# Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override]
 # track_mode: auto, remote, local, or none
 # skip_fetch: 0 (default, fetch) or 1 (skip)
 # force: 0 (default, check branch) or 1 (allow same branch in multiple worktrees)
 # custom_name: optional custom name suffix (e.g., "backend" creates "feature-auth-backend")
+# folder_override: optional complete folder name override (replaces default naming)
 create_worktree() {
   local base_dir="$1"
   local prefix="$2"
@@ -286,13 +287,26 @@ create_worktree() {
   local skip_fetch="${6:-0}"
   local force="${7:-0}"
   local custom_name="${8:-}"
+  local folder_override="${9:-}"
   local sanitized_name worktree_path
 
   # Construct folder name
-  if [ -n "$custom_name" ]; then
+  if [ -n "$folder_override" ]; then
+    sanitized_name=$(sanitize_branch_name "$folder_override")
+  elif [ -n "$custom_name" ]; then
     sanitized_name="$(sanitize_branch_name "$branch_name")-${custom_name}"
   else
     sanitized_name=$(sanitize_branch_name "$branch_name")
+  fi
+
+  # Validate sanitized name is not empty or path traversal attempt
+  if [ -z "$sanitized_name" ] || [ "$sanitized_name" = "." ] || [ "$sanitized_name" = ".." ]; then
+    if [ -n "$folder_override" ]; then
+      log_error "Invalid --folder value: $folder_override"
+    else
+      log_error "Invalid worktree folder name derived from branch: $branch_name"
+    fi
+    return 1
   fi
 
   worktree_path="$base_dir/${prefix}${sanitized_name}"

@@ -130,6 +130,7 @@ cmd_create() {
   local yes_mode=0
   local force=0
   local custom_name=""
+  local folder_override=""
   local open_editor=0
   local start_ai=0
 
@@ -168,6 +169,10 @@ cmd_create() {
         custom_name="$2"
         shift 2
         ;;
+      --folder)
+        folder_override="$2"
+        shift 2
+        ;;
       --editor|-e)
         open_editor=1
         shift
@@ -191,12 +196,19 @@ cmd_create() {
   done
 
   # Validate flag combinations
-  if [ "$force" -eq 1 ] && [ -z "$custom_name" ]; then
-    log_error "--force requires --name to distinguish worktrees"
+  if [ -n "$folder_override" ] && [ -n "$custom_name" ]; then
+    log_error "--folder and --name cannot be used together"
+    exit 1
+  fi
+
+  if [ "$force" -eq 1 ] && [ -z "$custom_name" ] && [ -z "$folder_override" ]; then
+    log_error "--force requires --name or --folder to distinguish worktrees"
     if [ -n "$branch_name" ]; then
       echo "Example: git gtr new $branch_name --force --name backend" >&2
+      echo "     or: git gtr new $branch_name --force --folder my-folder" >&2
     else
       echo "Example: git gtr new feature-auth --force --name backend" >&2
+      echo "     or: git gtr new feature-auth --force --folder my-folder" >&2
     fi
     exit 1
   fi
@@ -245,7 +257,9 @@ cmd_create() {
 
   # Construct folder name for display
   local folder_name
-  if [ -n "$custom_name" ]; then
+  if [ -n "$folder_override" ]; then
+    folder_name=$(sanitize_branch_name "$folder_override")
+  elif [ -n "$custom_name" ]; then
     folder_name="$(sanitize_branch_name "$branch_name")-${custom_name}"
   else
     folder_name=$(sanitize_branch_name "$branch_name")
@@ -256,7 +270,7 @@ cmd_create() {
   echo "Branch: $branch_name"
 
   # Create the worktree
-  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name"); then
+  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name" "$folder_override"); then
     exit 1
   fi
 
@@ -336,11 +350,35 @@ cmd_create() {
 
   # Show next steps only if no auto-launch flags were used
   if [ "$open_editor" -eq 0 ] && [ "$start_ai" -eq 0 ]; then
+    # Determine identifier to show in next steps
+    # Use custom folder when --folder specified, otherwise use original branch name
+    # Guard against collision where folder name resolves to main repo
+    local next_steps_id
+    if [ -n "$folder_override" ]; then
+      # Check if folder_name would resolve to main repo (collision with current branch)
+      local resolve_result
+      if resolve_result=$(resolve_target "$folder_name" "$repo_root" "$base_dir" "$prefix" 2>/dev/null); then
+        local is_main
+        is_main=$(printf "%s" "$resolve_result" | cut -f1)
+        if [ "$is_main" = "1" ]; then
+          # Collision: folder name matches current branch, use branch name instead
+          next_steps_id="$branch_name"
+        else
+          next_steps_id="$folder_name"
+        fi
+      else
+        # resolve_target failed (shouldn't happen for new worktree), fall back to folder_name
+        next_steps_id="$folder_name"
+      fi
+    else
+      next_steps_id="$branch_name"
+    fi
+
     echo ""
     echo "Next steps:"
-    echo "  git gtr editor $branch_name  # Open in editor"
-    echo "  git gtr ai $branch_name      # Start AI tool"
-    echo "  cd \"\$(git gtr go $branch_name)\"  # Navigate to worktree"
+    echo "  git gtr editor $next_steps_id  # Open in editor"
+    echo "  git gtr ai $next_steps_id      # Start AI tool"
+    echo "  cd \"\$(git gtr go $next_steps_id)\"  # Navigate to worktree"
   fi
 }
 
@@ -1445,8 +1483,9 @@ CORE COMMANDS (daily workflow):
          --track <mode>: tracking mode (auto|remote|local|none)
          --no-copy: skip file copying
          --no-fetch: skip git fetch
-         --force: allow same branch in multiple worktrees (requires --name)
+         --force: allow same branch in multiple worktrees (requires --name or --folder)
          --name <suffix>: custom folder name suffix (e.g., backend, frontend)
+         --folder <name>: custom folder name (replaces default, useful for long branches)
          --yes: non-interactive mode
          -e, --editor: open in editor after creation
          -a, --ai: start AI tool after creation

@@ -155,12 +155,13 @@ Run `git gtr help` for full documentation.
 Create a new git worktree. Folder is named after the branch.
 
 ```bash
-git gtr new my-feature                              # Creates folder: my-feature
-git gtr new hotfix --from v1.2.3                    # Create from specific ref
-git gtr new variant-1 --from-current                # Create from current branch
-git gtr new feature/auth                            # Creates folder: feature-auth
-git gtr new feature-auth --name backend --force     # Same branch, custom name
-git gtr new my-feature --name descriptive-variant   # Optional: custom name without --force
+git gtr new my-feature                                                                   # Creates folder: my-feature
+git gtr new hotfix --from v1.2.3                                                         # Create from specific ref
+git gtr new variant-1 --from-current                                                     # Create from current branch
+git gtr new feature/auth                                                                 # Creates folder: feature-auth
+git gtr new feature/implement-user-authentication-with-oauth2-integration --folder auth  # Custom folder name
+git gtr new feature-auth --name backend --force                                          # Same branch, custom name
+git gtr new my-feature --name descriptive-variant                                        # Optional: custom name without --force
 ```
 
 **Options:**
@@ -170,8 +171,9 @@ git gtr new my-feature --name descriptive-variant   # Optional: custom name with
 - `--track <mode>`: Tracking mode (auto|remote|local|none)
 - `--no-copy`: Skip file copying
 - `--no-fetch`: Skip git fetch
-- `--force`: Allow same branch in multiple worktrees (**requires --name**)
+- `--force`: Allow same branch in multiple worktrees (**requires --name or --folder**)
 - `--name <suffix>`: Custom folder name suffix (optional, required with --force)
+- `--folder <name>`: Custom folder name (replaces default, useful for long branch names)
 - `--editor`, `-e`: Open in editor after creation
 - `--ai`, `-a`: Start AI tool after creation
 - `--yes`: Non-interactive mode
