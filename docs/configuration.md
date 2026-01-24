@@ -338,6 +338,7 @@ Zsh needs to know `gtr` is a valid git subcommand before the completion system i
 ### Fish
 
 ```bash
+mkdir -p ~/.config/fish/completions
 git gtr completion fish > ~/.config/fish/completions/git-gtr.fish
 ```
 

@@ -344,6 +344,7 @@ source <(git gtr completion bash)
 eval "$(git gtr completion zsh)"
 
 # Fish
+mkdir -p ~/.config/fish/completions
 git gtr completion fish > ~/.config/fish/completions/git-gtr.fish
 ```
 
