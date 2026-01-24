@@ -44,6 +44,8 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a clean -d 'Remove stale w
 complete -f -c git -n '__fish_git_gtr_needs_command' -a doctor -d 'Health check'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a adapter -d 'List available adapters'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a config -d 'Manage configuration'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a completion -d 'Generate shell completions'
+complete -f -c git -n '__fish_git_gtr_using_command completion' -a 'bash zsh fish' -d 'Shell type'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a version -d 'Show version'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 

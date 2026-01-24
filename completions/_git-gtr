@@ -1,9 +1,19 @@
 #compdef _git-gtr git-gtr gtr
-
-# Register gtr as a git subcommand for completion
-zstyle ':completion:*:*:git:*' user-commands gtr:'Git worktree management'
-
-# Zsh completion for git gtr
+#
+# Zsh completion for git gtr (Git Worktree Runner)
+#
+# SETUP: For completions to work with `git gtr`, add this to ~/.zshrc
+# BEFORE any existing compinit call:
+#
+#   eval "$(git gtr completion zsh)"
+#
+# This registers gtr as a git subcommand and sets up the completion path.
+# Run `git gtr completion --help` for more details.
+#
+# WHY: Zsh needs to know `gtr` is a valid git subcommand BEFORE completion
+# triggers. The zstyle registration below only runs when this file is loaded,
+# but autoloading happens AFTER completion - a timing issue. The `completion`
+# command outputs the zstyle before compinit, solving this.
 
 _git-gtr() {
   # Normalize invocation so we always see: [git, gtr, <command>, ...]
@@ -29,6 +39,7 @@ _git-gtr() {
     'doctor:Health check'
     'adapter:List available adapters'
     'config:Manage configuration'
+    'completion:Generate shell completions'
     'version:Show version'
     'help:Show help'
   )
@@ -83,6 +94,10 @@ _git-gtr() {
       config)
         # Complete action or scope flags
         _values 'config action' list get set add unset --local --global --system
+        ;;
+      completion)
+        # Complete shell names
+        _values 'shell' bash zsh fish
         ;;
     esac
   # Complete subsequent arguments

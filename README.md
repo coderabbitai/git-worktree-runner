@@ -336,30 +336,19 @@ git gtr config add gtr.hook.postCreate "npm install"
 
 ## Shell Completions (Optional)
 
-Enable tab completion for your shell:
-
-**Bash:**
-
 ```bash
-echo 'source /path/to/git-worktree-runner/completions/gtr.bash' >> ~/.bashrc
+# Bash (~/.bashrc)
+source <(git gtr completion bash)
+
+# Zsh (~/.zshrc) - must be before compinit
+eval "$(git gtr completion zsh)"
+
+# Fish
+mkdir -p ~/.config/fish/completions
+git gtr completion fish > ~/.config/fish/completions/git-gtr.fish
 ```
 
-**Zsh:**
-
-```bash
-mkdir -p ~/.zsh/completions
-cp /path/to/git-worktree-runner/completions/_git-gtr ~/.zsh/completions/
-# Add to ~/.zshrc: fpath=(~/.zsh/completions $fpath) && autoload -Uz compinit && compinit
-# Then: source ~/.zsh/completions/_git-gtr
-```
-
-**Fish:**
-
-```bash
-ln -s /path/to/git-worktree-runner/completions/git-gtr.fish ~/.config/fish/completions/
-```
-
-> For detailed setup (bash-completion requirements, troubleshooting), see [docs/configuration.md#shell-completions](docs/configuration.md#shell-completions)
+> For troubleshooting, see [docs/configuration.md#shell-completions](docs/configuration.md#shell-completions)
 
 ## Platform Support
 

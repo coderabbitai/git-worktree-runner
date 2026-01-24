@@ -303,54 +303,43 @@ git gtr config add gtr.hook.postCreate "cargo build"
 
 ## Shell Completions
 
-Enable tab completion for Bash, Zsh, or Fish.
+Enable tab completion using the built-in `completion` command.
 
 ### Bash
 
-Requires `bash-completion` v2 and git completions:
+Requires `bash-completion` v2:
 
 ```bash
-# Install bash-completion first (if not already installed)
-# macOS:
+# macOS
 brew install bash-completion@2
 
-# Ubuntu/Debian:
+# Ubuntu/Debian
 sudo apt install bash-completion
 
-# Ensure git's bash completion is enabled (usually installed with git)
-# Then enable gtr completions:
-echo 'source /path/to/git-worktree-runner/completions/gtr.bash' >> ~/.bashrc
-source ~/.bashrc
+# Add to ~/.bashrc
+source <(git gtr completion bash)
 ```
 
 ### Zsh
 
-Requires git's zsh completion:
+Add to `~/.zshrc` **before** any existing `compinit` call:
 
 ```bash
-# Add completion directory to fpath and enable
-mkdir -p ~/.zsh/completions
-cp /path/to/git-worktree-runner/completions/_git-gtr ~/.zsh/completions/
-
-# Add to ~/.zshrc (if not already there):
-cat >> ~/.zshrc <<'EOF'
-# Enable completions
-fpath=(~/.zsh/completions $fpath)
-autoload -Uz compinit && compinit
-
-# Load git-gtr completions (REQUIRED - must be sourced after compinit)
-source ~/.zsh/completions/_git-gtr
-EOF
-
-# Clear completion cache and reload
-rm -f ~/.zcompdump*
-source ~/.zshrc
+eval "$(git gtr completion zsh)"
 ```
+
+<details>
+<summary>Why before compinit?</summary>
+
+Zsh needs to know `gtr` is a valid git subcommand before the completion system initializes. The `completion zsh` command outputs the required `zstyle` registration.
+
+</details>
 
 ### Fish
 
 ```bash
-ln -s /path/to/git-worktree-runner/completions/git-gtr.fish ~/.config/fish/completions/
+mkdir -p ~/.config/fish/completions
+git gtr completion fish > ~/.config/fish/completions/git-gtr.fish
 ```
 
 ---
