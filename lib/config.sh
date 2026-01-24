@@ -406,6 +406,11 @@ cfg_default() {
   local file_key="${4:-}"
   local value
 
+  # Auto-map file_key if not provided and key is a gtr.* key
+  if [ -z "$file_key" ] && [[ "$key" == gtr.* ]]; then
+    file_key=$(cfg_map_to_file_key "$key")
+  fi
+
   # 1. Try local git config first (highest priority)
   value=$(git config --local --get "$key" 2>/dev/null || true)
 
