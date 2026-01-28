@@ -173,12 +173,6 @@ rm /tmp/gtr-remove-test
 git config --unset gtr.hook.postRemove
 ```
 
-### 4.6 Cross-platform verification (if available)
-
-- [ ] Test on macOS
-- [ ] Test on Linux (Ubuntu/Fedora/Arch)
-- [ ] Test on Windows Git Bash
-
 ---
 
 ## Summary of Files to Modify
