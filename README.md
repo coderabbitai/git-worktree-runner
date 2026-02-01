@@ -230,6 +230,17 @@ git gtr rm my-feature --delete-branch --force      # Delete branch and force
 
 **Options:** `--delete-branch`, `--force`, `--yes`
 
+### `git gtr mv <old> <new> [--force]`
+
+Rename worktree directory and branch together. Aliases: `rename`
+
+```bash
+git gtr mv feature-wip feature-auth      # Rename worktree and branch
+git gtr mv old-name new-name --force     # Force rename locked worktree
+```
+
+**Note:** Only renames the local branch. Remote branch remains unchanged.
+
 ### `git gtr copy <target>... [options] [-- <pattern>...]`
 
 Copy files from main repo to existing worktree(s). Useful for syncing env files after worktree creation.
