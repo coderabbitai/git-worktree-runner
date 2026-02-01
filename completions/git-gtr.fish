@@ -35,6 +35,8 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a new -d 'Create a new wor
 complete -f -c git -n '__fish_git_gtr_needs_command' -a go -d 'Navigate to worktree'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a run -d 'Execute command in worktree'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a rm -d 'Remove worktree(s)'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a mv -d 'Rename worktree and branch'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a rename -d 'Rename worktree and branch'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a copy -d 'Copy files between worktrees'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a editor -d 'Open worktree in editor'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a ai -d 'Start AI coding tool'
@@ -66,6 +68,10 @@ complete -c git -n '__fish_git_gtr_using_command new' -s a -l ai -d 'Start AI to
 complete -c git -n '__fish_git_gtr_using_command rm' -l delete-branch -d 'Delete branch'
 complete -c git -n '__fish_git_gtr_using_command rm' -l force -d 'Force removal even if dirty'
 complete -c git -n '__fish_git_gtr_using_command rm' -l yes -d 'Non-interactive mode'
+
+# Rename command options
+complete -c git -n '__fish_git_gtr_using_command mv' -l force -d 'Force move even if locked'
+complete -c git -n '__fish_git_gtr_using_command rename' -l force -d 'Force move even if locked'
 
 # Copy command options
 complete -c git -n '__fish_git_gtr_using_command copy' -s n -l dry-run -d 'Preview without copying'
@@ -133,3 +139,5 @@ complete -f -c git -n '__fish_git_gtr_using_command copy' -a '(__gtr_worktree_br
 complete -f -c git -n '__fish_git_gtr_using_command editor' -a '(__gtr_worktree_branches)'
 complete -f -c git -n '__fish_git_gtr_using_command ai' -a '(__gtr_worktree_branches)'
 complete -f -c git -n '__fish_git_gtr_using_command rm' -a '(__gtr_worktree_branches)'
+complete -f -c git -n '__fish_git_gtr_using_command mv' -a '(__gtr_worktree_branches)'
+complete -f -c git -n '__fish_git_gtr_using_command rename' -a '(__gtr_worktree_branches)'

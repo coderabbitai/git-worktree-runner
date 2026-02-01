@@ -31,6 +31,8 @@ _git-gtr() {
     'run:Execute command in worktree'
     'copy:Copy files between worktrees'
     'rm:Remove worktree(s)'
+    'mv:Rename worktree and branch'
+    'rename:Rename worktree and branch'
     'editor:Open worktree in editor'
     'ai:Start AI coding tool'
     'ls:List all worktrees'
@@ -82,7 +84,7 @@ _git-gtr() {
   # Complete arguments to the subcommand
   elif (( CURRENT == 4 )); then
     case "$words[3]" in
-      go|run|rm|copy)
+      go|run|rm|mv|rename|copy)
         _describe 'branch names' all_options
         ;;
       editor)
@@ -114,6 +116,10 @@ _git-gtr() {
           '--delete-branch[Delete branch]' \
           '--force[Force removal even if dirty]' \
           '--yes[Non-interactive mode]'
+        ;;
+      mv|rename)
+        _arguments \
+          '--force[Force move even if locked]'
         ;;
       copy)
         _arguments \
