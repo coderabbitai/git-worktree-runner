@@ -410,8 +410,8 @@ When adding new commands or flags, update all three completion files:
 The codebase includes fallbacks for different Git versions:
 
 - **Git 2.22+**: Uses modern commands like `git branch --show-current`
-- **Git 2.5-2.21**: Falls back to `git rev-parse --abbrev-ref HEAD`
-- **Minimum**: Git 2.5+ (for basic `git worktree` support)
+- **Git 2.17-2.21**: Falls back to `git rev-parse --abbrev-ref HEAD`
+- **Minimum**: Git 2.17+ (for `git worktree move/remove` support)
 
 When using Git commands, check if fallbacks exist (search for `git branch --show-current` in `lib/core.sh`) or add them for new features.
 

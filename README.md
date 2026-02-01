@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE.txt)
 [![Bash](https://img.shields.io/badge/Bash-3.2%2B-green.svg)](https://www.gnu.org/software/bash/)
-[![Git](https://img.shields.io/badge/Git-2.5%2B-orange.svg)](https://git-scm.com/)
+[![Git](https://img.shields.io/badge/Git-2.17%2B-orange.svg)](https://git-scm.com/)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#platform-support)
 
 > A portable, cross-platform CLI for managing git worktrees with ease
@@ -142,7 +142,7 @@ While `git worktree` is powerful, it's verbose and manual. `git gtr` adds qualit
 
 ## Requirements
 
-- **Git** 2.5+ (for `git worktree` support)
+- **Git** 2.17+ (for `git worktree move/remove` support)
 - **Bash** 3.2+ (macOS ships 3.2; 4.0+ recommended for advanced features)
 
 ## Commands
@@ -369,7 +369,7 @@ git gtr completion fish > ~/.config/fish/completions/git-gtr.fish
 | **Linux**   | Full support    | Ubuntu, Fedora, Arch, etc.      |
 | **Windows** | Git Bash or WSL | Native PowerShell not supported |
 
-Requires Git 2.5+ and Bash 3.2+.
+Requires Git 2.17+ and Bash 3.2+.
 
 > For troubleshooting, platform-specific notes, and architecture details, see [docs/troubleshooting.md](docs/troubleshooting.md)
 
