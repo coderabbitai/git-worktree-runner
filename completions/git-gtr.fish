@@ -55,6 +55,7 @@ complete -c git -n '__fish_git_gtr_using_command new' -l from-current -d 'Create
 complete -c git -n '__fish_git_gtr_using_command new' -l track -d 'Track mode' -r -a 'auto remote local none'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-copy -d 'Skip file copying'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-fetch -d 'Skip git fetch'
+complete -c git -n '__fish_git_gtr_using_command new' -l no-hooks -d 'Skip post-create hooks'
 complete -c git -n '__fish_git_gtr_using_command new' -l force -d 'Allow same branch in multiple worktrees'
 complete -c git -n '__fish_git_gtr_using_command new' -l name -d 'Custom folder name suffix' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l folder -d 'Custom folder name (replaces default)' -r

@@ -130,6 +130,7 @@ cmd_create() {
   local track_mode="auto"
   local skip_copy=0
   local skip_fetch=0
+  local skip_hooks=0
   local yes_mode=0
   local force=0
   local custom_name=""
@@ -158,6 +159,10 @@ cmd_create() {
         ;;
       --no-fetch)
         skip_fetch=1
+        shift
+        ;;
+      --no-hooks)
+        skip_hooks=1
         shift
         ;;
       --yes)
@@ -313,11 +318,13 @@ cmd_create() {
     fi
   fi
 
-  # Run post-create hooks
-  run_hooks_in postCreate "$worktree_path" \
-    REPO_ROOT="$repo_root" \
-    WORKTREE_PATH="$worktree_path" \
-    BRANCH="$branch_name"
+  # Run post-create hooks (unless --no-hooks)
+  if [ "$skip_hooks" -eq 0 ]; then
+    run_hooks_in postCreate "$worktree_path" \
+      REPO_ROOT="$repo_root" \
+      WORKTREE_PATH="$worktree_path" \
+      BRANCH="$branch_name"
+  fi
 
   echo ""
   log_info "Worktree created: $worktree_path"
@@ -1548,6 +1555,7 @@ CORE COMMANDS (daily workflow):
          --track <mode>: tracking mode (auto|remote|local|none)
          --no-copy: skip file copying
          --no-fetch: skip git fetch
+         --no-hooks: skip post-create hooks
          --force: allow same branch in multiple worktrees (requires --name or --folder)
          --name <suffix>: custom folder name suffix (e.g., backend, frontend)
          --folder <name>: custom folder name (replaces default, useful for long branches)
