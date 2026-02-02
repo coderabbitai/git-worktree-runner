@@ -43,7 +43,7 @@ _git_gtr() {
             COMPREPLY=($(compgen -W "--delete-branch --force --yes" -- "$cur"))
             ;;
           mv|rename)
-            COMPREPLY=($(compgen -W "--force" -- "$cur"))
+            COMPREPLY=($(compgen -W "--force --yes" -- "$cur"))
             ;;
         esac
       fi

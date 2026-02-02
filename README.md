@@ -230,14 +230,17 @@ git gtr rm my-feature --delete-branch --force      # Delete branch and force
 
 **Options:** `--delete-branch`, `--force`, `--yes`
 
-### `git gtr mv <old> <new> [--force]`
+### `git gtr mv <old> <new> [--force] [--yes]`
 
 Rename worktree directory and branch together. Aliases: `rename`
 
 ```bash
 git gtr mv feature-wip feature-auth      # Rename worktree and branch
 git gtr mv old-name new-name --force     # Force rename locked worktree
+git gtr mv old-name new-name --yes       # Skip confirmation
 ```
+
+**Options:** `--force`, `--yes`
 
 **Note:** Only renames the local branch. Remote branch remains unchanged.
 

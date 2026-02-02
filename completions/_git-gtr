@@ -119,7 +119,8 @@ _git-gtr() {
         ;;
       mv|rename)
         _arguments \
-          '--force[Force move even if locked]'
+          '--force[Force move even if locked]' \
+          '--yes[Skip confirmation]'
         ;;
       copy)
         _arguments \

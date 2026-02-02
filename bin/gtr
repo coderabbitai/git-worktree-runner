@@ -491,12 +491,17 @@ cmd_rename() {
   local old_identifier=""
   local new_name=""
   local force=0
+  local yes_mode=0
 
   # Parse flags and arguments
   while [ $# -gt 0 ]; do
     case "$1" in
-      --force|-f)
+      --force)
         force=1
+        shift
+        ;;
+      --yes)
+        yes_mode=1
         shift
         ;;
       -*)
@@ -516,7 +521,7 @@ cmd_rename() {
 
   # Validate arguments
   if [ -z "$old_identifier" ] || [ -z "$new_name" ]; then
-    log_error "Usage: git gtr mv|rename <old> <new> [--force]"
+    log_error "Usage: git gtr mv <old> <new> [--force] [--yes]"
     exit 1
   fi
 
@@ -541,13 +546,6 @@ cmd_rename() {
   # Sanitize new name and construct new path
   local new_sanitized new_path
   new_sanitized=$(sanitize_branch_name "$new_name")
-
-  # Validate sanitized name
-  if [ -z "$new_sanitized" ] || [ "$new_sanitized" = "." ] || [ "$new_sanitized" = ".." ]; then
-    log_error "Invalid new name: $new_name"
-    exit 1
-  fi
-
   new_path="$base_dir/${prefix}${new_sanitized}"
 
   # Check if new path already exists
@@ -557,44 +555,49 @@ cmd_rename() {
   fi
 
   # Check if new branch name already exists
-  if git show-ref --verify --quiet "refs/heads/$new_name"; then
+  if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$new_name"; then
     log_error "Branch '$new_name' already exists"
     exit 1
   fi
 
-  log_step "Renaming worktree: $old_branch -> $new_name"
-  echo "Old path: $old_path"
-  echo "New path: $new_path"
+  log_step "Renaming worktree"
+  echo "Branch: $old_branch → $new_name"
+  echo "Folder: $(basename "$old_path") → ${prefix}${new_sanitized}"
+
+  # Confirm unless --yes
+  if [ "$yes_mode" -eq 0 ]; then
+    if ! prompt_yes_no "Proceed with rename?"; then
+      log_info "Cancelled"
+      exit 0
+    fi
+  fi
 
   # Rename the branch first
-  log_step "Renaming branch..."
-  if ! git branch -m "$old_branch" "$new_name"; then
+  if ! git -C "$repo_root" branch -m "$old_branch" "$new_name"; then
     log_error "Failed to rename branch"
     exit 1
   fi
 
   # Move the worktree
-  log_step "Moving worktree..."
-  local force_flag=""
+  local move_args=()
   if [ "$force" -eq 1 ]; then
-    force_flag="--force"
+    move_args+=(--force)
   fi
 
-  if ! git worktree move $force_flag "$old_path" "$new_path"; then
+  if ! git -C "$repo_root" worktree move "$old_path" "$new_path" "${move_args[@]}"; then
     # Rollback: rename branch back
-    log_warn "Failed to move worktree, rolling back branch rename..."
-    git branch -m "$new_name" "$old_branch" 2>/dev/null || true
+    log_warn "Worktree move failed, rolling back branch rename..."
+    git -C "$repo_root" branch -m "$new_name" "$old_branch" 2>/dev/null || true
     log_error "Failed to move worktree"
     exit 1
   fi
 
   echo ""
-  log_info "Worktree renamed successfully"
-  echo "Branch: $new_name"
-  echo "Path: $new_path"
+  log_info "Renamed: $old_branch → $new_name"
+  log_info "Location: $new_path"
 
   # Check if remote tracking branch exists and warn
-  if git show-ref --verify --quiet "refs/remotes/origin/$old_branch"; then
+  if git -C "$repo_root" show-ref --verify --quiet "refs/remotes/origin/$old_branch"; then
     echo ""
     log_warn "Remote branch 'origin/$old_branch' still exists"
     log_info "To update remote, run:"
@@ -1705,10 +1708,11 @@ CORE COMMANDS (daily workflow):
          --force: force removal (dirty worktree)
          --yes: skip confirmation
 
-  mv <old> <new> [--force]
+  mv <old> <new> [--force] [--yes]
          Rename worktree and its branch
          Aliases: rename
          --force: force move (locked worktree)
+         --yes: skip confirmation
          Note: Only renames local branch. Remote branch unchanged.
 
          Examples:

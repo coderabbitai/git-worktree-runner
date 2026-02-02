@@ -127,6 +127,20 @@ cd "$(./bin/gtr go test-feature)"
 ./bin/gtr run test-feature echo "Hello from worktree"
 # Expected: Outputs "Hello from worktree"
 
+# Test mv/rename command
+./bin/gtr new test-old
+./bin/gtr mv test-old test-new --yes
+./bin/gtr list
+# Expected: Shows test-new, not test-old
+./bin/gtr mv 1 something --yes
+# Expected: Error "Cannot rename main repository"
+./bin/gtr new test-conflict
+./bin/gtr mv test-new test-conflict --yes
+# Expected: Error "Branch 'test-conflict' already exists"
+./bin/gtr rename test-new test-renamed --yes
+# Expected: Works (rename alias)
+./bin/gtr rm test-renamed test-conflict
+
 # Test copy patterns with include/exclude
 git config --add gtr.copy.include "**/.env.example"
 git config --add gtr.copy.exclude "**/.env"

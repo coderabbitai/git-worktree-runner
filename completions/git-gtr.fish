@@ -71,7 +71,9 @@ complete -c git -n '__fish_git_gtr_using_command rm' -l yes -d 'Non-interactive 
 
 # Rename command options
 complete -c git -n '__fish_git_gtr_using_command mv' -l force -d 'Force move even if locked'
+complete -c git -n '__fish_git_gtr_using_command mv' -l yes -d 'Skip confirmation'
 complete -c git -n '__fish_git_gtr_using_command rename' -l force -d 'Force move even if locked'
+complete -c git -n '__fish_git_gtr_using_command rename' -l yes -d 'Skip confirmation'
 
 # Copy command options
 complete -c git -n '__fish_git_gtr_using_command copy' -s n -l dry-run -d 'Preview without copying'
