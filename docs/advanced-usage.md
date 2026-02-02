@@ -126,7 +126,7 @@ git gtr rm ci-test --yes --delete-branch
 | `--yes`           | Skip all confirmation prompts        |
 | `--no-copy`       | Skip file copying (faster)           |
 | `--no-fetch`      | Skip git fetch (use existing refs)   |
-| `--no-verify`     | Skip post-create hooks               |
+| `--no-hooks`      | Skip post-create hooks               |
 | `--delete-branch` | Delete branch when removing worktree |
 
 ---

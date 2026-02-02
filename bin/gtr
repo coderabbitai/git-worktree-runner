@@ -161,7 +161,7 @@ cmd_create() {
         skip_fetch=1
         shift
         ;;
-      --no-verify)
+      --no-hooks)
         skip_hooks=1
         shift
         ;;
@@ -318,7 +318,7 @@ cmd_create() {
     fi
   fi
 
-  # Run post-create hooks (unless --no-verify)
+  # Run post-create hooks (unless --no-hooks)
   if [ "$skip_hooks" -eq 0 ]; then
     run_hooks_in postCreate "$worktree_path" \
       REPO_ROOT="$repo_root" \
@@ -1555,7 +1555,7 @@ CORE COMMANDS (daily workflow):
          --track <mode>: tracking mode (auto|remote|local|none)
          --no-copy: skip file copying
          --no-fetch: skip git fetch
-         --no-verify: skip post-create hooks
+         --no-hooks: skip post-create hooks
          --force: allow same branch in multiple worktrees (requires --name or --folder)
          --name <suffix>: custom folder name suffix (e.g., backend, frontend)
          --folder <name>: custom folder name (replaces default, useful for long branches)

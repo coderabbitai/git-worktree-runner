@@ -186,12 +186,12 @@ git config gtr.hook.preRemove "exit 1"
 ./bin/gtr rm test-hook-fail --force
 # Expected: Removal proceeds despite hook failure
 
-# Test --no-verify flag
+# Test --no-hooks flag
 git config --add gtr.hook.postCreate "echo 'Created!' > /tmp/gtr-test"
-./bin/gtr new test-no-verify --no-verify
+./bin/gtr new test-no-hooks --no-hooks
 # Expected: /tmp/gtr-test should NOT be created
 ls /tmp/gtr-test 2>&1  # Should fail
-./bin/gtr rm test-no-verify
+./bin/gtr rm test-no-hooks
 git config --unset gtr.hook.postCreate
 ```
 
