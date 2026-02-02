@@ -171,6 +171,7 @@ git gtr new my-feature --name descriptive-variant                               
 - `--track <mode>`: Tracking mode (auto|remote|local|none)
 - `--no-copy`: Skip file copying
 - `--no-fetch`: Skip git fetch
+- `--no-hooks`: Skip post-create hooks
 - `--force`: Allow same branch in multiple worktrees (**requires --name or --folder**)
 - `--name <suffix>`: Custom folder name suffix (optional, required with --force)
 - `--folder <name>`: Custom folder name (replaces default, useful for long branch names)

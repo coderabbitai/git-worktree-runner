@@ -61,6 +61,7 @@ _git-gtr() {
       '--track[Track mode]:mode:(auto remote local none)' \
       '--no-copy[Skip file copying]' \
       '--no-fetch[Skip git fetch]' \
+      '--no-hooks[Skip post-create hooks]' \
       '--force[Allow same branch in multiple worktrees]' \
       '--name[Custom folder name suffix]:name:' \
       '--folder[Custom folder name (replaces default)]:folder:' \
