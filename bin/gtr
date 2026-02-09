@@ -1127,7 +1127,12 @@ EOF
       if [ -z "$remote_url" ]; then
         log_error "No remote URL configured for 'origin'"
       else
-        log_error "Could not detect hosting provider from remote URL: $remote_url"
+        # Sanitize URL to avoid leaking embedded credentials (e.g., https://token@host/...)
+        local safe_url="${remote_url%%@*}"
+        if [ "$safe_url" != "$remote_url" ]; then
+          safe_url="<redacted>@${remote_url#*@}"
+        fi
+        log_error "Could not detect hosting provider from remote URL: $safe_url"
         log_info "Set manually: git gtr config set gtr.provider github  (or gitlab)"
       fi
       exit 1
