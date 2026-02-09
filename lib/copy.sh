@@ -235,7 +235,8 @@ copy_directories() {
         ;;
     esac
 
-    # Find directories matching the pattern name
+    # Find directories matching the pattern
+    # Use -path for patterns with slashes (e.g., vendor/bundle), -name for basenames
     while IFS= read -r dir_path; do
       [ -z "$dir_path" ] && continue
 
@@ -362,7 +363,7 @@ EOF
         log_warn "Failed to copy directory $dir_path"
       fi
     done <<EOF
-$(find . -type d -name "$pattern" 2>/dev/null)
+$(if [[ "$pattern" == */* ]]; then find . -type d -path "./$pattern" 2>/dev/null; else find . -type d -name "$pattern" 2>/dev/null; fi)
 EOF
   done <<EOF
 $dir_patterns
