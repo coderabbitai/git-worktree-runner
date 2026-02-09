@@ -83,6 +83,13 @@ complete -c git -n '__fish_git_gtr_using_command copy' -s n -l dry-run -d 'Previ
 complete -c git -n '__fish_git_gtr_using_command copy' -s a -l all -d 'Copy to all worktrees'
 complete -c git -n '__fish_git_gtr_using_command copy' -l from -d 'Source worktree' -r
 
+# Clean command options
+complete -c git -n '__fish_git_gtr_using_command clean' -l merged -d 'Remove worktrees with merged PRs/MRs'
+complete -c git -n '__fish_git_gtr_using_command clean' -l yes -d 'Skip confirmation prompts'
+complete -c git -n '__fish_git_gtr_using_command clean' -s y -d 'Skip confirmation prompts'
+complete -c git -n '__fish_git_gtr_using_command clean' -l dry-run -d 'Show what would be removed'
+complete -c git -n '__fish_git_gtr_using_command clean' -s n -d 'Show what would be removed'
+
 # Config command
 complete -f -c git -n '__fish_git_gtr_using_command config' -a 'list get set add unset'
 
@@ -120,6 +127,7 @@ complete -f -c git -n '__fish_git_gtr_using_command config' -a "
   gtr.defaultBranch\t'Default branch'
   gtr.editor.default\t'Default editor'
   gtr.ai.default\t'Default AI tool'
+  gtr.provider\t'Hosting provider (github, gitlab)'
   gtr.copy.include\t'Files to copy'
   gtr.copy.exclude\t'Files to exclude'
   gtr.copy.includeDirs\t'Directories to copy (e.g., node_modules)'

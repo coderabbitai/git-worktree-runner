@@ -74,6 +74,17 @@ _git-gtr() {
     return
   fi
 
+  # Early handler for `clean` command
+  if (( CURRENT >= 4 )) && [[ $words[3] == clean ]]; then
+    _arguments \
+      '--merged[Remove worktrees with merged PRs/MRs]' \
+      '--yes[Skip confirmation prompts]' \
+      '-y[Skip confirmation prompts]' \
+      '--dry-run[Show what would be removed]' \
+      '-n[Show what would be removed]'
+    return
+  fi
+
   # Early handler for `list/ls` command - add --porcelain
   if (( CURRENT >= 4 )) && [[ $words[3] == (list|ls) ]]; then
     _arguments '--porcelain[Machine-readable output]'
@@ -161,7 +172,7 @@ _git-gtr() {
                 '--local[Use local git config]' \
                 '--global[Use global git config]' \
                 '--system[Use system git config]' \
-                '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove)'
+                '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.provider gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove)'
               ;;
             set|add|unset)
               # Write operations only support --local and --global
@@ -169,7 +180,7 @@ _git-gtr() {
               _arguments \
                 '--local[Use local git config]' \
                 '--global[Use global git config]' \
-                '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove)'
+                '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.provider gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove)'
               ;;
           esac
         fi
