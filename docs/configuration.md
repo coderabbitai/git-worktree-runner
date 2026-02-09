@@ -134,7 +134,7 @@ VS Code and Cursor support `.code-workspace` files for multi-root workspaces, cu
 ## AI Tool Settings
 
 ```bash
-# Default AI tool: none (or aider, claude, codex, continue, copilot, cursor, gemini, opencode)
+# Default AI tool: none (or aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode)
 gtr.ai.default = none
 ```
 
@@ -143,6 +143,7 @@ gtr.ai.default = none
 | Tool                                                                  | Install                                           | Use Case                                                 | Set as Default                               |
 | --------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------- |
 | **[Aider](https://aider.chat)**                                       | `pip install aider-chat`                          | Pair programming, edit files with AI                     | `git gtr config set gtr.ai.default aider`    |
+| **[Auggie CLI](https://www.augmentcode.com/product/CLI)**             | `npm install -g @augmentcode/auggie`              | Context-aware agentic CLI for automation and development | `git gtr config set gtr.ai.default auggie`   |
 | **[Claude Code](https://claude.com/claude-code)**                     | Install from claude.com                           | Terminal-native coding agent                             | `git gtr config set gtr.ai.default claude`   |
 | **[Codex CLI](https://github.com/openai/codex)**                      | `npm install -g @openai/codex`                    | OpenAI coding assistant                                  | `git gtr config set gtr.ai.default codex`    |
 | **[Continue](https://continue.dev)**                                  | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent                                 | `git gtr config set gtr.ai.default continue` |
