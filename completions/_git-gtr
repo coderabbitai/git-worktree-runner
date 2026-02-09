@@ -1,9 +1,19 @@
 #compdef _git-gtr git-gtr gtr
-
-# Register gtr as a git subcommand for completion
-zstyle ':completion:*:*:git:*' user-commands gtr:'Git worktree management'
-
-# Zsh completion for git gtr
+#
+# Zsh completion for git gtr (Git Worktree Runner)
+#
+# SETUP: For completions to work with `git gtr`, add this to ~/.zshrc
+# BEFORE any existing compinit call:
+#
+#   eval "$(git gtr completion zsh)"
+#
+# This registers gtr as a git subcommand and sets up the completion path.
+# Run `git gtr completion --help` for more details.
+#
+# WHY: Zsh needs to know `gtr` is a valid git subcommand BEFORE completion
+# triggers. The zstyle registration below only runs when this file is loaded,
+# but autoloading happens AFTER completion - a timing issue. The `completion`
+# command outputs the zstyle before compinit, solving this.
 
 _git-gtr() {
   # Normalize invocation so we always see: [git, gtr, <command>, ...]
@@ -21,6 +31,8 @@ _git-gtr() {
     'run:Execute command in worktree'
     'copy:Copy files between worktrees'
     'rm:Remove worktree(s)'
+    'mv:Rename worktree and branch'
+    'rename:Rename worktree and branch'
     'editor:Open worktree in editor'
     'ai:Start AI coding tool'
     'ls:List all worktrees'
@@ -29,6 +41,7 @@ _git-gtr() {
     'doctor:Health check'
     'adapter:List available adapters'
     'config:Manage configuration'
+    'completion:Generate shell completions'
     'version:Show version'
     'help:Show help'
   )
@@ -48,8 +61,10 @@ _git-gtr() {
       '--track[Track mode]:mode:(auto remote local none)' \
       '--no-copy[Skip file copying]' \
       '--no-fetch[Skip git fetch]' \
+      '--no-hooks[Skip post-create hooks]' \
       '--force[Allow same branch in multiple worktrees]' \
       '--name[Custom folder name suffix]:name:' \
+      '--folder[Custom folder name (replaces default)]:folder:' \
       '--yes[Non-interactive mode]' \
       '--editor[Open in editor after creation]' \
       '-e[Open in editor after creation]' \
@@ -70,7 +85,7 @@ _git-gtr() {
   # Complete arguments to the subcommand
   elif (( CURRENT == 4 )); then
     case "$words[3]" in
-      go|run|rm|copy)
+      go|run|rm|mv|rename|copy)
         _describe 'branch names' all_options
         ;;
       editor)
@@ -82,6 +97,10 @@ _git-gtr() {
       config)
         # Complete action or scope flags
         _values 'config action' list get set add unset --local --global --system
+        ;;
+      completion)
+        # Complete shell names
+        _values 'shell' bash zsh fish
         ;;
     esac
   # Complete subsequent arguments
@@ -98,6 +117,11 @@ _git-gtr() {
           '--delete-branch[Delete branch]' \
           '--force[Force removal even if dirty]' \
           '--yes[Non-interactive mode]'
+        ;;
+      mv|rename)
+        _arguments \
+          '--force[Force move even if locked]' \
+          '--yes[Skip confirmation]'
         ;;
       copy)
         _arguments \

@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE.txt)
 [![Bash](https://img.shields.io/badge/Bash-3.2%2B-green.svg)](https://www.gnu.org/software/bash/)
-[![Git](https://img.shields.io/badge/Git-2.5%2B-orange.svg)](https://git-scm.com/)
+[![Git](https://img.shields.io/badge/Git-2.17%2B-orange.svg)](https://git-scm.com/)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#platform-support)
 
 > A portable, cross-platform CLI for managing git worktrees with ease
@@ -69,10 +69,10 @@ sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
 **User-local (no sudo required):**
 
 ```bash
-mkdir -p ~/bin
-ln -s "$(pwd)/bin/git-gtr" ~/bin/git-gtr
-# Add to ~/.zshrc or ~/.bashrc if ~/bin is not in PATH:
-# export PATH="$HOME/bin:$PATH"
+mkdir -p ~/.local/bin
+ln -s "$(pwd)/bin/git-gtr" ~/.local/bin/git-gtr
+# Add to ~/.zshrc or ~/.bashrc if ~/.local/bin is not in PATH:
+# export PATH="$HOME/.local/bin:$PATH"
 ```
 
 </details>
@@ -142,7 +142,7 @@ While `git worktree` is powerful, it's verbose and manual. `git gtr` adds qualit
 
 ## Requirements
 
-- **Git** 2.5+ (for `git worktree` support)
+- **Git** 2.17+ (for `git worktree move/remove` support)
 - **Bash** 3.2+ (macOS ships 3.2; 4.0+ recommended for advanced features)
 
 ## Commands
@@ -155,12 +155,13 @@ Run `git gtr help` for full documentation.
 Create a new git worktree. Folder is named after the branch.
 
 ```bash
-git gtr new my-feature                              # Creates folder: my-feature
-git gtr new hotfix --from v1.2.3                    # Create from specific ref
-git gtr new variant-1 --from-current                # Create from current branch
-git gtr new feature/auth                            # Creates folder: feature-auth
-git gtr new feature-auth --name backend --force     # Same branch, custom name
-git gtr new my-feature --name descriptive-variant   # Optional: custom name without --force
+git gtr new my-feature                                                                   # Creates folder: my-feature
+git gtr new hotfix --from v1.2.3                                                         # Create from specific ref
+git gtr new variant-1 --from-current                                                     # Create from current branch
+git gtr new feature/auth                                                                 # Creates folder: feature-auth
+git gtr new feature/implement-user-authentication-with-oauth2-integration --folder auth  # Custom folder name
+git gtr new feature-auth --name backend --force                                          # Same branch, custom name
+git gtr new my-feature --name descriptive-variant                                        # Optional: custom name without --force
 ```
 
 **Options:**
@@ -170,8 +171,10 @@ git gtr new my-feature --name descriptive-variant   # Optional: custom name with
 - `--track <mode>`: Tracking mode (auto|remote|local|none)
 - `--no-copy`: Skip file copying
 - `--no-fetch`: Skip git fetch
-- `--force`: Allow same branch in multiple worktrees (**requires --name**)
+- `--no-hooks`: Skip post-create hooks
+- `--force`: Allow same branch in multiple worktrees (**requires --name or --folder**)
 - `--name <suffix>`: Custom folder name suffix (optional, required with --force)
+- `--folder <name>`: Custom folder name (replaces default, useful for long branch names)
 - `--editor`, `-e`: Open in editor after creation
 - `--ai`, `-a`: Start AI tool after creation
 - `--yes`: Non-interactive mode
@@ -227,6 +230,20 @@ git gtr rm my-feature --delete-branch --force      # Delete branch and force
 ```
 
 **Options:** `--delete-branch`, `--force`, `--yes`
+
+### `git gtr mv <old> <new> [--force] [--yes]`
+
+Rename worktree directory and branch together. Aliases: `rename`
+
+```bash
+git gtr mv feature-wip feature-auth      # Rename worktree and branch
+git gtr mv old-name new-name --force     # Force rename locked worktree
+git gtr mv old-name new-name --yes       # Skip confirmation
+```
+
+**Options:** `--force`, `--yes`
+
+**Note:** Only renames the local branch. Remote branch remains unchanged.
 
 ### `git gtr copy <target>... [options] [-- <pattern>...]`
 
@@ -334,30 +351,19 @@ git gtr config add gtr.hook.postCreate "npm install"
 
 ## Shell Completions (Optional)
 
-Enable tab completion for your shell:
-
-**Bash:**
-
 ```bash
-echo 'source /path/to/git-worktree-runner/completions/gtr.bash' >> ~/.bashrc
+# Bash (~/.bashrc)
+source <(git gtr completion bash)
+
+# Zsh (~/.zshrc) - must be before compinit
+eval "$(git gtr completion zsh)"
+
+# Fish
+mkdir -p ~/.config/fish/completions
+git gtr completion fish > ~/.config/fish/completions/git-gtr.fish
 ```
 
-**Zsh:**
-
-```bash
-mkdir -p ~/.zsh/completions
-cp /path/to/git-worktree-runner/completions/_git-gtr ~/.zsh/completions/
-# Add to ~/.zshrc: fpath=(~/.zsh/completions $fpath) && autoload -Uz compinit && compinit
-# Then: source ~/.zsh/completions/_git-gtr
-```
-
-**Fish:**
-
-```bash
-ln -s /path/to/git-worktree-runner/completions/git-gtr.fish ~/.config/fish/completions/
-```
-
-> For detailed setup (bash-completion requirements, troubleshooting), see [docs/configuration.md#shell-completions](docs/configuration.md#shell-completions)
+> For troubleshooting, see [docs/configuration.md#shell-completions](docs/configuration.md#shell-completions)
 
 ## Platform Support
 
@@ -367,7 +373,7 @@ ln -s /path/to/git-worktree-runner/completions/git-gtr.fish ~/.config/fish/compl
 | **Linux**   | Full support    | Ubuntu, Fedora, Arch, etc.      |
 | **Windows** | Git Bash or WSL | Native PowerShell not supported |
 
-Requires Git 2.5+ and Bash 3.2+.
+Requires Git 2.17+ and Bash 3.2+.
 
 > For troubleshooting, platform-specific notes, and architecture details, see [docs/troubleshooting.md](docs/troubleshooting.md)
 

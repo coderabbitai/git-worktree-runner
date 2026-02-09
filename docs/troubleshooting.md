@@ -196,11 +196,12 @@ git-worktree-runner/
 
 ### Git Versions
 
-| Version      | Support Level                         |
-| ------------ | ------------------------------------- |
-| Git 2.25+    | Recommended                           |
-| Git 2.22+    | Full support                          |
-| Git 2.5-2.21 | Basic support (some features limited) |
+| Version       | Support Level                         |
+| ------------- | ------------------------------------- |
+| Git 2.25+     | Recommended                           |
+| Git 2.22+     | Full support                          |
+| Git 2.17-2.21 | Basic support (some features limited) |
+| Git < 2.17    | Not supported                         |
 
 ### Known Limitations
 

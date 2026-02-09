@@ -35,6 +35,8 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a new -d 'Create a new wor
 complete -f -c git -n '__fish_git_gtr_needs_command' -a go -d 'Navigate to worktree'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a run -d 'Execute command in worktree'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a rm -d 'Remove worktree(s)'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a mv -d 'Rename worktree and branch'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a rename -d 'Rename worktree and branch'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a copy -d 'Copy files between worktrees'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a editor -d 'Open worktree in editor'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a ai -d 'Start AI coding tool'
@@ -44,6 +46,8 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a clean -d 'Remove stale w
 complete -f -c git -n '__fish_git_gtr_needs_command' -a doctor -d 'Health check'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a adapter -d 'List available adapters'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a config -d 'Manage configuration'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a completion -d 'Generate shell completions'
+complete -f -c git -n '__fish_git_gtr_using_command completion' -a 'bash zsh fish' -d 'Shell type'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a version -d 'Show version'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 
@@ -53,8 +57,10 @@ complete -c git -n '__fish_git_gtr_using_command new' -l from-current -d 'Create
 complete -c git -n '__fish_git_gtr_using_command new' -l track -d 'Track mode' -r -a 'auto remote local none'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-copy -d 'Skip file copying'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-fetch -d 'Skip git fetch'
+complete -c git -n '__fish_git_gtr_using_command new' -l no-hooks -d 'Skip post-create hooks'
 complete -c git -n '__fish_git_gtr_using_command new' -l force -d 'Allow same branch in multiple worktrees'
 complete -c git -n '__fish_git_gtr_using_command new' -l name -d 'Custom folder name suffix' -r
+complete -c git -n '__fish_git_gtr_using_command new' -l folder -d 'Custom folder name (replaces default)' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l yes -d 'Non-interactive mode'
 complete -c git -n '__fish_git_gtr_using_command new' -s e -l editor -d 'Open in editor after creation'
 complete -c git -n '__fish_git_gtr_using_command new' -s a -l ai -d 'Start AI tool after creation'
@@ -63,6 +69,12 @@ complete -c git -n '__fish_git_gtr_using_command new' -s a -l ai -d 'Start AI to
 complete -c git -n '__fish_git_gtr_using_command rm' -l delete-branch -d 'Delete branch'
 complete -c git -n '__fish_git_gtr_using_command rm' -l force -d 'Force removal even if dirty'
 complete -c git -n '__fish_git_gtr_using_command rm' -l yes -d 'Non-interactive mode'
+
+# Rename command options
+complete -c git -n '__fish_git_gtr_using_command mv' -l force -d 'Force move even if locked'
+complete -c git -n '__fish_git_gtr_using_command mv' -l yes -d 'Skip confirmation'
+complete -c git -n '__fish_git_gtr_using_command rename' -l force -d 'Force move even if locked'
+complete -c git -n '__fish_git_gtr_using_command rename' -l yes -d 'Skip confirmation'
 
 # Copy command options
 complete -c git -n '__fish_git_gtr_using_command copy' -s n -l dry-run -d 'Preview without copying'
@@ -130,3 +142,5 @@ complete -f -c git -n '__fish_git_gtr_using_command copy' -a '(__gtr_worktree_br
 complete -f -c git -n '__fish_git_gtr_using_command editor' -a '(__gtr_worktree_branches)'
 complete -f -c git -n '__fish_git_gtr_using_command ai' -a '(__gtr_worktree_branches)'
 complete -f -c git -n '__fish_git_gtr_using_command rm' -a '(__gtr_worktree_branches)'
+complete -f -c git -n '__fish_git_gtr_using_command mv' -a '(__gtr_worktree_branches)'
+complete -f -c git -n '__fish_git_gtr_using_command rename' -a '(__gtr_worktree_branches)'

@@ -127,6 +127,20 @@ cd "$(./bin/gtr go test-feature)"
 ./bin/gtr run test-feature echo "Hello from worktree"
 # Expected: Outputs "Hello from worktree"
 
+# Test mv/rename command
+./bin/gtr new test-old
+./bin/gtr mv test-old test-new --yes
+./bin/gtr list
+# Expected: Shows test-new, not test-old
+./bin/gtr mv 1 something --yes
+# Expected: Error "Cannot rename main repository"
+./bin/gtr new test-conflict
+./bin/gtr mv test-new test-conflict --yes
+# Expected: Error "Branch 'test-conflict' already exists"
+./bin/gtr rename test-new test-renamed --yes
+# Expected: Works (rename alias)
+./bin/gtr rm test-renamed test-conflict
+
 # Test copy patterns with include/exclude
 git config --add gtr.copy.include "**/.env.example"
 git config --add gtr.copy.exclude "**/.env"
@@ -185,6 +199,14 @@ git config gtr.hook.preRemove "exit 1"
 # Expected: Removal aborted due to hook failure
 ./bin/gtr rm test-hook-fail --force
 # Expected: Removal proceeds despite hook failure
+
+# Test --no-hooks flag
+git config --add gtr.hook.postCreate "echo 'Created!' > /tmp/gtr-test"
+./bin/gtr new test-no-hooks --no-hooks
+# Expected: /tmp/gtr-test should NOT be created
+ls /tmp/gtr-test 2>&1  # Should fail
+./bin/gtr rm test-no-hooks
+git config --unset gtr.hook.postCreate
 ```
 
 ### Debugging Bash Scripts
@@ -410,8 +432,8 @@ When adding new commands or flags, update all three completion files:
 The codebase includes fallbacks for different Git versions:
 
 - **Git 2.22+**: Uses modern commands like `git branch --show-current`
-- **Git 2.5-2.21**: Falls back to `git rev-parse --abbrev-ref HEAD`
-- **Minimum**: Git 2.5+ (for basic `git worktree` support)
+- **Git 2.17-2.21**: Falls back to `git rev-parse --abbrev-ref HEAD`
+- **Minimum**: Git 2.17+ (for `git worktree move/remove` support)
 
 When using Git commands, check if fallbacks exist (search for `git branch --show-current` in `lib/core.sh`) or add them for new features.
 

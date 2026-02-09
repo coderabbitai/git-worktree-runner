@@ -75,6 +75,9 @@ main() {
     rm)
       cmd_remove "$@"
       ;;
+    mv|rename)
+      cmd_rename "$@"
+      ;;
     go)
       cmd_go "$@"
       ;;
@@ -105,6 +108,9 @@ main() {
     config)
       cmd_config "$@"
       ;;
+    completion)
+      cmd_completion "$@"
+      ;;
     version|--version|-v)
       echo "git gtr version $GTR_VERSION"
       ;;
@@ -127,9 +133,11 @@ cmd_create() {
   local track_mode="auto"
   local skip_copy=0
   local skip_fetch=0
+  local skip_hooks=0
   local yes_mode=0
   local force=0
   local custom_name=""
+  local folder_override=""
   local open_editor=0
   local start_ai=0
 
@@ -156,6 +164,10 @@ cmd_create() {
         skip_fetch=1
         shift
         ;;
+      --no-hooks)
+        skip_hooks=1
+        shift
+        ;;
       --yes)
         yes_mode=1
         shift
@@ -166,6 +178,10 @@ cmd_create() {
         ;;
       --name)
         custom_name="$2"
+        shift 2
+        ;;
+      --folder)
+        folder_override="$2"
         shift 2
         ;;
       --editor|-e)
@@ -191,12 +207,19 @@ cmd_create() {
   done
 
   # Validate flag combinations
-  if [ "$force" -eq 1 ] && [ -z "$custom_name" ]; then
-    log_error "--force requires --name to distinguish worktrees"
+  if [ -n "$folder_override" ] && [ -n "$custom_name" ]; then
+    log_error "--folder and --name cannot be used together"
+    exit 1
+  fi
+
+  if [ "$force" -eq 1 ] && [ -z "$custom_name" ] && [ -z "$folder_override" ]; then
+    log_error "--force requires --name or --folder to distinguish worktrees"
     if [ -n "$branch_name" ]; then
       echo "Example: git gtr new $branch_name --force --name backend" >&2
+      echo "     or: git gtr new $branch_name --force --folder my-folder" >&2
     else
       echo "Example: git gtr new feature-auth --force --name backend" >&2
+      echo "     or: git gtr new feature-auth --force --folder my-folder" >&2
     fi
     exit 1
   fi
@@ -245,7 +268,9 @@ cmd_create() {
 
   # Construct folder name for display
   local folder_name
-  if [ -n "$custom_name" ]; then
+  if [ -n "$folder_override" ]; then
+    folder_name=$(sanitize_branch_name "$folder_override")
+  elif [ -n "$custom_name" ]; then
     folder_name="$(sanitize_branch_name "$branch_name")-${custom_name}"
   else
     folder_name=$(sanitize_branch_name "$branch_name")
@@ -256,7 +281,7 @@ cmd_create() {
   echo "Branch: $branch_name"
 
   # Create the worktree
-  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name"); then
+  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name" "$folder_override"); then
     exit 1
   fi
 
@@ -296,11 +321,13 @@ cmd_create() {
     fi
   fi
 
-  # Run post-create hooks
-  run_hooks_in postCreate "$worktree_path" \
-    REPO_ROOT="$repo_root" \
-    WORKTREE_PATH="$worktree_path" \
-    BRANCH="$branch_name"
+  # Run post-create hooks (unless --no-hooks)
+  if [ "$skip_hooks" -eq 0 ]; then
+    run_hooks_in postCreate "$worktree_path" \
+      REPO_ROOT="$repo_root" \
+      WORKTREE_PATH="$worktree_path" \
+      BRANCH="$branch_name"
+  fi
 
   echo ""
   log_info "Worktree created: $worktree_path"
@@ -336,11 +363,35 @@ cmd_create() {
 
   # Show next steps only if no auto-launch flags were used
   if [ "$open_editor" -eq 0 ] && [ "$start_ai" -eq 0 ]; then
+    # Determine identifier to show in next steps
+    # Use custom folder when --folder specified, otherwise use original branch name
+    # Guard against collision where folder name resolves to main repo
+    local next_steps_id
+    if [ -n "$folder_override" ]; then
+      # Check if folder_name would resolve to main repo (collision with current branch)
+      local resolve_result
+      if resolve_result=$(resolve_target "$folder_name" "$repo_root" "$base_dir" "$prefix" 2>/dev/null); then
+        local is_main
+        is_main=$(printf "%s" "$resolve_result" | cut -f1)
+        if [ "$is_main" = "1" ]; then
+          # Collision: folder name matches current branch, use branch name instead
+          next_steps_id="$branch_name"
+        else
+          next_steps_id="$folder_name"
+        fi
+      else
+        # resolve_target failed (shouldn't happen for new worktree), fall back to folder_name
+        next_steps_id="$folder_name"
+      fi
+    else
+      next_steps_id="$branch_name"
+    fi
+
     echo ""
     echo "Next steps:"
-    echo "  git gtr editor $branch_name  # Open in editor"
-    echo "  git gtr ai $branch_name      # Start AI tool"
-    echo "  cd \"\$(git gtr go $branch_name)\"  # Navigate to worktree"
+    echo "  git gtr editor $next_steps_id  # Open in editor"
+    echo "  git gtr ai $next_steps_id      # Start AI tool"
+    echo "  cd \"\$(git gtr go $next_steps_id)\"  # Navigate to worktree"
   fi
 }
 
@@ -440,6 +491,125 @@ cmd_remove() {
       WORKTREE_PATH="$worktree_path" \
       BRANCH="$branch_name"
   done
+}
+
+# Rename command (rename worktree and branch)
+cmd_rename() {
+  local old_identifier=""
+  local new_name=""
+  local force=0
+  local yes_mode=0
+
+  # Parse flags and arguments
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --force)
+        force=1
+        shift
+        ;;
+      --yes)
+        yes_mode=1
+        shift
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        if [ -z "$old_identifier" ]; then
+          old_identifier="$1"
+        elif [ -z "$new_name" ]; then
+          new_name="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  # Validate arguments
+  if [ -z "$old_identifier" ] || [ -z "$new_name" ]; then
+    log_error "Usage: git gtr mv <old> <new> [--force] [--yes]"
+    exit 1
+  fi
+
+  local repo_root base_dir prefix
+  repo_root=$(discover_repo_root) || exit 1
+  base_dir=$(resolve_base_dir "$repo_root")
+  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+  # Resolve old worktree
+  local target is_main old_path old_branch
+  target=$(resolve_target "$old_identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
+  is_main=$(echo "$target" | cut -f1)
+  old_path=$(echo "$target" | cut -f2)
+  old_branch=$(echo "$target" | cut -f3)
+
+  # Cannot rename main repository
+  if [ "$is_main" = "1" ]; then
+    log_error "Cannot rename main repository"
+    exit 1
+  fi
+
+  # Sanitize new name and construct new path
+  local new_sanitized new_path
+  new_sanitized=$(sanitize_branch_name "$new_name")
+  new_path="$base_dir/${prefix}${new_sanitized}"
+
+  # Check if new path already exists
+  if [ -d "$new_path" ]; then
+    log_error "Worktree already exists at: $new_path"
+    exit 1
+  fi
+
+  # Check if new branch name already exists
+  if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$new_name"; then
+    log_error "Branch '$new_name' already exists"
+    exit 1
+  fi
+
+  log_step "Renaming worktree"
+  echo "Branch: $old_branch → $new_name"
+  echo "Folder: $(basename "$old_path") → ${prefix}${new_sanitized}"
+
+  # Confirm unless --yes
+  if [ "$yes_mode" -eq 0 ]; then
+    if ! prompt_yes_no "Proceed with rename?"; then
+      log_info "Cancelled"
+      exit 0
+    fi
+  fi
+
+  # Rename the branch first
+  if ! git -C "$repo_root" branch -m "$old_branch" "$new_name"; then
+    log_error "Failed to rename branch"
+    exit 1
+  fi
+
+  # Move the worktree
+  local move_args=()
+  if [ "$force" -eq 1 ]; then
+    move_args+=(--force)
+  fi
+
+  if ! git -C "$repo_root" worktree move "$old_path" "$new_path" "${move_args[@]}"; then
+    # Rollback: rename branch back
+    log_warn "Worktree move failed, rolling back branch rename..."
+    git -C "$repo_root" branch -m "$new_name" "$old_branch" 2>/dev/null || true
+    log_error "Failed to move worktree"
+    exit 1
+  fi
+
+  echo ""
+  log_info "Renamed: $old_branch → $new_name"
+  log_info "Location: $new_path"
+
+  # Check if remote tracking branch exists and warn
+  if git -C "$repo_root" show-ref --verify --quiet "refs/remotes/origin/$old_branch"; then
+    echo ""
+    log_warn "Remote branch 'origin/$old_branch' still exists"
+    log_info "To update remote, run:"
+    echo "  git push origin :$old_branch $new_name"
+  fi
 }
 
 # Go command (navigate to worktree - prints path for shell integration)
@@ -823,7 +993,10 @@ cmd_list() {
 
     if [ -d "$base_dir" ]; then
       # Find all worktree directories and output: path<tab>branch<tab>status
+      # Exclude the base directory itself to avoid matching when prefix is empty
       find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | while IFS= read -r dir; do
+        # Skip the base directory itself
+        [ "$dir" = "$base_dir" ] && continue
         local branch status
         branch=$(current_branch "$dir")
         [ -z "$branch" ] && branch="(detached)"
@@ -851,6 +1024,8 @@ cmd_list() {
   # Show worktrees sorted by branch name
   if [ -d "$base_dir" ]; then
     find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | while IFS= read -r dir; do
+      # Skip the base directory itself
+      [ "$dir" = "$base_dir" ] && continue
       local branch
       branch=$(current_branch "$dir")
       [ -z "$branch" ] && branch="(detached)"
@@ -1316,6 +1491,68 @@ cmd_config() {
   esac
 }
 
+# Completion command (generate shell completions)
+cmd_completion() {
+  local shell="${1:-}"
+
+  case "$shell" in
+    bash)
+      cat "$GTR_DIR/completions/gtr.bash"
+      ;;
+    zsh)
+      # Output zstyle registration + completion loading
+      # The zstyle MUST run before compinit to register gtr as a git subcommand
+      cat <<EOF
+# git-gtr zsh completion
+# Generated by: git gtr completion zsh
+# Add to ~/.zshrc (before compinit):
+#   eval "\$(git gtr completion zsh)"
+
+# Register gtr as a git subcommand (MUST be before compinit)
+zstyle ':completion:*:*:git:*' user-commands gtr:'Git worktree management'
+
+# Add completions to fpath and initialize
+fpath=($GTR_DIR/completions \$fpath)
+
+# Note: If you already have compinit in your .zshrc, you may want to
+# source this file before your existing compinit call and remove the
+# autoload line below.
+autoload -Uz compinit && compinit -C
+EOF
+      ;;
+    fish)
+      cat "$GTR_DIR/completions/git-gtr.fish"
+      ;;
+    ""|--help|-h)
+      echo "Generate shell completions for git gtr"
+      echo ""
+      echo "Usage: git gtr completion <shell>"
+      echo ""
+      echo "Shells:"
+      echo "  bash    Generate Bash completions"
+      echo "  zsh     Generate Zsh completions"
+      echo "  fish    Generate Fish completions"
+      echo ""
+      echo "Examples:"
+      echo "  # Bash: add to ~/.bashrc"
+      echo "  source <(git gtr completion bash)"
+      echo ""
+      echo "  # Zsh: add to ~/.zshrc (BEFORE any existing compinit call)"
+      echo "  eval \"\$(git gtr completion zsh)\""
+      echo ""
+      echo "  # Fish: save to completions directory"
+      echo "  git gtr completion fish > ~/.config/fish/completions/git-gtr.fish"
+      return 0
+      ;;
+    *)
+      log_error "Unknown shell: $shell"
+      log_error "Supported shells: bash, zsh, fish"
+      log_info "Run 'git gtr completion --help' for usage"
+      return 1
+      ;;
+  esac
+}
+
 # Resolve workspace file for VS Code/Cursor editors
 # Returns the workspace file path if found, empty otherwise
 resolve_workspace_file() {
@@ -1440,8 +1677,10 @@ CORE COMMANDS (daily workflow):
          --track <mode>: tracking mode (auto|remote|local|none)
          --no-copy: skip file copying
          --no-fetch: skip git fetch
-         --force: allow same branch in multiple worktrees (requires --name)
+         --no-hooks: skip post-create hooks
+         --force: allow same branch in multiple worktrees (requires --name or --folder)
          --name <suffix>: custom folder name suffix (e.g., backend, frontend)
+         --folder <name>: custom folder name (replaces default, useful for long branches)
          --yes: non-interactive mode
          -e, --editor: open in editor after creation
          -a, --ai: start AI tool after creation
@@ -1476,6 +1715,17 @@ CORE COMMANDS (daily workflow):
          --delete-branch: also delete the branch
          --force: force removal (dirty worktree)
          --yes: skip confirmation
+
+  mv <old> <new> [--force] [--yes]
+         Rename worktree and its branch
+         Aliases: rename
+         --force: force move (locked worktree)
+         --yes: skip confirmation
+         Note: Only renames local branch. Remote branch unchanged.
+
+         Examples:
+           git gtr mv feature-wip feature-auth
+           git gtr rename old-name new-name
 
   copy <target>... [options] [-- <pattern>...]
          Copy files from main repo to worktree(s)
@@ -1519,6 +1769,10 @@ SETUP & MAINTENANCE:
          --merged: also remove worktrees with merged PRs (uses gh CLI)
          --yes, -y: skip confirmation prompts
          --dry-run, -n: show what would be removed without removing
+
+  completion <shell>
+         Generate shell completions (bash, zsh, fish)
+         Usage: eval "$(git gtr completion zsh)"
 
   version
          Show version

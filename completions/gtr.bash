@@ -22,7 +22,7 @@ _git_gtr() {
 
   # If we're completing the first argument after 'git gtr'
   if [ "$cword" -eq 2 ]; then
-    COMPREPLY=($(compgen -W "new go run copy editor ai rm ls list clean doctor adapter config help version" -- "$cur"))
+    COMPREPLY=($(compgen -W "new go run copy editor ai rm mv rename ls list clean doctor adapter config completion help version" -- "$cur"))
     return 0
   fi
 
@@ -30,7 +30,7 @@ _git_gtr() {
 
   # Commands that take branch names or '1' for main repo
   case "$cmd" in
-    go|run|editor|ai|rm)
+    go|run|editor|ai|rm|mv|rename)
       if [ "$cword" -eq 3 ]; then
         # Complete with branch names and special ID '1' for main repo
         local branches all_options
@@ -41,6 +41,9 @@ _git_gtr() {
         case "$cmd" in
           rm)
             COMPREPLY=($(compgen -W "--delete-branch --force --yes" -- "$cur"))
+            ;;
+          mv|rename)
+            COMPREPLY=($(compgen -W "--force --yes" -- "$cur"))
             ;;
         esac
       fi
@@ -59,9 +62,15 @@ _git_gtr() {
     new)
       # Complete flags
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--id --from --from-current --track --no-copy --no-fetch --force --name --yes --editor -e --ai -a" -- "$cur"))
+        COMPREPLY=($(compgen -W "--id --from --from-current --track --no-copy --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
       elif [ "$prev" = "--track" ]; then
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
+      fi
+      ;;
+    completion)
+      # Complete with shell names
+      if [ "$cword" -eq 3 ]; then
+        COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
       fi
       ;;
     config)
