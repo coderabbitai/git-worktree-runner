@@ -42,6 +42,7 @@ _git-gtr() {
     'adapter:List available adapters'
     'config:Manage configuration'
     'completion:Generate shell completions'
+    'init:Generate shell integration for cd support'
     'version:Show version'
     'help:Show help'
   )
@@ -98,7 +99,7 @@ _git-gtr() {
         # Complete action or scope flags
         _values 'config action' list get set add unset --local --global --system
         ;;
-      completion)
+      completion|init)
         # Complete shell names
         _values 'shell' bash zsh fish
         ;;

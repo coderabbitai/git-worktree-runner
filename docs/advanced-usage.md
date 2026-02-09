@@ -41,7 +41,8 @@ git gtr new pr/123
 git gtr editor pr/123
 
 # Terminal 3: Navigate to main branch (repo root)
-cd "$(git gtr go 1)"  # Special ID '1' = main repo
+gtr cd 1                  # With shell integration (git gtr init)
+cd "$(git gtr go 1)"     # Without shell integration
 ```
 
 ---
