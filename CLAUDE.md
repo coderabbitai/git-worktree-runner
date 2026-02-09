@@ -100,7 +100,7 @@ cmd_editor() → resolve_target() → load_editor_adapter() → editor_open()
 
 **`init` command**: Outputs shell functions for `gtr cd <branch>` navigation. Users add `eval "$(git gtr init bash)"` to their shell rc file.
 
-**`clean --merged`**: Removes worktrees whose PRs are merged on GitHub. Requires `gh` CLI.
+**`clean --merged`**: Removes worktrees whose PRs/MRs are merged. Auto-detects GitHub (`gh`) or GitLab (`glab`) from the `origin` remote URL. Override with `gtr.provider` config for self-hosted instances.
 
 ## Common Development Tasks
 

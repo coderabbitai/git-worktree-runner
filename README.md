@@ -108,7 +108,7 @@ git gtr list
 # Remove when done
 git gtr rm my-feature
 
-# Or remove all worktrees with merged PRs (requires gh CLI)
+# Or remove all worktrees with merged PRs/MRs (requires gh or glab CLI)
 git gtr clean --merged
 ```
 
@@ -292,22 +292,22 @@ git gtr config list                                # List all gtr config
 
 ### `git gtr clean [options]`
 
-Remove worktrees: clean up empty directories, or remove those with merged GitHub PRs.
+Remove worktrees: clean up empty directories, or remove those with merged PRs/MRs.
 
 ```bash
 git gtr clean                                  # Remove empty worktree directories and prune
-git gtr clean --merged                         # Remove worktrees for merged PRs (GitHub CLI required)
+git gtr clean --merged                         # Remove worktrees for merged PRs/MRs
 git gtr clean --merged --dry-run               # Preview which worktrees would be removed
 git gtr clean --merged --yes                   # Remove without confirmation prompts
 ```
 
 **Options:**
 
-- `--merged`: Remove worktrees whose branches have merged PRs on GitHub (also deletes the branch)
+- `--merged`: Remove worktrees whose branches have merged PRs/MRs (also deletes the branch)
 - `--dry-run`, `-n`: Preview changes without removing
 - `--yes`, `-y`: Non-interactive mode (skip confirmation prompts)
 
-**Note:** The `--merged` mode requires the GitHub CLI (`gh`) to be installed and authenticated. It checks GitHub PRs (e.g., PRs merged into the default branch `main`) using the GitHub CLI to inspect merge state and removes their worktrees (and deletes the branches locally).
+**Note:** The `--merged` mode auto-detects your hosting provider (GitHub or GitLab) from the `origin` remote URL and requires the corresponding CLI tool (`gh` or `glab`) to be installed and authenticated. For self-hosted instances, set the provider explicitly: `git gtr config set gtr.provider gitlab`.
 
 ### Other Commands
 
