@@ -98,8 +98,9 @@ git gtr ai my-feature           # Start claude
 # Run commands in worktree
 git gtr run my-feature npm test # Run tests
 
-# Navigate to worktree (alternative)
-cd "$(git gtr go my-feature)"
+# Navigate to worktree
+gtr cd my-feature               # Requires: eval "$(git gtr init bash)"
+cd "$(git gtr go my-feature)"   # Alternative without shell integration
 
 # List all worktrees
 git gtr list
@@ -206,6 +207,17 @@ Print worktree path for shell navigation.
 ```bash
 cd "$(git gtr go my-feature)"    # Navigate by branch name
 cd "$(git gtr go 1)"             # Navigate to main repo
+```
+
+**Tip:** For easier navigation, use `git gtr init` to enable `gtr cd`:
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc (one-time setup)
+eval "$(git gtr init bash)"
+
+# Then navigate with:
+gtr cd my-feature
+gtr cd 1
 ```
 
 ### `git gtr run <branch> <command...>`

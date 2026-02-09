@@ -48,6 +48,8 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a adapter -d 'List availab
 complete -f -c git -n '__fish_git_gtr_needs_command' -a config -d 'Manage configuration'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a completion -d 'Generate shell completions'
 complete -f -c git -n '__fish_git_gtr_using_command completion' -a 'bash zsh fish' -d 'Shell type'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a init -d 'Generate shell integration for cd support'
+complete -f -c git -n '__fish_git_gtr_using_command init' -a 'bash zsh fish' -d 'Shell type'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a version -d 'Show version'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 

@@ -111,6 +111,9 @@ main() {
     completion)
       cmd_completion "$@"
       ;;
+    init)
+      cmd_init "$@"
+      ;;
     version|--version|-v)
       echo "git gtr version $GTR_VERSION"
       ;;
@@ -1553,6 +1556,108 @@ EOF
   esac
 }
 
+# Init command (generate shell integration for cd support)
+cmd_init() {
+  local shell="${1:-}"
+
+  case "$shell" in
+    bash)
+      cat <<'BASH'
+# git-gtr shell integration
+# Add to ~/.bashrc:
+#   eval "$(git gtr init bash)"
+
+gtr() {
+  if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
+    shift
+    local dir
+    dir="$(command git gtr go "$@")" && cd "$dir"
+  else
+    command git gtr "$@"
+  fi
+}
+
+# Forward completions to gtr wrapper
+if type _git_gtr &>/dev/null; then
+  complete -F _git_gtr gtr
+fi
+BASH
+      ;;
+    zsh)
+      cat <<'ZSH'
+# git-gtr shell integration
+# Add to ~/.zshrc:
+#   eval "$(git gtr init zsh)"
+
+gtr() {
+  if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
+    shift
+    local dir
+    dir="$(command git gtr go "$@")" && cd "$dir"
+  else
+    command git gtr "$@"
+  fi
+}
+
+# Forward completions to gtr wrapper
+if (( $+functions[_git-gtr] )); then
+  compdef gtr=git-gtr
+fi
+ZSH
+      ;;
+    fish)
+      cat <<'FISH'
+# git-gtr shell integration
+# Add to ~/.config/fish/config.fish:
+#   git gtr init fish | source
+
+function gtr
+  if test (count $argv) -gt 0; and test "$argv[1]" = "cd"
+    set -l dir (command git gtr go $argv[2..])
+    and cd $dir
+  else
+    command git gtr $argv
+  end
+end
+
+# Forward completions to gtr wrapper
+complete -c gtr -w git-gtr
+FISH
+      ;;
+    ""|--help|-h)
+      echo "Generate shell integration for git gtr"
+      echo ""
+      echo "Usage: git gtr init <shell>"
+      echo ""
+      echo "This outputs a gtr() shell function that enables:"
+      echo "  gtr cd <branch>    Change directory to worktree"
+      echo "  gtr <command>      Passes through to git gtr"
+      echo ""
+      echo "Shells:"
+      echo "  bash    Generate Bash integration"
+      echo "  zsh     Generate Zsh integration"
+      echo "  fish    Generate Fish integration"
+      echo ""
+      echo "Examples:"
+      echo "  # Bash: add to ~/.bashrc"
+      echo "  eval \"\$(git gtr init bash)\""
+      echo ""
+      echo "  # Zsh: add to ~/.zshrc"
+      echo "  eval \"\$(git gtr init zsh)\""
+      echo ""
+      echo "  # Fish: add to ~/.config/fish/config.fish"
+      echo "  git gtr init fish | source"
+      return 0
+      ;;
+    *)
+      log_error "Unknown shell: $shell"
+      log_error "Supported shells: bash, zsh, fish"
+      log_info "Run 'git gtr init --help' for usage"
+      return 1
+      ;;
+  esac
+}
+
 # Resolve workspace file for VS Code/Cursor editors
 # Returns the workspace file path if found, empty otherwise
 resolve_workspace_file() {
@@ -1773,6 +1878,10 @@ SETUP & MAINTENANCE:
   completion <shell>
          Generate shell completions (bash, zsh, fish)
          Usage: eval "$(git gtr completion zsh)"
+
+  init <shell>
+         Generate shell integration for cd support (bash, zsh, fish)
+         Usage: eval "$(git gtr init bash)"
 
   version
          Show version
