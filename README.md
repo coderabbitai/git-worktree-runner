@@ -69,10 +69,10 @@ sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
 **User-local (no sudo required):**
 
 ```bash
-mkdir -p ~/bin
-ln -s "$(pwd)/bin/git-gtr" ~/bin/git-gtr
-# Add to ~/.zshrc or ~/.bashrc if ~/bin is not in PATH:
-# export PATH="$HOME/bin:$PATH"
+mkdir -p ~/.local/bin
+ln -s "$(pwd)/bin/git-gtr" ~/.local/bin/git-gtr
+# Add to ~/.zshrc or ~/.bashrc if ~/.local/bin is not in PATH:
+# export PATH="$HOME/.local/bin:$PATH"
 ```
 
 </details>
