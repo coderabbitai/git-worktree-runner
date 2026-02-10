@@ -96,8 +96,10 @@ cfg_map_to_file_key() {
     gtr.worktrees.dir)    echo "worktrees.dir" ;;
     gtr.worktrees.prefix) echo "worktrees.prefix" ;;
     gtr.defaultBranch)    echo "defaults.branch" ;;
-    gtr.provider)         echo "defaults.provider" ;;
-    *)                    echo "" ;;
+    gtr.provider)           echo "defaults.provider" ;;
+    gtr.symlink.include)    echo "symlink.include" ;;
+    gtr.symlink.includeDirs) echo "symlink.includeDirs" ;;
+    *)                      echo "" ;;
   esac
 }
 
@@ -312,10 +314,12 @@ cfg_list() {
             defaults.ai)      mapped_key="gtr.ai.default" ;;
             defaults.branch)  mapped_key="gtr.defaultBranch" ;;
             defaults.provider) mapped_key="gtr.provider" ;;
-            worktrees.dir)    mapped_key="gtr.worktrees.dir" ;;
-            worktrees.prefix) mapped_key="gtr.worktrees.prefix" ;;
-            gtr.*)            mapped_key="$fkey" ;;
-            *)                continue ;;  # Skip unmapped keys
+            worktrees.dir)      mapped_key="gtr.worktrees.dir" ;;
+            worktrees.prefix)   mapped_key="gtr.worktrees.prefix" ;;
+            symlink.include)    mapped_key="gtr.symlink.include" ;;
+            symlink.includeDirs) mapped_key="gtr.symlink.includeDirs" ;;
+            gtr.*)              mapped_key="$fkey" ;;
+            *)                  continue ;;  # Skip unmapped keys
           esac
           _cfg_list_add_entry ".gtrconfig" "$mapped_key" "$fvalue"
         done < <(git config -f "$config_file" --get-regexp '.' 2>/dev/null || true)

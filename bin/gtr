@@ -136,6 +136,7 @@ cmd_create() {
   local from_current=0
   local track_mode="auto"
   local skip_copy=0
+  local skip_symlink=0
   local skip_fetch=0
   local skip_hooks=0
   local yes_mode=0
@@ -162,6 +163,11 @@ cmd_create() {
         ;;
       --no-copy)
         skip_copy=1
+        skip_symlink=1
+        shift
+        ;;
+      --no-symlink)
+        skip_symlink=1
         shift
         ;;
       --no-fetch)
@@ -322,6 +328,23 @@ cmd_create() {
     if [ -n "$dir_includes" ]; then
       log_step "Copying directories..."
       copy_directories "$repo_root" "$worktree_path" "$dir_includes" "$dir_excludes"
+    fi
+  fi
+
+  # Create symlinks
+  if [ "$skip_symlink" -eq 0 ]; then
+    local sym_includes sym_dir_includes sym_excludes
+    sym_includes=$(cfg_get_all gtr.symlink.include symlink.include)
+    sym_dir_includes=$(cfg_get_all gtr.symlink.includeDirs symlink.includeDirs)
+    sym_excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
+
+    if [ -n "$sym_includes" ]; then
+      log_step "Creating file symlinks..."
+      symlink_patterns "$repo_root" "$worktree_path" "$sym_includes" "$sym_excludes"
+    fi
+    if [ -n "$sym_dir_includes" ]; then
+      log_step "Creating directory symlinks..."
+      symlink_directories "$repo_root" "$worktree_path" "$sym_dir_includes"
     fi
   fi
 
@@ -716,6 +739,7 @@ cmd_copy() {
   local patterns=""
   local all_mode=0
   local dry_run=0
+  local symlink_mode=0
 
   # Parse arguments (patterns come after -- separator, like git pathspec)
   while [ $# -gt 0 ]; do
@@ -730,6 +754,10 @@ cmd_copy() {
         ;;
       -a|--all)
         all_mode=1
+        shift
+        ;;
+      -s|--symlink)
+        symlink_mode=1
         shift
         ;;
       --)
@@ -758,7 +786,7 @@ cmd_copy() {
 
   # Validation
   if [ "$all_mode" -eq 0 ] && [ -z "$targets" ]; then
-    log_error "Usage: git gtr copy <target>... [-n] [-a] [--from <source>] [-- <pattern>...]"
+    log_error "Usage: git gtr copy <target>... [-n] [-a] [-s] [--from <source>] [-- <pattern>...]"
     exit 1
   fi
 
@@ -773,30 +801,46 @@ cmd_copy() {
   src_target=$(resolve_target "$source" "$repo_root" "$base_dir" "$prefix") || exit 1
   src_path=$(echo "$src_target" | cut -f2)
 
-  # Get patterns (flag > config)
-  if [ -z "$patterns" ]; then
-    patterns=$(cfg_get_all gtr.copy.include copy.include)
-    # Also check .worktreeinclude
-    if [ -f "$repo_root/.worktreeinclude" ]; then
-      local file_patterns
-      file_patterns=$(parse_pattern_file "$repo_root/.worktreeinclude")
-      if [ -n "$file_patterns" ]; then
-        if [ -n "$patterns" ]; then
-          patterns="$patterns"$'\n'"$file_patterns"
-        else
-          patterns="$file_patterns"
+  # Resolve includes, excludes, and dir_includes based on mode
+  local includes="" excludes="" dir_includes=""
+  excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
+
+  if [ "$symlink_mode" -eq 1 ]; then
+    if [ -n "$patterns" ]; then
+      includes="$patterns"
+    else
+      includes=$(cfg_get_all gtr.symlink.include symlink.include)
+      dir_includes=$(cfg_get_all gtr.symlink.includeDirs symlink.includeDirs)
+    fi
+
+    if [ -z "$includes" ] && [ -z "$dir_includes" ]; then
+      log_error "No symlink patterns configured. Use '-- <pattern>...' or configure gtr.symlink.include"
+      exit 1
+    fi
+  else
+    if [ -n "$patterns" ]; then
+      includes="$patterns"
+    else
+      includes=$(cfg_get_all gtr.copy.include copy.include)
+      # Also check .worktreeinclude
+      if [ -f "$repo_root/.worktreeinclude" ]; then
+        local file_patterns
+        file_patterns=$(parse_pattern_file "$repo_root/.worktreeinclude")
+        if [ -n "$file_patterns" ]; then
+          if [ -n "$includes" ]; then
+            includes="$includes"$'\n'"$file_patterns"
+          else
+            includes="$file_patterns"
+          fi
         fi
       fi
     fi
-  fi
 
-  if [ -z "$patterns" ]; then
-    log_error "No patterns specified. Use '-- <pattern>...' or configure gtr.copy.include"
-    exit 1
+    if [ -z "$includes" ]; then
+      log_error "No patterns specified. Use '-- <pattern>...' or configure gtr.copy.include"
+      exit 1
+    fi
   fi
-
-  local excludes
-  excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
 
   # Build target list for --all mode
   if [ "$all_mode" -eq 1 ]; then
@@ -808,28 +852,48 @@ cmd_copy() {
   fi
 
   # Process each target
-  local copied_any=0
+  local processed_any=0
   for target_id in $targets; do
     local dst_target dst_path dst_branch
     dst_target=$(resolve_target "$target_id" "$repo_root" "$base_dir" "$prefix") || continue
     dst_path=$(echo "$dst_target" | cut -f2)
     dst_branch=$(echo "$dst_target" | cut -f3)
 
-    # Skip if source == destination
     [ "$src_path" = "$dst_path" ] && continue
 
-    if [ "$dry_run" -eq 1 ]; then
-      log_step "[dry-run] Would copy to: $dst_branch"
-      copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true" "true"
+    local dry_arg=""
+    [ "$dry_run" -eq 1 ] && dry_arg="true"
+
+    if [ "$symlink_mode" -eq 1 ]; then
+      if [ "$dry_run" -eq 1 ]; then
+        log_step "[dry-run] Would symlink to: $dst_branch"
+      else
+        log_step "Symlinking to: $dst_branch"
+      fi
+      if [ -n "$includes" ]; then
+        symlink_patterns "$src_path" "$dst_path" "$includes" "$excludes" "$dry_arg"
+      fi
+      if [ -n "$dir_includes" ]; then
+        symlink_directories "$src_path" "$dst_path" "$dir_includes" "$dry_arg"
+      fi
     else
-      log_step "Copying to: $dst_branch"
-      copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true"
+      if [ "$dry_run" -eq 1 ]; then
+        log_step "[dry-run] Would copy to: $dst_branch"
+        copy_patterns "$src_path" "$dst_path" "$includes" "$excludes" "true" "true"
+      else
+        log_step "Copying to: $dst_branch"
+        copy_patterns "$src_path" "$dst_path" "$includes" "$excludes" "true"
+      fi
     fi
-    copied_any=1
+    processed_any=1
   done
 
-  if [ "$copied_any" -eq 0 ]; then
-    log_warn "No files copied (source and target may be the same)"
+  if [ "$processed_any" -eq 0 ]; then
+    if [ "$symlink_mode" -eq 1 ]; then
+      log_warn "No symlinks created (source and target may be the same)"
+    else
+      log_warn "No files copied (source and target may be the same)"
+    fi
   fi
 }
 
@@ -1305,6 +1369,21 @@ cmd_doctor() {
   local os
   os=$(detect_os)
   echo "[OK] Platform: $os"
+
+  # Check symlink support (relevant on Windows/MSYS2)
+  if [ "$os" = "windows" ]; then
+    local test_link="/tmp/.gtr-symlink-test-$$"
+    local test_target="/tmp/.gtr-symlink-target-$$"
+    touch "$test_target" 2>/dev/null
+    if ln -s "$test_target" "$test_link" 2>/dev/null; then
+      echo "[OK] Symlinks: supported"
+      rm -f "$test_link" "$test_target" 2>/dev/null
+    else
+      echo "[!] Symlinks: not available (enable Developer Mode or run as admin)"
+      issues=$((issues + 1))
+      rm -f "$test_target" 2>/dev/null
+    fi
+  fi
 
   # Check hosting provider
   if [ -n "$repo_root" ]; then
@@ -1815,7 +1894,8 @@ CORE COMMANDS (daily workflow):
          --from <ref>: create from specific ref
          --from-current: create from current branch (for parallel variants)
          --track <mode>: tracking mode (auto|remote|local|none)
-         --no-copy: skip file copying
+         --no-copy: skip file copying and symlinking
+         --no-symlink: skip symlink creation (keeps file copying)
          --no-fetch: skip git fetch
          --no-hooks: skip post-create hooks
          --force: allow same branch in multiple worktrees (requires --name or --folder)
@@ -1871,8 +1951,9 @@ CORE COMMANDS (daily workflow):
          Copy files from main repo to worktree(s)
          -n, --dry-run: preview without copying
          -a, --all: copy to all worktrees
+         -s, --symlink: create symlinks instead of copying (uses gtr.symlink.* config)
          --from <source>: copy from different worktree (default: main repo)
-         Patterns after -- override gtr.copy.include config
+         Patterns after -- override gtr.copy.include (or gtr.symlink.include with -s)
 
          Examples:
            git gtr copy my-feature                       # Uses configured patterns
@@ -1880,6 +1961,8 @@ CORE COMMANDS (daily workflow):
            git gtr copy my-feature -- ".env*" "*.json"   # Multiple patterns
            git gtr copy -a -- ".env*"                    # Update all worktrees
            git gtr copy my-feature -n -- "**/.env*"      # Dry-run preview
+           git gtr copy my-feature --symlink             # Create/refresh symlinks
+           git gtr copy -a --symlink --dry-run           # Preview symlinks for all
 
 ────────────────────────────────────────────────────────────────────────────────
 
@@ -1949,6 +2032,11 @@ WORKFLOW EXAMPLES:
   git gtr editor feature/user-auth --editor vscode
   git gtr ai feature/user-auth --ai aider
 
+  # Keep settings in sync across worktrees (symlinks)
+  git gtr config add gtr.symlink.includeDirs .claude
+  git gtr new my-feature                          # .claude/ symlinked automatically
+  git gtr copy my-feature --symlink               # Refresh symlinks on existing worktree
+
   # Chain commands together
   git gtr new hotfix && git gtr editor hotfix && git gtr ai hotfix
 
@@ -1988,6 +2076,11 @@ CONFIGURATION OPTIONS:
                            Use gtr.copy.excludeDirs to exclude them.
   gtr.copy.excludeDirs     Directories to exclude (multi-valued)
                            Supports glob patterns (e.g., "node_modules/.cache", "*/.npm")
+  gtr.symlink.include      Files to symlink (multi-valued, glob patterns)
+                           Symlinks stay in sync — changes reflect everywhere
+                           Example: .claude/settings.json
+  gtr.symlink.includeDirs  Directories to symlink (multi-valued)
+                           Example: .claude, .bmad
   gtr.hook.postCreate      Post-create hooks (multi-valued)
   gtr.hook.preRemove       Pre-remove hooks (multi-valued, abort on failure)
   gtr.hook.postRemove      Post-remove hooks (multi-valued)

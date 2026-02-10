@@ -55,7 +55,7 @@ _git_gtr() {
       ;;
     copy)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "-n --dry-run -a --all --from" -- "$cur"))
+        COMPREPLY=($(compgen -W "-n --dry-run -a --all -s --symlink --from" -- "$cur"))
       else
         # Complete with branch names and special ID '1' for main repo
         local branches all_options
@@ -67,7 +67,7 @@ _git_gtr() {
     new)
       # Complete flags
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--id --from --from-current --track --no-copy --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
+        COMPREPLY=($(compgen -W "--id --from --from-current --track --no-copy --no-symlink --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
       elif [ "$prev" = "--track" ]; then
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
       fi
@@ -99,7 +99,7 @@ _git_gtr() {
             if [[ "$cur" == -* ]]; then
               COMPREPLY=($(compgen -W "--local --global --system" -- "$cur"))
             else
-              COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.provider gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove" -- "$cur"))
+              COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.provider gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.symlink.include gtr.symlink.includeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove" -- "$cur"))
             fi
             ;;
           set|add|unset)
@@ -107,7 +107,7 @@ _git_gtr() {
             if [[ "$cur" == -* ]]; then
               COMPREPLY=($(compgen -W "--local --global" -- "$cur"))
             else
-              COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.provider gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove" -- "$cur"))
+              COMPREPLY=($(compgen -W "gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.provider gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.symlink.include gtr.symlink.includeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove" -- "$cur"))
             fi
             ;;
         esac
