@@ -333,6 +333,9 @@ git gtr config add gtr.copy.include "**/.env.example"
 
 # Run setup after creating worktrees
 git gtr config add gtr.hook.postCreate "npm install"
+
+# Re-source environment after gtr cd (runs in current shell)
+git gtr config add gtr.hook.postCd "source ./vars.sh"
 ```
 
 ### Team Configuration (.gtrconfig)

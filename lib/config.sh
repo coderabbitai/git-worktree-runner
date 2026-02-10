@@ -90,6 +90,7 @@ cfg_map_to_file_key() {
     gtr.hook.postCreate)  echo "hooks.postCreate" ;;
     gtr.hook.preRemove)   echo "hooks.preRemove" ;;
     gtr.hook.postRemove)  echo "hooks.postRemove" ;;
+    gtr.hook.postCd)      echo "hooks.postCd" ;;
     gtr.editor.default)   echo "defaults.editor" ;;
     gtr.editor.workspace) echo "editor.workspace" ;;
     gtr.ai.default)       echo "defaults.ai" ;;
@@ -307,6 +308,7 @@ cfg_list() {
             hooks.postCreate) mapped_key="gtr.hook.postCreate" ;;
             hooks.preRemove)  mapped_key="gtr.hook.preRemove" ;;
             hooks.postRemove) mapped_key="gtr.hook.postRemove" ;;
+            hooks.postCd)     mapped_key="gtr.hook.postCd" ;;
             defaults.editor)  mapped_key="gtr.editor.default" ;;
             editor.workspace) mapped_key="gtr.editor.workspace" ;;
             defaults.ai)      mapped_key="gtr.ai.default" ;;

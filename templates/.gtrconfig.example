@@ -49,6 +49,10 @@
     # Commands to run after removing a worktree
     # postRemove = echo "Removed worktree for branch $BRANCH"
 
+    # Commands to run after 'gtr cd' changes directory (shell integration only)
+    # Runs in the current shell (not a subshell) — can source files and set env vars
+    # postCd = source ./vars.sh
+
 [defaults]
     # Default editor for 'git gtr editor' command
     # Available: cursor, vscode, zed, windsurf, or custom via GTR_EDITOR_CMD

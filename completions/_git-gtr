@@ -172,7 +172,7 @@ _git-gtr() {
                 '--local[Use local git config]' \
                 '--global[Use global git config]' \
                 '--system[Use system git config]' \
-                '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.provider gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove)'
+                '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.provider gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd)'
               ;;
             set|add|unset)
               # Write operations only support --local and --global
@@ -180,7 +180,7 @@ _git-gtr() {
               _arguments \
                 '--local[Use local git config]' \
                 '--global[Use global git config]' \
-                '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.provider gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove)'
+                '*:config key:(gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.editor.default gtr.ai.default gtr.provider gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd)'
               ;;
           esac
         fi

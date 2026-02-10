@@ -1606,7 +1606,40 @@ gtr() {
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
     shift
     local dir
-    dir="$(command git gtr go "$@")" && cd "$dir"
+    dir="$(command git gtr go "$@")" && cd "$dir" && {
+      local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
+      _gtr_hooks=""
+      _gtr_seen=""
+      # Read from git config (local > global > system)
+      _gtr_hooks="$(git config --get-all gtr.hook.postCd 2>/dev/null)" || true
+      # Read from .gtrconfig if it exists
+      _gtr_config_file="$(git rev-parse --show-toplevel 2>/dev/null)/.gtrconfig"
+      if [ -f "$_gtr_config_file" ]; then
+        local _gtr_file_hooks
+        _gtr_file_hooks="$(git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)" || true
+        if [ -n "$_gtr_file_hooks" ]; then
+          if [ -n "$_gtr_hooks" ]; then
+            _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
+          else
+            _gtr_hooks="$_gtr_file_hooks"
+          fi
+        fi
+      fi
+      if [ -n "$_gtr_hooks" ]; then
+        # Deduplicate while preserving order
+        _gtr_seen=""
+        export WORKTREE_PATH="$dir"
+        export REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+        export BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+        while IFS= read -r _gtr_hook; do
+          [ -z "$_gtr_hook" ] && continue
+          case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
+          _gtr_seen="$_gtr_seen|$_gtr_hook|"
+          eval "$_gtr_hook" || echo "gtr: postCd hook failed: $_gtr_hook" >&2
+        done <<< "$_gtr_hooks"
+        unset WORKTREE_PATH REPO_ROOT BRANCH
+      fi
+    }
   else
     command git gtr "$@"
   fi
@@ -1628,7 +1661,40 @@ gtr() {
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
     shift
     local dir
-    dir="$(command git gtr go "$@")" && cd "$dir"
+    dir="$(command git gtr go "$@")" && cd "$dir" && {
+      local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
+      _gtr_hooks=""
+      _gtr_seen=""
+      # Read from git config (local > global > system)
+      _gtr_hooks="$(git config --get-all gtr.hook.postCd 2>/dev/null)" || true
+      # Read from .gtrconfig if it exists
+      _gtr_config_file="$(git rev-parse --show-toplevel 2>/dev/null)/.gtrconfig"
+      if [ -f "$_gtr_config_file" ]; then
+        local _gtr_file_hooks
+        _gtr_file_hooks="$(git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)" || true
+        if [ -n "$_gtr_file_hooks" ]; then
+          if [ -n "$_gtr_hooks" ]; then
+            _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
+          else
+            _gtr_hooks="$_gtr_file_hooks"
+          fi
+        fi
+      fi
+      if [ -n "$_gtr_hooks" ]; then
+        # Deduplicate while preserving order
+        _gtr_seen=""
+        export WORKTREE_PATH="$dir"
+        export REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+        export BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+        while IFS= read -r _gtr_hook; do
+          [ -z "$_gtr_hook" ] && continue
+          case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
+          _gtr_seen="$_gtr_seen|$_gtr_hook|"
+          eval "$_gtr_hook" || echo "gtr: postCd hook failed: $_gtr_hook" >&2
+        done <<< "$_gtr_hooks"
+        unset WORKTREE_PATH REPO_ROOT BRANCH
+      fi
+    }
   else
     command git gtr "$@"
   fi
@@ -1650,6 +1716,33 @@ function gtr
   if test (count $argv) -gt 0; and test "$argv[1]" = "cd"
     set -l dir (command git gtr go $argv[2..])
     and cd $dir
+    and begin
+      set -l _gtr_hooks
+      set -l _gtr_seen
+      # Read from git config (local > global > system)
+      set -l _gtr_git_hooks (git config --get-all gtr.hook.postCd 2>/dev/null)
+      # Read from .gtrconfig if it exists
+      set -l _gtr_config_file (git rev-parse --show-toplevel 2>/dev/null)"/.gtrconfig"
+      set -l _gtr_file_hooks
+      if test -f "$_gtr_config_file"
+        set _gtr_file_hooks (git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)
+      end
+      # Merge and deduplicate
+      set _gtr_hooks $_gtr_git_hooks $_gtr_file_hooks
+      if test (count $_gtr_hooks) -gt 0
+        set -lx WORKTREE_PATH "$dir"
+        set -lx REPO_ROOT (git rev-parse --show-toplevel 2>/dev/null)
+        set -lx BRANCH (git rev-parse --abbrev-ref HEAD 2>/dev/null)
+        for _gtr_hook in $_gtr_hooks
+          if test -n "$_gtr_hook"
+            if not contains -- "$_gtr_hook" $_gtr_seen
+              set -a _gtr_seen "$_gtr_hook"
+              eval "$_gtr_hook"; or echo "gtr: postCd hook failed: $_gtr_hook" >&2
+            end
+          end
+        end
+      end
+    end
   else
     command git gtr $argv
   end
@@ -1991,6 +2084,7 @@ CONFIGURATION OPTIONS:
   gtr.hook.postCreate      Post-create hooks (multi-valued)
   gtr.hook.preRemove       Pre-remove hooks (multi-valued, abort on failure)
   gtr.hook.postRemove      Post-remove hooks (multi-valued)
+  gtr.hook.postCd          Post-cd hooks (multi-valued, shell integration only)
 
 ────────────────────────────────────────────────────────────────────────────────
 
