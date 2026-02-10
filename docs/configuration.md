@@ -307,7 +307,7 @@ git gtr config add gtr.hook.postCd "source ./vars.sh"
 | `postCd`     | After `gtr cd` changes directory | Re-source environment, update shell context |
 
 > **Note:** Pre-remove hooks abort removal on failure. Use `--force` to skip failed hooks.
-
+>
 > **Note:** `postCd` hooks run in the **current shell** (not a subshell) so they can modify environment variables. They only run via `gtr cd` (shell integration), not `git gtr go`. Failures warn but don't undo the `cd`.
 
 **Environment variables available in hooks:**
