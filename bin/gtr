@@ -27,6 +27,7 @@ resolve_script_dir() {
 . "$GTR_DIR/lib/core.sh"
 . "$GTR_DIR/lib/copy.sh"
 . "$GTR_DIR/lib/hooks.sh"
+. "$GTR_DIR/lib/provider.sh"
 
 # Generic adapter functions (used when no explicit adapter file exists)
 # These will be overridden if an adapter file is sourced
@@ -110,6 +111,9 @@ main() {
       ;;
     completion)
       cmd_completion "$@"
+      ;;
+    init)
+      cmd_init "$@"
       ;;
     version|--version|-v)
       echo "git gtr version $GTR_VERSION"
@@ -1110,22 +1114,32 @@ EOF
     log_info "Cleanup complete (no empty directories found)"
   fi
 
-  # --merged mode: remove worktrees with merged PRs (handles squash merges)
+  # --merged mode: remove worktrees with merged PRs/MRs (handles squash merges)
   if [ "$merged_mode" -eq 1 ]; then
-    log_step "Checking for worktrees with merged PRs..."
+    log_step "Checking for worktrees with merged PRs/MRs..."
 
-    # Ensure gh CLI is available
-    if ! command -v gh >/dev/null 2>&1; then
-      log_error "GitHub CLI (gh) not found. Install from: https://cli.github.com/"
+    # Detect hosting provider (GitHub, GitLab, etc.)
+    local provider
+    provider=$(detect_provider) || true
+    if [ -z "$provider" ]; then
+      local remote_url
+      remote_url=$(git remote get-url origin 2>/dev/null || true)
+      if [ -z "$remote_url" ]; then
+        log_error "No remote URL configured for 'origin'"
+      else
+        # Sanitize URL to avoid leaking embedded credentials (e.g., https://token@host/...)
+        local safe_url="${remote_url%%@*}"
+        if [ "$safe_url" != "$remote_url" ]; then
+          safe_url="<redacted>@${remote_url#*@}"
+        fi
+        log_error "Could not detect hosting provider from remote URL: $safe_url"
+        log_info "Set manually: git gtr config set gtr.provider github  (or gitlab)"
+      fi
       exit 1
     fi
 
-    # Ensure gh is authenticated and this is a GitHub repository
-    if ! gh repo view >/dev/null 2>&1; then
-      log_error "Not authenticated with GitHub or not a GitHub repository"
-      log_info "Run: gh auth login"
-      exit 1
-    fi
+    # Ensure provider CLI is available and authenticated
+    ensure_provider_cli "$provider" || exit 1
 
     # Fetch latest from origin
     log_step "Fetching from origin..."
@@ -1171,11 +1185,8 @@ EOF
         continue
       fi
 
-      # Check if branch has a merged PR on GitHub
-      local pr_state
-      pr_state=$(gh pr list --head "$branch" --state merged --json state --jq '.[0].state' 2>/dev/null || true)
-
-      if [ "$pr_state" = "MERGED" ]; then
+      # Check if branch has a merged PR/MR
+      if check_branch_merged "$provider" "$branch"; then
         if [ "$dry_run" -eq 1 ]; then
           log_info "[dry-run] Would remove: $branch ($dir)"
           removed=$((removed + 1))
@@ -1294,6 +1305,33 @@ cmd_doctor() {
   local os
   os=$(detect_os)
   echo "[OK] Platform: $os"
+
+  # Check hosting provider
+  if [ -n "$repo_root" ]; then
+    local provider
+    provider=$(detect_provider 2>/dev/null)
+    if [ -n "$provider" ]; then
+      echo "[OK] Provider: $provider"
+      case "$provider" in
+        github)
+          if command -v gh >/dev/null 2>&1; then
+            echo "[OK] GitHub CLI: $(gh --version 2>/dev/null | head -1)"
+          else
+            echo "[!] GitHub CLI: not found (needed for: clean --merged)"
+          fi
+          ;;
+        gitlab)
+          if command -v glab >/dev/null 2>&1; then
+            echo "[OK] GitLab CLI: $(glab --version 2>/dev/null | head -1)"
+          else
+            echo "[!] GitLab CLI: not found (needed for: clean --merged)"
+          fi
+          ;;
+      esac
+    else
+      echo "[i] Provider: unknown (set gtr.provider for clean --merged)"
+    fi
+  fi
 
   echo ""
   if [ "$issues" -eq 0 ]; then
@@ -1553,6 +1591,108 @@ EOF
   esac
 }
 
+# Init command (generate shell integration for cd support)
+cmd_init() {
+  local shell="${1:-}"
+
+  case "$shell" in
+    bash)
+      cat <<'BASH'
+# git-gtr shell integration
+# Add to ~/.bashrc:
+#   eval "$(git gtr init bash)"
+
+gtr() {
+  if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
+    shift
+    local dir
+    dir="$(command git gtr go "$@")" && cd "$dir"
+  else
+    command git gtr "$@"
+  fi
+}
+
+# Forward completions to gtr wrapper
+if type _git_gtr &>/dev/null; then
+  complete -F _git_gtr gtr
+fi
+BASH
+      ;;
+    zsh)
+      cat <<'ZSH'
+# git-gtr shell integration
+# Add to ~/.zshrc:
+#   eval "$(git gtr init zsh)"
+
+gtr() {
+  if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
+    shift
+    local dir
+    dir="$(command git gtr go "$@")" && cd "$dir"
+  else
+    command git gtr "$@"
+  fi
+}
+
+# Forward completions to gtr wrapper
+if (( $+functions[_git-gtr] )); then
+  compdef gtr=git-gtr
+fi
+ZSH
+      ;;
+    fish)
+      cat <<'FISH'
+# git-gtr shell integration
+# Add to ~/.config/fish/config.fish:
+#   git gtr init fish | source
+
+function gtr
+  if test (count $argv) -gt 0; and test "$argv[1]" = "cd"
+    set -l dir (command git gtr go $argv[2..])
+    and cd $dir
+  else
+    command git gtr $argv
+  end
+end
+
+# Forward completions to gtr wrapper
+complete -c gtr -w git-gtr
+FISH
+      ;;
+    ""|--help|-h)
+      echo "Generate shell integration for git gtr"
+      echo ""
+      echo "Usage: git gtr init <shell>"
+      echo ""
+      echo "This outputs a gtr() shell function that enables:"
+      echo "  gtr cd <branch>    Change directory to worktree"
+      echo "  gtr <command>      Passes through to git gtr"
+      echo ""
+      echo "Shells:"
+      echo "  bash    Generate Bash integration"
+      echo "  zsh     Generate Zsh integration"
+      echo "  fish    Generate Fish integration"
+      echo ""
+      echo "Examples:"
+      echo "  # Bash: add to ~/.bashrc"
+      echo "  eval \"\$(git gtr init bash)\""
+      echo ""
+      echo "  # Zsh: add to ~/.zshrc"
+      echo "  eval \"\$(git gtr init zsh)\""
+      echo ""
+      echo "  # Fish: add to ~/.config/fish/config.fish"
+      echo "  git gtr init fish | source"
+      return 0
+      ;;
+    *)
+      log_error "Unknown shell: $shell"
+      log_error "Supported shells: bash, zsh, fish"
+      log_info "Run 'git gtr init --help' for usage"
+      return 1
+      ;;
+  esac
+}
+
 # Resolve workspace file for VS Code/Cursor editors
 # Returns the workspace file path if found, empty otherwise
 resolve_workspace_file() {
@@ -1629,7 +1769,7 @@ load_ai_adapter() {
 
   if ! command -v "$cmd_name" >/dev/null 2>&1; then
     log_error "AI tool '$ai_tool' not found"
-    log_info "Built-in adapters: aider, claude, codex, continue, copilot, cursor, gemini, opencode"
+    log_info "Built-in adapters: aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode"
     log_info "Or use any AI tool command available in your PATH (e.g., bunx, gpt)"
     exit 1
   fi
@@ -1694,7 +1834,7 @@ CORE COMMANDS (daily workflow):
          Special: use '1' to open repo root
 
   go <branch>
-         Navigate to worktree (prints path for: cd "$(git gtr go my-feature)")
+         Print worktree path (tip: use 'gtr cd <branch>' with shell integration)
          Special: use '1' for repo root
 
   run <branch> <command...>
@@ -1766,13 +1906,19 @@ SETUP & MAINTENANCE:
 
   clean [options]
          Remove stale/prunable worktrees and empty directories
-         --merged: also remove worktrees with merged PRs (uses gh CLI)
+         --merged: also remove worktrees with merged PRs/MRs
+                   Auto-detects GitHub (gh) or GitLab (glab) from remote URL
+                   Override: git gtr config set gtr.provider gitlab
          --yes, -y: skip confirmation prompts
          --dry-run, -n: show what would be removed without removing
 
   completion <shell>
          Generate shell completions (bash, zsh, fish)
          Usage: eval "$(git gtr completion zsh)"
+
+  init <shell>
+         Generate shell integration for cd support (bash, zsh, fish)
+         Usage: eval "$(git gtr init bash)"
 
   version
          Show version
@@ -1796,7 +1942,8 @@ WORKFLOW EXAMPLES:
   git gtr run feature/user-auth npm run dev   # Start dev server
 
   # Navigate to worktree directory
-  cd "$(git gtr go feature/user-auth)"
+  gtr cd feature/user-auth                  # With shell integration (git gtr init)
+  cd "$(git gtr go feature/user-auth)"      # Without shell integration
 
   # Override defaults with flags
   git gtr editor feature/user-auth --editor vscode
@@ -1831,7 +1978,7 @@ CONFIGURATION OPTIONS:
   gtr.editor.workspace     Workspace file for VS Code/Cursor
                            (relative path, auto-detects, or "none")
   gtr.ai.default           Default AI tool
-                           Options: aider, claude, codex, continue,
+                           Options: aider, auggie, claude, codex, continue,
                            copilot, cursor, gemini, opencode, none
   gtr.copy.include         Files to copy (multi-valued)
   gtr.copy.exclude         Files to exclude (multi-valued)

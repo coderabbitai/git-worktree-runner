@@ -11,6 +11,7 @@
 - [Configuration Sources](#configuration-sources)
 - [Team Configuration (.gtrconfig)](#team-configuration-gtrconfig)
 - [Worktree Settings](#worktree-settings)
+- [Provider Settings](#provider-settings)
 - [Editor Settings](#editor-settings)
 - [AI Tool Settings](#ai-tool-settings)
 - [File Copying](#file-copying)
@@ -101,6 +102,34 @@ echo "/.worktrees/" >> .gitignore
 
 ---
 
+## Provider Settings
+
+The `clean --merged` command auto-detects your hosting provider from the `origin` remote URL (`github.com` → GitHub, `gitlab.com` → GitLab). For self-hosted instances, set the provider explicitly:
+
+```bash
+# Override auto-detected hosting provider (github or gitlab)
+gtr.provider = gitlab
+```
+
+**Setup:**
+
+```bash
+# Self-hosted GitLab
+git gtr config set gtr.provider gitlab
+
+# Self-hosted GitHub Enterprise
+git gtr config set gtr.provider github
+```
+
+**Required CLI tools:**
+
+| Provider | CLI Tool | Install                                                        |
+| -------- | -------- | -------------------------------------------------------------- |
+| GitHub   | `gh`     | [cli.github.com](https://cli.github.com/)                      |
+| GitLab   | `glab`   | [gitlab.com/gitlab-org/cli](https://gitlab.com/gitlab-org/cli) |
+
+---
+
 ## Editor Settings
 
 ```bash
@@ -134,7 +163,7 @@ VS Code and Cursor support `.code-workspace` files for multi-root workspaces, cu
 ## AI Tool Settings
 
 ```bash
-# Default AI tool: none (or aider, claude, codex, continue, copilot, cursor, gemini, opencode)
+# Default AI tool: none (or aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode)
 gtr.ai.default = none
 ```
 
@@ -143,6 +172,7 @@ gtr.ai.default = none
 | Tool                                                                  | Install                                           | Use Case                                                 | Set as Default                               |
 | --------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------- |
 | **[Aider](https://aider.chat)**                                       | `pip install aider-chat`                          | Pair programming, edit files with AI                     | `git gtr config set gtr.ai.default aider`    |
+| **[Auggie CLI](https://www.augmentcode.com/product/CLI)**             | `npm install -g @augmentcode/auggie`              | Context-aware agentic CLI for automation and development | `git gtr config set gtr.ai.default auggie`   |
 | **[Claude Code](https://claude.com/claude-code)**                     | Install from claude.com                           | Terminal-native coding agent                             | `git gtr config set gtr.ai.default claude`   |
 | **[Codex CLI](https://github.com/openai/codex)**                      | `npm install -g @openai/codex`                    | OpenAI coding assistant                                  | `git gtr config set gtr.ai.default codex`    |
 | **[Continue](https://continue.dev)**                                  | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent                                 | `git gtr config set gtr.ai.default continue` |
@@ -392,6 +422,7 @@ git gtr config set gtr.ai.default claude --global
 | `GTR_EDITOR_CMD_NAME` | First word of `GTR_EDITOR_CMD` for availability checks | None                       |
 | `GTR_AI_CMD`          | Custom AI tool command (e.g., `copilot`)               | None                       |
 | `GTR_AI_CMD_NAME`     | First word of `GTR_AI_CMD` for availability checks     | None                       |
+| `GTR_PROVIDER`        | Override hosting provider (`github` or `gitlab`)       | Auto-detected from URL     |
 
 **Hook environment variables** (available in hook scripts):
 

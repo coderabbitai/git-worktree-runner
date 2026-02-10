@@ -115,7 +115,13 @@ find_install_dir() {
     return 0
   fi
 
-  # Option 3: ~/bin (user-local, create if needed)
+  # Option 3: ~/.local/bin (if it exists)
+  if [ -d "$HOME/.local/bin" ]; then
+    echo "$HOME/.local/bin"
+    return 0
+  fi
+
+  # Option 4: ~/bin (user-local, create if needed)
   echo "$HOME/bin"
   return 0
 }

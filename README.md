@@ -69,10 +69,10 @@ sudo ln -s "$(pwd)/bin/git-gtr" /usr/local/bin/git-gtr
 **User-local (no sudo required):**
 
 ```bash
-mkdir -p ~/bin
-ln -s "$(pwd)/bin/git-gtr" ~/bin/git-gtr
-# Add to ~/.zshrc or ~/.bashrc if ~/bin is not in PATH:
-# export PATH="$HOME/bin:$PATH"
+mkdir -p ~/.local/bin
+ln -s "$(pwd)/bin/git-gtr" ~/.local/bin/git-gtr
+# Add to ~/.zshrc or ~/.bashrc if ~/.local/bin is not in PATH:
+# export PATH="$HOME/.local/bin:$PATH"
 ```
 
 </details>
@@ -98,8 +98,9 @@ git gtr ai my-feature           # Start claude
 # Run commands in worktree
 git gtr run my-feature npm test # Run tests
 
-# Navigate to worktree (alternative)
-cd "$(git gtr go my-feature)"
+# Navigate to worktree
+gtr cd my-feature               # Requires: eval "$(git gtr init bash)"
+cd "$(git gtr go my-feature)"   # Alternative without shell integration
 
 # List all worktrees
 git gtr list
@@ -107,7 +108,7 @@ git gtr list
 # Remove when done
 git gtr rm my-feature
 
-# Or remove all worktrees with merged PRs (requires gh CLI)
+# Or remove all worktrees with merged PRs/MRs (requires gh or glab CLI)
 git gtr clean --merged
 ```
 
@@ -208,6 +209,17 @@ cd "$(git gtr go my-feature)"    # Navigate by branch name
 cd "$(git gtr go 1)"             # Navigate to main repo
 ```
 
+**Tip:** For easier navigation, use `git gtr init` to enable `gtr cd`:
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc (one-time setup)
+eval "$(git gtr init bash)"
+
+# Then navigate with:
+gtr cd my-feature
+gtr cd 1
+```
+
 ### `git gtr run <branch> <command...>`
 
 Execute command in worktree directory.
@@ -280,22 +292,22 @@ git gtr config list                                # List all gtr config
 
 ### `git gtr clean [options]`
 
-Remove worktrees: clean up empty directories, or remove those with merged GitHub PRs.
+Remove worktrees: clean up empty directories, or remove those with merged PRs/MRs.
 
 ```bash
 git gtr clean                                  # Remove empty worktree directories and prune
-git gtr clean --merged                         # Remove worktrees for merged PRs (GitHub CLI required)
+git gtr clean --merged                         # Remove worktrees for merged PRs/MRs
 git gtr clean --merged --dry-run               # Preview which worktrees would be removed
 git gtr clean --merged --yes                   # Remove without confirmation prompts
 ```
 
 **Options:**
 
-- `--merged`: Remove worktrees whose branches have merged PRs on GitHub (also deletes the branch)
+- `--merged`: Remove worktrees whose branches have merged PRs/MRs (also deletes the branch)
 - `--dry-run`, `-n`: Preview changes without removing
 - `--yes`, `-y`: Non-interactive mode (skip confirmation prompts)
 
-**Note:** The `--merged` mode requires the GitHub CLI (`gh`) to be installed and authenticated. It checks GitHub PRs (e.g., PRs merged into the default branch `main`) using the GitHub CLI to inspect merge state and removes their worktrees (and deletes the branches locally).
+**Note:** The `--merged` mode auto-detects your hosting provider (GitHub or GitLab) from the `origin` remote URL and requires the corresponding CLI tool (`gh` or `glab`) to be installed and authenticated. For self-hosted instances, set the provider explicitly: `git gtr config set gtr.provider gitlab`.
 
 ### Other Commands
 
@@ -313,7 +325,7 @@ All configuration is stored via `git config`. For team settings, create a `.gtrc
 # Set your editor (cursor, vscode, zed)
 git gtr config set gtr.editor.default cursor
 
-# Set your AI tool (claude, codex, copilot, cursor, gemini, opencode, aider, continue)
+# Set your AI tool (aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode)
 git gtr config set gtr.ai.default claude
 
 # Copy env files to new worktrees

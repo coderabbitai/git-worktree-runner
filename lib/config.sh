@@ -96,6 +96,7 @@ cfg_map_to_file_key() {
     gtr.worktrees.dir)    echo "worktrees.dir" ;;
     gtr.worktrees.prefix) echo "worktrees.prefix" ;;
     gtr.defaultBranch)    echo "defaults.branch" ;;
+    gtr.provider)         echo "defaults.provider" ;;
     *)                    echo "" ;;
   esac
 }
@@ -310,6 +311,7 @@ cfg_list() {
             editor.workspace) mapped_key="gtr.editor.workspace" ;;
             defaults.ai)      mapped_key="gtr.ai.default" ;;
             defaults.branch)  mapped_key="gtr.defaultBranch" ;;
+            defaults.provider) mapped_key="gtr.provider" ;;
             worktrees.dir)    mapped_key="gtr.worktrees.dir" ;;
             worktrees.prefix) mapped_key="gtr.worktrees.prefix" ;;
             gtr.*)            mapped_key="$fkey" ;;
