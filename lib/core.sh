@@ -456,7 +456,6 @@ list_worktrees() {
   git worktree list
 }
 
-# List all worktree branch names (excluding main repo)
 # Resolve common repo context used by most cmd_* handlers.
 # Sets globals: _ctx_repo_root, _ctx_base_dir, _ctx_prefix
 # Usage: resolve_repo_context || exit 1
@@ -466,6 +465,7 @@ resolve_repo_context() {
   _ctx_prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
 }
 
+# List all worktree branch names (excluding main repo)
 # Usage: list_worktree_branches base_dir prefix
 # Returns: newline-separated list of branch names
 list_worktree_branches() {
