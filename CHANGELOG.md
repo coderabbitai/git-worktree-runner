@@ -6,17 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-02-10
+
 ### Added
 
-### Changed
-
-### Deprecated
-
-### Removed
+- `mv`/`rename` command for worktree renaming ([#95](https://github.com/coderabbitai/git-worktree-runner/pull/95))
+- Shell integration via `git gtr init` with `gtr cd` navigation ([#104](https://github.com/coderabbitai/git-worktree-runner/pull/104))
+- `postCd` hook for shell integration ([#109](https://github.com/coderabbitai/git-worktree-runner/pull/109))
+- GitLab support for `clean --merged` ([#105](https://github.com/coderabbitai/git-worktree-runner/pull/105))
+- `--folder` flag for custom worktree folder names ([#82](https://github.com/coderabbitai/git-worktree-runner/pull/82))
+- `--no-hooks` flag to skip post-create hooks ([#91](https://github.com/coderabbitai/git-worktree-runner/pull/91))
+- Auggie CLI adapter ([#84](https://github.com/coderabbitai/git-worktree-runner/pull/84))
+- `$HOME/.local/bin` as install path option ([#100](https://github.com/coderabbitai/git-worktree-runner/pull/100))
 
 ### Fixed
 
-### Security
+- Base directory excluded from worktree list output ([#86](https://github.com/coderabbitai/git-worktree-runner/pull/86))
+- Zsh completion timing issue resolved with `git gtr completion` command ([#87](https://github.com/coderabbitai/git-worktree-runner/pull/87))
+- `.gtrconfig` file key auto-mapping in `cfg_default` ([#88](https://github.com/coderabbitai/git-worktree-runner/pull/88))
+- Paths with slashes in `includeDirs` now handled correctly ([#103](https://github.com/coderabbitai/git-worktree-runner/pull/103))
 
 ## [2.1.0] - 2026-01-14
 
@@ -98,7 +106,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 - Improved base directory resolution logic to distinguish `.` (repo root), `./path` (repo-internal) from other relative values (sibling directories)
 
-[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/coderabbitai/git-worktree-runner/releases/tag/v1.0.0
