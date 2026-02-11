@@ -229,12 +229,8 @@ cmd_create() {
   fi
 
   # Get repo info
-  local repo_root
-  repo_root=$(discover_repo_root) || exit 1
-
-  local base_dir prefix
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Get branch name if not provided
   if [ -z "$branch_name" ]; then
@@ -437,10 +433,8 @@ cmd_remove() {
     exit 1
   fi
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   for identifier in $identifiers; do
     # Resolve target branch
@@ -536,10 +530,8 @@ cmd_rename() {
     exit 1
   fi
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve old worktree
   local target is_main old_path old_branch
@@ -624,10 +616,8 @@ cmd_go() {
   fi
 
   local identifier="$1"
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local target is_main worktree_path branch
@@ -684,10 +674,8 @@ cmd_run() {
     exit 1
   fi
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local target is_main worktree_path branch
@@ -763,10 +751,8 @@ cmd_copy() {
   fi
 
   # Get repo context
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve source path
   local src_target src_path
@@ -868,10 +854,8 @@ cmd_editor() {
     editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor)
   fi
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local target worktree_path branch
@@ -944,10 +928,8 @@ cmd_ai() {
   # Load AI adapter
   load_ai_adapter "$ai_tool"
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local target worktree_path branch
@@ -1080,10 +1062,8 @@ cmd_clean() {
     log_info "Pruned stale worktree administrative files"
   fi
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   if [ ! -d "$base_dir" ]; then
     log_info "No worktrees directory to clean"
