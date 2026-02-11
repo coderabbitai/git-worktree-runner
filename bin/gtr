@@ -375,9 +375,8 @@ cmd_create() {
       # Check if folder_name would resolve to main repo (collision with current branch)
       local resolve_result
       if resolve_result=$(resolve_target "$folder_name" "$repo_root" "$base_dir" "$prefix" 2>/dev/null); then
-        local is_main
-        is_main=$(printf "%s" "$resolve_result" | cut -f1)
-        if [ "$is_main" = "1" ]; then
+        unpack_target "$resolve_result"
+        if [ "$_ctx_is_main" = "1" ]; then
           # Collision: folder name matches current branch, use branch name instead
           next_steps_id="$branch_name"
         else
@@ -446,9 +445,8 @@ cmd_remove() {
     # Resolve target branch
     local target is_main worktree_path branch_name
     target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || continue
-    is_main=$(echo "$target" | cut -f1)
-    worktree_path=$(echo "$target" | cut -f2)
-    branch_name=$(echo "$target" | cut -f3)
+    unpack_target "$target"
+    is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch_name="$_ctx_branch"
 
     # Cannot remove main repository
     if [ "$is_main" = "1" ]; then
@@ -544,9 +542,8 @@ cmd_rename() {
   # Resolve old worktree
   local target is_main old_path old_branch
   target=$(resolve_target "$old_identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  is_main=$(echo "$target" | cut -f1)
-  old_path=$(echo "$target" | cut -f2)
-  old_branch=$(echo "$target" | cut -f3)
+  unpack_target "$target"
+  is_main="$_ctx_is_main" old_path="$_ctx_worktree_path" old_branch="$_ctx_branch"
 
   # Cannot rename main repository
   if [ "$is_main" = "1" ]; then
@@ -632,9 +629,8 @@ cmd_go() {
   # Resolve target branch
   local target is_main worktree_path branch
   target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  is_main=$(echo "$target" | cut -f1)
-  worktree_path=$(echo "$target" | cut -f2)
-  branch=$(echo "$target" | cut -f3)
+  unpack_target "$target"
+  is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   # Human messages to stderr so stdout can be used in command substitution
   if [ "$is_main" = "1" ]; then
@@ -692,9 +688,8 @@ cmd_run() {
   # Resolve target branch
   local target is_main worktree_path branch
   target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  is_main=$(echo "$target" | cut -f1)
-  worktree_path=$(echo "$target" | cut -f2)
-  branch=$(echo "$target" | cut -f3)
+  unpack_target "$target"
+  is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   # Human messages to stderr (like cmd_go)
   if [ "$is_main" = "1" ]; then
@@ -771,7 +766,8 @@ cmd_copy() {
   # Resolve source path
   local src_target src_path
   src_target=$(resolve_target "$source" "$repo_root" "$base_dir" "$prefix") || exit 1
-  src_path=$(echo "$src_target" | cut -f2)
+  unpack_target "$src_target"
+  src_path="$_ctx_worktree_path"
 
   # Get patterns (flag > config)
   if [ -z "$patterns" ]; then
@@ -812,8 +808,8 @@ cmd_copy() {
   for target_id in $targets; do
     local dst_target dst_path dst_branch
     dst_target=$(resolve_target "$target_id" "$repo_root" "$base_dir" "$prefix") || continue
-    dst_path=$(echo "$dst_target" | cut -f2)
-    dst_branch=$(echo "$dst_target" | cut -f3)
+    unpack_target "$dst_target"
+    dst_path="$_ctx_worktree_path" dst_branch="$_ctx_branch"
 
     # Skip if source == destination
     [ "$src_path" = "$dst_path" ] && continue
@@ -876,8 +872,8 @@ cmd_editor() {
   # Resolve target branch
   local target worktree_path branch
   target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  worktree_path=$(echo "$target" | cut -f2)
-  branch=$(echo "$target" | cut -f3)
+  unpack_target "$target"
+  worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   if [ "$editor" = "none" ]; then
     # Just open in GUI file browser
@@ -952,8 +948,8 @@ cmd_ai() {
   # Resolve target branch
   local target worktree_path branch
   target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  worktree_path=$(echo "$target" | cut -f2)
-  branch=$(echo "$target" | cut -f3)
+  unpack_target "$target"
+  worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   log_step "Starting $ai_tool for: $branch"
   echo "Directory: $worktree_path"
