@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 # File copying utilities with pattern matching
 
+# Check if a path/pattern is unsafe (absolute or contains directory traversal)
+# Usage: _is_unsafe_path "pattern"
+# Returns: 0 if unsafe, 1 if safe
+_is_unsafe_path() {
+  case "$1" in
+    /*|*/../*|../*|*/..|..) return 0 ;;
+  esac
+  return 1
+}
+
 # Check if a path matches any exclude pattern
 # Usage: is_excluded "path" "excludes_newline_separated"
 # Returns: 0 if excluded, 1 if not
@@ -83,12 +93,10 @@ copy_patterns() {
     [ -z "$pattern" ] && continue
 
     # Security: reject absolute paths and parent directory traversal
-    case "$pattern" in
-      /*|*/../*|../*|*/..|..)
-        log_warn "Skipping unsafe pattern (absolute path or '..' path segment): $pattern"
-        continue
-        ;;
-    esac
+    if _is_unsafe_path "$pattern"; then
+      log_warn "Skipping unsafe pattern (absolute path or '..' path segment): $pattern"
+      continue
+    fi
 
     # Detect if pattern uses ** (requires globstar)
     if [ "$have_globstar" -eq 0 ] && echo "$pattern" | grep -q '\*\*'; then
@@ -215,12 +223,10 @@ copy_directories() {
     [ -z "$pattern" ] && continue
 
     # Security: reject absolute paths and parent directory traversal
-    case "$pattern" in
-      /*|*/../*|../*|*/..|..)
-        log_warn "Skipping unsafe pattern: $pattern"
-        continue
-        ;;
-    esac
+    if _is_unsafe_path "$pattern"; then
+      log_warn "Skipping unsafe pattern: $pattern"
+      continue
+    fi
 
     # Find directories matching the pattern
     # Use -path for patterns with slashes (e.g., vendor/bundle), -name for basenames
@@ -255,12 +261,10 @@ copy_directories() {
             [ -z "$exclude_pattern" ] && continue
 
             # Security: reject absolute paths and parent directory traversal in excludes
-            case "$exclude_pattern" in
-              /*|*/../*|../*|*/..|..)
-                log_warn "Skipping unsafe exclude pattern: $exclude_pattern"
-                continue
-                ;;
-            esac
+            if _is_unsafe_path "$exclude_pattern"; then
+              log_warn "Skipping unsafe exclude pattern: $exclude_pattern"
+              continue
+            fi
 
             # Check if pattern applies to this copied directory
             # Supports patterns like:

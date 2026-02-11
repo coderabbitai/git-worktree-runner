@@ -77,54 +77,52 @@ cfg_get() {
   git config $flag --get "$key" 2>/dev/null || true
 }
 
+# Single source of truth for gtr.* <-> .gtrconfig key mapping
+# Format: "gtr_key|file_key" — add new config keys here only
+_CFG_KEY_MAP=(
+  "gtr.copy.include|copy.include"
+  "gtr.copy.exclude|copy.exclude"
+  "gtr.copy.includeDirs|copy.includeDirs"
+  "gtr.copy.excludeDirs|copy.excludeDirs"
+  "gtr.hook.postCreate|hooks.postCreate"
+  "gtr.hook.preRemove|hooks.preRemove"
+  "gtr.hook.postRemove|hooks.postRemove"
+  "gtr.hook.postCd|hooks.postCd"
+  "gtr.editor.default|defaults.editor"
+  "gtr.editor.workspace|editor.workspace"
+  "gtr.ai.default|defaults.ai"
+  "gtr.worktrees.dir|worktrees.dir"
+  "gtr.worktrees.prefix|worktrees.prefix"
+  "gtr.defaultBranch|defaults.branch"
+  "gtr.provider|defaults.provider"
+)
+
 # Map a gtr.* config key to its .gtrconfig equivalent
 # Usage: cfg_map_to_file_key <key>
 # Returns: mapped key for .gtrconfig or empty if no mapping exists
 cfg_map_to_file_key() {
-  local key="$1"
-  case "$key" in
-    gtr.copy.include)     echo "copy.include" ;;
-    gtr.copy.exclude)     echo "copy.exclude" ;;
-    gtr.copy.includeDirs) echo "copy.includeDirs" ;;
-    gtr.copy.excludeDirs) echo "copy.excludeDirs" ;;
-    gtr.hook.postCreate)  echo "hooks.postCreate" ;;
-    gtr.hook.preRemove)   echo "hooks.preRemove" ;;
-    gtr.hook.postRemove)  echo "hooks.postRemove" ;;
-    gtr.hook.postCd)      echo "hooks.postCd" ;;
-    gtr.editor.default)   echo "defaults.editor" ;;
-    gtr.editor.workspace) echo "editor.workspace" ;;
-    gtr.ai.default)       echo "defaults.ai" ;;
-    gtr.worktrees.dir)    echo "worktrees.dir" ;;
-    gtr.worktrees.prefix) echo "worktrees.prefix" ;;
-    gtr.defaultBranch)    echo "defaults.branch" ;;
-    gtr.provider)         echo "defaults.provider" ;;
-    *)                    echo "" ;;
-  esac
+  local pair
+  for pair in "${_CFG_KEY_MAP[@]}"; do
+    if [ "${pair%%|*}" = "$1" ]; then
+      echo "${pair#*|}"
+      return
+    fi
+  done
 }
 
 # Map a .gtrconfig key to its gtr.* config equivalent (reverse of cfg_map_to_file_key)
 # Usage: cfg_map_from_file_key <file_key>
 # Returns: mapped gtr.* key, or empty if no mapping exists
 cfg_map_from_file_key() {
-  case "$1" in
-    copy.include)      echo "gtr.copy.include" ;;
-    copy.exclude)      echo "gtr.copy.exclude" ;;
-    copy.includeDirs)  echo "gtr.copy.includeDirs" ;;
-    copy.excludeDirs)  echo "gtr.copy.excludeDirs" ;;
-    hooks.postCreate)  echo "gtr.hook.postCreate" ;;
-    hooks.preRemove)   echo "gtr.hook.preRemove" ;;
-    hooks.postRemove)  echo "gtr.hook.postRemove" ;;
-    hooks.postCd)      echo "gtr.hook.postCd" ;;
-    defaults.editor)   echo "gtr.editor.default" ;;
-    editor.workspace)  echo "gtr.editor.workspace" ;;
-    defaults.ai)       echo "gtr.ai.default" ;;
-    worktrees.dir)     echo "gtr.worktrees.dir" ;;
-    worktrees.prefix)  echo "gtr.worktrees.prefix" ;;
-    defaults.branch)   echo "gtr.defaultBranch" ;;
-    defaults.provider) echo "gtr.provider" ;;
-    gtr.*)             echo "$1" ;;
-    *)                 echo "" ;;
-  esac
+  local pair
+  for pair in "${_CFG_KEY_MAP[@]}"; do
+    if [ "${pair#*|}" = "$1" ]; then
+      echo "${pair%%|*}"
+      return
+    fi
+  done
+  # Passthrough for gtr.* keys already in canonical form
+  case "$1" in gtr.*) echo "$1" ;; esac
 }
 
 # Get all values for a multi-valued config key
@@ -192,54 +190,42 @@ cfg_bool() {
   esac
 }
 
-# Set a config value
-# Usage: cfg_set key value [--global]
-cfg_set() {
-  local key="$1"
-  local value="$2"
-  local scope="${3:-local}"
-  local flag=""
-
-  case "$scope" in
-    --global|global) flag="--global" ;;
-    --system|system) flag="--system" ;;
-    --local|local|*) flag="--local" ;;
+# Convert scope name to git config flag
+# Usage: _cfg_scope_flag <scope>
+# Returns: --local, --global, or --system
+_cfg_scope_flag() {
+  case "${1:-local}" in
+    --global|global) echo "--global" ;;
+    --system|system) echo "--system" ;;
+    *)               echo "--local" ;;
   esac
+}
 
-  git config $flag "$key" "$value"
+# Set a config value
+# Usage: cfg_set key value [scope]
+cfg_set() {
+  local flag
+  flag=$(_cfg_scope_flag "${3:-local}")
+  # shellcheck disable=SC2086
+  git config $flag "$1" "$2"
 }
 
 # Add a value to a multi-valued config key
-# Usage: cfg_add key value [--global]
+# Usage: cfg_add key value [scope]
 cfg_add() {
-  local key="$1"
-  local value="$2"
-  local scope="${3:-local}"
-  local flag=""
-
-  case "$scope" in
-    --global|global) flag="--global" ;;
-    --system|system) flag="--system" ;;
-    --local|local|*) flag="--local" ;;
-  esac
-
-  git config $flag --add "$key" "$value"
+  local flag
+  flag=$(_cfg_scope_flag "${3:-local}")
+  # shellcheck disable=SC2086
+  git config $flag --add "$1" "$2"
 }
 
 # Unset a config value
-# Usage: cfg_unset key [--global]
+# Usage: cfg_unset key [scope]
 cfg_unset() {
-  local key="$1"
-  local scope="${2:-local}"
-  local flag=""
-
-  case "$scope" in
-    --global|global) flag="--global" ;;
-    --system|system) flag="--system" ;;
-    --local|local|*) flag="--local" ;;
-  esac
-
-  git config $flag --unset-all "$key" 2>/dev/null || true
+  local flag
+  flag=$(_cfg_scope_flag "${2:-local}")
+  # shellcheck disable=SC2086
+  git config $flag --unset-all "$1" 2>/dev/null || true
 }
 
 # List all gtr.* config values
@@ -271,8 +257,8 @@ cfg_list() {
       local result=""
       local key value line
 
-      # Set up cleanup trap for helper function (protects against early exit/return)
-      trap 'unset -f _cfg_list_add_entry 2>/dev/null' RETURN
+      # Set up cleanup trap for helper functions (protects against early exit/return)
+      trap 'unset -f _cfg_list_add_entry _cfg_list_parse_entries 2>/dev/null' RETURN
 
       # Helper function to add entries with origin (inline to avoid Bash 3.2 nameref issues)
       # Uses Unit Separator ($'\x1f') as delimiter to avoid conflicts with any values
@@ -295,72 +281,50 @@ cfg_list() {
         result="${result}${entry_key}"$'\x1f'"${entry_value}"$'\x1f'"${origin}"$'\n'
       }
 
+      # Parse get-regexp output and add each entry with an origin label
+      _cfg_list_parse_entries() {
+        local origin="$1"
+        local entries="$2"
+        while IFS= read -r line; do
+          [ -z "$line" ] && continue
+          key="${line%% *}"
+          if [[ "$line" == *" "* ]]; then
+            value="${line#* }"
+          else
+            value=""
+          fi
+          _cfg_list_add_entry "$origin" "$key" "$value"
+        done <<< "$entries"
+      }
+
       # Process in priority order: local > .gtrconfig > global > system
-      local local_entries global_entries system_entries
+      _cfg_list_parse_entries "local" \
+        "$(git config --local --get-regexp '^gtr\.' 2>/dev/null || true)"
 
-      # 1. Local git config (highest priority)
-      local_entries=$(git config --local --get-regexp '^gtr\.' 2>/dev/null || true)
-      while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        key="${line%% *}"
-        # Handle empty values (no space in line means value is empty)
-        if [[ "$line" == *" "* ]]; then
-          value="${line#* }"
-        else
-          value=""
-        fi
-        _cfg_list_add_entry "local" "$key" "$value"
-      done <<< "$local_entries"
-
-      # 2. .gtrconfig file (team defaults)
+      # .gtrconfig needs key remapping from file format to gtr.* format
       if [ -n "$config_file" ] && [ -f "$config_file" ]; then
         while IFS= read -r line; do
           [ -z "$line" ] && continue
-          local fkey fvalue mapped_key
+          local fkey mapped_key
           fkey="${line%% *}"
-          # Handle empty values (no space in line means value is empty)
           if [[ "$line" == *" "* ]]; then
-            fvalue="${line#* }"
+            value="${line#* }"
           else
-            fvalue=""
+            value=""
           fi
-          # Map .gtrconfig keys to gtr.* format
           mapped_key=$(cfg_map_from_file_key "$fkey")
-          [ -z "$mapped_key" ] && continue  # Skip unmapped keys
-          _cfg_list_add_entry ".gtrconfig" "$mapped_key" "$fvalue"
+          [ -z "$mapped_key" ] && continue
+          _cfg_list_add_entry ".gtrconfig" "$mapped_key" "$value"
         done < <(git config -f "$config_file" --get-regexp '.' 2>/dev/null || true)
       fi
 
-      # 3. Global git config
-      global_entries=$(git config --global --get-regexp '^gtr\.' 2>/dev/null || true)
-      while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        key="${line%% *}"
-        # Handle empty values (no space in line means value is empty)
-        if [[ "$line" == *" "* ]]; then
-          value="${line#* }"
-        else
-          value=""
-        fi
-        _cfg_list_add_entry "global" "$key" "$value"
-      done <<< "$global_entries"
+      _cfg_list_parse_entries "global" \
+        "$(git config --global --get-regexp '^gtr\.' 2>/dev/null || true)"
+      _cfg_list_parse_entries "system" \
+        "$(git config --system --get-regexp '^gtr\.' 2>/dev/null || true)"
 
-      # 4. System git config (lowest priority)
-      system_entries=$(git config --system --get-regexp '^gtr\.' 2>/dev/null || true)
-      while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        key="${line%% *}"
-        # Handle empty values (no space in line means value is empty)
-        if [[ "$line" == *" "* ]]; then
-          value="${line#* }"
-        else
-          value=""
-        fi
-        _cfg_list_add_entry "system" "$key" "$value"
-      done <<< "$system_entries"
-
-      # Clean up helper function and clear trap (trap handles early exit cases)
-      unset -f _cfg_list_add_entry
+      # Clean up helper functions and clear trap (trap handles early exit cases)
+      unset -f _cfg_list_add_entry _cfg_list_parse_entries
       trap - RETURN
 
       output="$result"

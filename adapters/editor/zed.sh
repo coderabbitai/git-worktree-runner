@@ -1,20 +1,6 @@
 #!/usr/bin/env bash
 # Zed editor adapter
 
-# Check if Zed is available
-editor_can_open() {
-  command -v zed >/dev/null 2>&1
-}
-
-# Open a directory in Zed
-# Usage: editor_open path
-editor_open() {
-  local path="$1"
-
-  if ! editor_can_open; then
-    log_error "Zed not found. Install from https://zed.dev"
-    return 1
-  fi
-
-  zed "$path"
-}
+_EDITOR_CMD="zed"
+_EDITOR_ERR_MSG="Zed not found. Install from https://zed.dev"
+_editor_define_standard

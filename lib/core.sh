@@ -139,21 +139,28 @@ resolve_default_branch() {
   fi
 }
 
-# Get the current branch of a worktree
+# Get current branch name with Git 2.22+ fallback
+# Usage: get_current_branch [directory]
+# Returns: branch name, "HEAD" if detached, or empty
+get_current_branch() {
+  local dir_flag=""
+  # shellcheck disable=SC2086
+  [ -n "${1:-}" ] && dir_flag="-C $1"
+  git $dir_flag branch --show-current 2>/dev/null ||
+    git $dir_flag rev-parse --abbrev-ref HEAD 2>/dev/null
+}
+
+# Get the current branch of a worktree (with detached HEAD normalization)
 # Usage: current_branch worktree_path
 current_branch() {
   local worktree_path="$1"
-  local branch
 
   if [ ! -d "$worktree_path" ]; then
     return 1
   fi
 
-  # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
-  branch=$(cd "$worktree_path" && git branch --show-current 2>/dev/null)
-  if [ -z "$branch" ]; then
-    branch=$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null)
-  fi
+  local branch
+  branch=$(get_current_branch "$worktree_path")
 
   # Normalize detached HEAD
   if [ "$branch" = "HEAD" ]; then
@@ -278,6 +285,15 @@ unpack_target() {
   local IFS=$'\t'
   # shellcheck disable=SC2162
   read _ctx_is_main _ctx_worktree_path _ctx_branch <<< "$1"
+}
+
+# Resolve an identifier to a worktree and set _ctx_* variables in one step
+# Usage: resolve_worktree <identifier> <repo_root> <base_dir> <prefix>
+# Sets: _ctx_is_main, _ctx_worktree_path, _ctx_branch
+resolve_worktree() {
+  local target
+  target=$(resolve_target "$1" "$2" "$3" "$4") || return 1
+  unpack_target "$target"
 }
 
 # Create a new git worktree
