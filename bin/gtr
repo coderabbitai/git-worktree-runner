@@ -5,7 +5,7 @@
 set -e
 
 # Version
-GTR_VERSION="2.1.0"
+GTR_VERSION="2.2.0"
 
 # Find the script directory (resolve symlinks; allow env override)
 resolve_script_dir() {
