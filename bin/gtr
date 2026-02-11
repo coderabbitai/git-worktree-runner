@@ -2,6 +2,8 @@
 # gtr - Git worktree runner
 # Portable, cross-platform git worktree management
 
+# shellcheck disable=SC2329 # Functions defined inside adapter builders are invoked indirectly
+
 set -e
 
 # Version
@@ -1048,7 +1050,9 @@ cmd_list() {
     # Output: path<tab>branch<tab>status
     local branch status
     branch=$(get_current_branch "$repo_root")
-    [ -z "$branch" ] || [ "$branch" = "HEAD" ] && branch="(detached)"
+    if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
+      branch="(detached)"
+    fi
     status=$(worktree_status "$repo_root")
     printf "%s\t%s\t%s\n" "$repo_root" "$branch" "$status"
 
@@ -1077,7 +1081,9 @@ cmd_list() {
   # Always show repo root first
   local branch
   branch=$(get_current_branch "$repo_root")
-  [ -z "$branch" ] || [ "$branch" = "HEAD" ] && branch="(detached)"
+  if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
+    branch="(detached)"
+  fi
   printf "%-30s %s\n" "$branch [main repo]" "$repo_root"
 
   # Show worktrees sorted by branch name
@@ -1329,6 +1335,7 @@ cmd_doctor() {
     # Check if adapter exists
     local editor_adapter="$GTR_DIR/adapters/editor/${editor}.sh"
     if [ -f "$editor_adapter" ]; then
+      # shellcheck disable=SC1090
       . "$editor_adapter"
       if editor_can_open 2>/dev/null; then
         echo "[OK] Editor: $editor (found)"
@@ -1349,6 +1356,7 @@ cmd_doctor() {
     # Check if adapter exists
     local adapter_file="$GTR_DIR/adapters/ai/${ai_tool}.sh"
     if [ -f "$adapter_file" ]; then
+      # shellcheck disable=SC1090
       . "$adapter_file"
       if ai_can_start 2>/dev/null; then
         echo "[OK] AI tool: $ai_tool (found)"
@@ -1419,6 +1427,7 @@ cmd_adapter() {
     if [ -f "$adapter_file" ]; then
       local adapter_name
       adapter_name=$(basename "$adapter_file" .sh)
+      # shellcheck disable=SC1090
       . "$adapter_file"
 
       if editor_can_open 2>/dev/null; then
@@ -1440,6 +1449,7 @@ cmd_adapter() {
     if [ -f "$adapter_file" ]; then
       local adapter_name
       adapter_name=$(basename "$adapter_file" .sh)
+      # shellcheck disable=SC1090
       . "$adapter_file"
 
       if ai_can_start 2>/dev/null; then
@@ -1896,6 +1906,7 @@ _load_adapter() {
 
   # Try loading explicit adapter first (allows special handling)
   if [ -f "$adapter_file" ]; then
+    # shellcheck disable=SC1090
     . "$adapter_file"
     return 0
   fi

@@ -36,6 +36,7 @@ run_hooks() {
     if (
       # Export each KEY=VALUE exactly as passed, safely quoted
       for kv in "${envs[@]}"; do
+        # shellcheck disable=SC2163
         export "$kv"
       done
       # Execute the hook

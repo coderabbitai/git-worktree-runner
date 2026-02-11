@@ -48,6 +48,48 @@ parse_pattern_file() {
   grep -v '^#' "$file_path" 2>/dev/null | grep -v '^[[:space:]]*$' || true
 }
 
+# Copy a single file to destination, handling exclusion, path preservation, and dry-run
+# Usage: _copy_pattern_file file dst_root excludes preserve_paths dry_run
+# Returns: 0 if file was copied (or would be in dry-run), 1 if skipped/failed
+_copy_pattern_file() {
+  local file="$1"
+  local dst_root="$2"
+  local excludes="$3"
+  local preserve_paths="$4"
+  local dry_run="$5"
+
+  # Remove leading ./
+  file="${file#./}"
+
+  # Skip if excluded
+  is_excluded "$file" "$excludes" && return 1
+
+  # Determine destination path
+  local dest_file
+  if [ "$preserve_paths" = "true" ]; then
+    dest_file="$dst_root/$file"
+  else
+    dest_file="$dst_root/$(basename "$file")"
+  fi
+
+  # Copy the file (or show what would be copied in dry-run mode)
+  if [ "$dry_run" = "true" ]; then
+    log_info "[dry-run] Would copy: $file"
+    return 0
+  fi
+
+  local dest_dir
+  dest_dir=$(dirname "$dest_file")
+  mkdir -p "$dest_dir"
+  if cp "$file" "$dest_file" 2>/dev/null; then
+    log_info "Copied $file"
+    return 0
+  else
+    log_warn "Failed to copy $file"
+    return 1
+  fi
+}
+
 # Copy files matching patterns from source to destination
 # Usage: copy_patterns src_root dst_root includes excludes [preserve_paths] [dry_run]
 # includes: newline-separated glob patterns to include
@@ -102,36 +144,8 @@ copy_patterns() {
     if [ "$have_globstar" -eq 0 ] && echo "$pattern" | grep -q '\*\*'; then
       # Fallback to find for ** patterns on Bash 3.2
       while IFS= read -r file; do
-        # Remove leading ./
-        file="${file#./}"
-
-        # Skip if excluded
-        is_excluded "$file" "$excludes" && continue
-
-        # Determine destination path
-        local dest_file
-        if [ "$preserve_paths" = "true" ]; then
-          dest_file="$dst_root/$file"
-        else
-          dest_file="$dst_root/$(basename "$file")"
-        fi
-
-        # Create destination directory (skip in dry-run mode)
-        local dest_dir
-        dest_dir=$(dirname "$dest_file")
-
-        # Copy the file (or show what would be copied in dry-run mode)
-        if [ "$dry_run" = "true" ]; then
-          log_info "[dry-run] Would copy: $file"
+        if _copy_pattern_file "$file" "$dst_root" "$excludes" "$preserve_paths" "$dry_run"; then
           copied_count=$((copied_count + 1))
-        else
-          mkdir -p "$dest_dir"
-          if cp "$file" "$dest_file" 2>/dev/null; then
-            log_info "Copied $file"
-            copied_count=$((copied_count + 1))
-          else
-            log_warn "Failed to copy $file"
-          fi
         fi
       done <<EOF
 $(find . -path "./$pattern" -type f 2>/dev/null)
@@ -142,36 +156,8 @@ EOF
         # Skip if not a file
         [ -f "$file" ] || continue
 
-        # Remove leading ./
-        file="${file#./}"
-
-        # Skip if excluded
-        is_excluded "$file" "$excludes" && continue
-
-        # Determine destination path
-        local dest_file
-        if [ "$preserve_paths" = "true" ]; then
-          dest_file="$dst_root/$file"
-        else
-          dest_file="$dst_root/$(basename "$file")"
-        fi
-
-        # Create destination directory (skip in dry-run mode)
-        local dest_dir
-        dest_dir=$(dirname "$dest_file")
-
-        # Copy the file (or show what would be copied in dry-run mode)
-        if [ "$dry_run" = "true" ]; then
-          log_info "[dry-run] Would copy: $file"
+        if _copy_pattern_file "$file" "$dst_root" "$excludes" "$preserve_paths" "$dry_run"; then
           copied_count=$((copied_count + 1))
-        else
-          mkdir -p "$dest_dir"
-          if cp "$file" "$dest_file" 2>/dev/null; then
-            log_info "Copied $file"
-            copied_count=$((copied_count + 1))
-          else
-            log_warn "Failed to copy $file"
-          fi
         fi
       done
     fi

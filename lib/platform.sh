@@ -68,6 +68,15 @@ open_in_gui() {
   esac
 }
 
+# Escape a string for safe interpolation into AppleScript double-quoted strings
+# Handles backslashes and double quotes that would break AppleScript syntax
+_escape_applescript() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '%s' "$s"
+}
+
 # Spawn a new terminal window/tab in a directory
 # Usage: spawn_terminal_in path title [command]
 # Note: Best-effort implementation, may not work on all systems
@@ -81,6 +90,12 @@ spawn_terminal_in() {
 
   case "$os" in
     darwin)
+      # Escape variables for AppleScript string interpolation
+      local safe_path safe_title safe_cmd
+      safe_path=$(_escape_applescript "$path")
+      safe_title=$(_escape_applescript "$title")
+      safe_cmd=$(_escape_applescript "$cmd")
+
       # Try iTerm2 first, then Terminal.app
       if osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null | grep -q "iTerm"; then
         osascript <<-EOF 2>/dev/null || true
@@ -88,9 +103,9 @@ spawn_terminal_in() {
 						tell current window
 							create tab with default profile
 							tell current session
-								write text "cd \"$path\""
-								set name to "$title"
-								$([ -n "$cmd" ] && echo "write text \"$cmd\"")
+								write text "cd \"$safe_path\""
+								set name to "$safe_title"
+								$([ -n "$safe_cmd" ] && echo "write text \"$safe_cmd\"")
 							end tell
 						end tell
 					end tell
@@ -98,8 +113,8 @@ spawn_terminal_in() {
       else
         osascript <<-EOF 2>/dev/null || true
 					tell application "Terminal"
-						do script "cd \"$path\"; $cmd"
-						set custom title of front window to "$title"
+						do script "cd \"$safe_path\"; $safe_cmd"
+						set custom title of front window to "$safe_title"
 					end tell
 				EOF
       fi

@@ -54,10 +54,12 @@ resolve_base_dir() {
     # Default: <repo>-worktrees next to the repo
     base_dir="$(dirname "$repo_root")/${repo_name}-worktrees"
   else
-    # Expand tilde to home directory
+    # Expand literal tilde to home directory
+    # Patterns must quote ~ to prevent bash tilde expansion in case arms
+    # shellcheck disable=SC2088
     case "$base_dir" in
-      ~/*) base_dir="$HOME/${base_dir#~/}" ;;
-      ~) base_dir="$HOME" ;;
+      "~/"*) base_dir="$HOME/${base_dir#"~/"}" ;;
+      "~") base_dir="$HOME" ;;
     esac
 
     # Check if absolute or relative
@@ -89,7 +91,7 @@ resolve_base_dir() {
 
   # Warn if worktree dir is inside repo (but not a sibling)
   if [[ "$base_dir" == "$canonical_repo_root"/* ]]; then
-    local rel_path="${base_dir#$canonical_repo_root/}"
+    local rel_path="${base_dir#"$canonical_repo_root"/}"
     # Check if .gitignore exists and whether it includes the worktree directory
     if [ -f "$canonical_repo_root/.gitignore" ]; then
       if ! grep -qE "^/?${rel_path}/?\$|^/?${rel_path}/\*?\$" "$canonical_repo_root/.gitignore" 2>/dev/null; then
@@ -234,7 +236,7 @@ resolve_target() {
   local repo_root="$2"
   local base_dir="$3"
   local prefix="$4"
-  local id path branch sanitized_name
+  local path branch sanitized_name
 
   # Special case: ID 1 is always the repo root
   if [ "$identifier" = "1" ]; then
