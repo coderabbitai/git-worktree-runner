@@ -102,6 +102,31 @@ cfg_map_to_file_key() {
   esac
 }
 
+# Map a .gtrconfig key to its gtr.* config equivalent (reverse of cfg_map_to_file_key)
+# Usage: cfg_map_from_file_key <file_key>
+# Returns: mapped gtr.* key, or empty if no mapping exists
+cfg_map_from_file_key() {
+  case "$1" in
+    copy.include)      echo "gtr.copy.include" ;;
+    copy.exclude)      echo "gtr.copy.exclude" ;;
+    copy.includeDirs)  echo "gtr.copy.includeDirs" ;;
+    copy.excludeDirs)  echo "gtr.copy.excludeDirs" ;;
+    hooks.postCreate)  echo "gtr.hook.postCreate" ;;
+    hooks.preRemove)   echo "gtr.hook.preRemove" ;;
+    hooks.postRemove)  echo "gtr.hook.postRemove" ;;
+    hooks.postCd)      echo "gtr.hook.postCd" ;;
+    defaults.editor)   echo "gtr.editor.default" ;;
+    editor.workspace)  echo "gtr.editor.workspace" ;;
+    defaults.ai)       echo "gtr.ai.default" ;;
+    worktrees.dir)     echo "gtr.worktrees.dir" ;;
+    worktrees.prefix)  echo "gtr.worktrees.prefix" ;;
+    defaults.branch)   echo "gtr.defaultBranch" ;;
+    defaults.provider) echo "gtr.provider" ;;
+    gtr.*)             echo "$1" ;;
+    *)                 echo "" ;;
+  esac
+}
+
 # Get all values for a multi-valued config key
 # Usage: cfg_get_all key [file_key] [scope]
 # file_key: optional key name in .gtrconfig (e.g., "copy.include" for gtr.copy.include)
@@ -300,25 +325,8 @@ cfg_list() {
             fvalue=""
           fi
           # Map .gtrconfig keys to gtr.* format
-          case "$fkey" in
-            copy.include)     mapped_key="gtr.copy.include" ;;
-            copy.exclude)     mapped_key="gtr.copy.exclude" ;;
-            copy.includeDirs) mapped_key="gtr.copy.includeDirs" ;;
-            copy.excludeDirs) mapped_key="gtr.copy.excludeDirs" ;;
-            hooks.postCreate) mapped_key="gtr.hook.postCreate" ;;
-            hooks.preRemove)  mapped_key="gtr.hook.preRemove" ;;
-            hooks.postRemove) mapped_key="gtr.hook.postRemove" ;;
-            hooks.postCd)     mapped_key="gtr.hook.postCd" ;;
-            defaults.editor)  mapped_key="gtr.editor.default" ;;
-            editor.workspace) mapped_key="gtr.editor.workspace" ;;
-            defaults.ai)      mapped_key="gtr.ai.default" ;;
-            defaults.branch)  mapped_key="gtr.defaultBranch" ;;
-            defaults.provider) mapped_key="gtr.provider" ;;
-            worktrees.dir)    mapped_key="gtr.worktrees.dir" ;;
-            worktrees.prefix) mapped_key="gtr.worktrees.prefix" ;;
-            gtr.*)            mapped_key="$fkey" ;;
-            *)                continue ;;  # Skip unmapped keys
-          esac
+          mapped_key=$(cfg_map_from_file_key "$fkey")
+          [ -z "$mapped_key" ] && continue  # Skip unmapped keys
           _cfg_list_add_entry ".gtrconfig" "$mapped_key" "$fvalue"
         done < <(git config -f "$config_file" --get-regexp '.' 2>/dev/null || true)
       fi
