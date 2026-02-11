@@ -83,6 +83,16 @@ complete -c git -n '__fish_git_gtr_using_command copy' -s n -l dry-run -d 'Previ
 complete -c git -n '__fish_git_gtr_using_command copy' -s a -l all -d 'Copy to all worktrees'
 complete -c git -n '__fish_git_gtr_using_command copy' -l from -d 'Source worktree' -r
 
+# List command options
+complete -c git -n '__fish_git_gtr_using_command list' -l porcelain -d 'Machine-readable output'
+complete -c git -n '__fish_git_gtr_using_command ls' -l porcelain -d 'Machine-readable output'
+
+# Editor command options
+complete -c git -n '__fish_git_gtr_using_command editor' -l editor -d 'Editor to use' -r -a 'cursor vscode zed idea pycharm webstorm vim nvim emacs sublime nano atom none'
+
+# AI command options
+complete -c git -n '__fish_git_gtr_using_command ai' -l ai -d 'AI tool to use' -r -a 'aider auggie claude codex continue copilot cursor gemini opencode none'
+
 # Clean command options
 complete -c git -n '__fish_git_gtr_using_command clean' -l merged -d 'Remove worktrees with merged PRs/MRs'
 complete -c git -n '__fish_git_gtr_using_command clean' -l yes -d 'Skip confirmation prompts'
