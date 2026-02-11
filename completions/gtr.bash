@@ -30,7 +30,7 @@ _git_gtr() {
 
   # Commands that take branch names or '1' for main repo
   case "$cmd" in
-    go|run|editor|ai|rm|mv|rename)
+    go|run|rm|mv|rename)
       if [ "$cword" -eq 3 ]; then
         # Complete with branch names and special ID '1' for main repo
         local branches all_options
@@ -46,6 +46,35 @@ _git_gtr() {
             COMPREPLY=($(compgen -W "--force --yes" -- "$cur"))
             ;;
         esac
+      fi
+      ;;
+    editor)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--editor" -- "$cur"))
+      elif [ "$prev" = "--editor" ]; then
+        COMPREPLY=($(compgen -W "cursor vscode zed idea pycharm webstorm vim nvim emacs sublime nano atom none" -- "$cur"))
+      else
+        local branches all_options
+        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
+        all_options="1 $branches"
+        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+      fi
+      ;;
+    ai)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--ai" -- "$cur"))
+      elif [ "$prev" = "--ai" ]; then
+        COMPREPLY=($(compgen -W "aider auggie claude codex continue copilot cursor gemini opencode none" -- "$cur"))
+      else
+        local branches all_options
+        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
+        all_options="1 $branches"
+        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+      fi
+      ;;
+    ls|list)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--porcelain" -- "$cur"))
       fi
       ;;
     clean)
@@ -67,7 +96,7 @@ _git_gtr() {
     new)
       # Complete flags
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--id --from --from-current --track --no-copy --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
+        COMPREPLY=($(compgen -W "--from --from-current --track --no-copy --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
       elif [ "$prev" = "--track" ]; then
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
       fi
