@@ -1,6 +1,29 @@
 #!/usr/bin/env bash
 # File copying utilities with pattern matching
 
+# Check if a path matches any exclude pattern
+# Usage: is_excluded "path" "excludes_newline_separated"
+# Returns: 0 if excluded, 1 if not
+is_excluded() {
+  local path="$1"
+  local excludes="$2"
+
+  [ -z "$excludes" ] && return 1
+
+  while IFS= read -r exclude_pattern; do
+    [ -z "$exclude_pattern" ] && continue
+    # Intentional glob pattern matching for exclusion
+    # shellcheck disable=SC2254
+    case "$path" in
+      $exclude_pattern) return 0 ;;
+    esac
+  done <<EOF
+$excludes
+EOF
+
+  return 1
+}
+
 # Parse .gitignore-style pattern file
 # Usage: parse_pattern_file file_path
 # Returns: newline-separated patterns (comments and empty lines stripped)
@@ -74,26 +97,8 @@ copy_patterns() {
         # Remove leading ./
         file="${file#./}"
 
-        # Check if file matches any exclude pattern
-        local excluded=0
-        if [ -n "$excludes" ]; then
-          while IFS= read -r exclude_pattern; do
-            [ -z "$exclude_pattern" ] && continue
-            # Intentional glob pattern matching for file exclusion
-            # shellcheck disable=SC2254
-            case "$file" in
-              $exclude_pattern)
-                excluded=1
-                break
-                ;;
-            esac
-          done <<EOF
-$excludes
-EOF
-        fi
-
         # Skip if excluded
-        [ "$excluded" -eq 1 ] && continue
+        is_excluded "$file" "$excludes" && continue
 
         # Determine destination path
         local dest_file
@@ -132,26 +137,8 @@ EOF
         # Remove leading ./
         file="${file#./}"
 
-        # Check if file matches any exclude pattern
-        local excluded=0
-        if [ -n "$excludes" ]; then
-          while IFS= read -r exclude_pattern; do
-            [ -z "$exclude_pattern" ] && continue
-            # Intentional glob pattern matching for file exclusion
-            # shellcheck disable=SC2254
-            case "$file" in
-              $exclude_pattern)
-                excluded=1
-                break
-                ;;
-            esac
-          done <<EOF
-$excludes
-EOF
-        fi
-
         # Skip if excluded
-        [ "$excluded" -eq 1 ] && continue
+        is_excluded "$file" "$excludes" && continue
 
         # Determine destination path
         local dest_file
@@ -243,36 +230,8 @@ copy_directories() {
       # Remove leading ./
       dir_path="${dir_path#./}"
 
-      # Check if directory matches any exclude pattern
-      local excluded=0
-      if [ -n "$excludes" ]; then
-        while IFS= read -r exclude_pattern; do
-          [ -z "$exclude_pattern" ] && continue
-
-          # Security: reject absolute paths and parent directory traversal in excludes
-          case "$exclude_pattern" in
-            /*|*/../*|../*|*/..|..)
-              log_warn "Skipping unsafe exclude pattern: $exclude_pattern"
-              continue
-              ;;
-          esac
-
-          # Match full path (supports glob patterns like node_modules/.cache or */cache)
-          # Intentional glob pattern matching for directory exclusion
-          # shellcheck disable=SC2254
-          case "$dir_path" in
-            $exclude_pattern)
-              excluded=1
-              break
-              ;;
-          esac
-        done <<EOF
-$excludes
-EOF
-      fi
-
       # Skip if excluded
-      [ "$excluded" -eq 1 ] && continue
+      is_excluded "$dir_path" "$excludes" && continue
 
       # Ensure source directory exists
       [ ! -d "$dir_path" ] && continue
