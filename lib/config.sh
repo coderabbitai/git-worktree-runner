@@ -125,6 +125,17 @@ cfg_map_from_file_key() {
   case "$1" in gtr.*) echo "$1" ;; esac
 }
 
+# Check if a key is a recognized gtr.* config key
+# Usage: _cfg_is_known_key <key>
+# Returns: 0 if known, 1 if not
+_cfg_is_known_key() {
+  local pair
+  for pair in "${_CFG_KEY_MAP[@]}"; do
+    [ "${pair%%|*}" = "$1" ] && return 0
+  done
+  return 1
+}
+
 # Get all values for a multi-valued config key
 # Usage: cfg_get_all key [file_key] [scope]
 # file_key: optional key name in .gtrconfig (e.g., "copy.include" for gtr.copy.include)

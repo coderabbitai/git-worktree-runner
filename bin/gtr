@@ -111,6 +111,27 @@ _editor_define_standard() {
   }
 }
 
+# Terminal editor adapter builder — for editors that run in the current terminal
+# Sets globals then call this: _EDITOR_CMD, _EDITOR_ERR_MSG, _EDITOR_BACKGROUND (optional, 0 or 1)
+_editor_define_terminal() {
+  editor_can_open() {
+    command -v "$_EDITOR_CMD" >/dev/null 2>&1
+  }
+
+  editor_open() {
+    local path="$1"
+    if ! editor_can_open; then
+      log_error "$_EDITOR_ERR_MSG"
+      return 1
+    fi
+    if [ "${_EDITOR_BACKGROUND:-0}" = "1" ]; then
+      "$_EDITOR_CMD" "$path" &
+    else
+      (cd "$path" && "$_EDITOR_CMD" .)
+    fi
+  }
+}
+
 # Main dispatcher
 main() {
   local cmd="${1:-help}"
@@ -276,7 +297,7 @@ _auto_launch_editor() {
   local editor
   editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor)
   if [ "$editor" != "none" ]; then
-    load_editor_adapter "$editor"
+    load_editor_adapter "$editor" || return 1
     local workspace_file
     workspace_file=$(resolve_workspace_file "$worktree_path")
     log_step "Opening in $editor..."
@@ -295,7 +316,7 @@ _auto_launch_ai() {
   if [ "$ai_tool" = "none" ]; then
     log_warn "No AI tool configured. Set with: git gtr config set gtr.ai.default claude"
   else
-    load_ai_adapter "$ai_tool"
+    load_ai_adapter "$ai_tool" || return 1
     log_step "Starting $ai_tool..."
     ai_start "$worktree_path"
   fi
@@ -455,8 +476,8 @@ cmd_create() {
   log_info "Worktree created: $worktree_path"
 
   # Auto-launch editor/AI or show next steps
-  [ "$open_editor" -eq 1 ] && _auto_launch_editor "$worktree_path"
-  [ "$start_ai" -eq 1 ] && _auto_launch_ai "$worktree_path"
+  [ "$open_editor" -eq 1 ] && { _auto_launch_editor "$worktree_path" || true; }
+  [ "$start_ai" -eq 1 ] && { _auto_launch_ai "$worktree_path" || true; }
   if [ "$open_editor" -eq 0 ] && [ "$start_ai" -eq 0 ]; then
     _post_create_next_steps "$branch_name" "$folder_name" "$folder_override" "$repo_root" "$base_dir" "$prefix"
   fi
@@ -926,7 +947,7 @@ cmd_editor() {
     log_info "Opened in file browser"
   else
     # Load editor adapter and open
-    load_editor_adapter "$editor"
+    load_editor_adapter "$editor" || exit 1
     local workspace_file
     workspace_file=$(resolve_workspace_file "$worktree_path")
     log_step "Opening in $editor..."
@@ -983,7 +1004,7 @@ cmd_ai() {
   fi
 
   # Load AI adapter
-  load_ai_adapter "$ai_tool"
+  load_ai_adapter "$ai_tool" || exit 1
 
   resolve_repo_context || exit 1
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
@@ -1525,6 +1546,9 @@ cmd_config() {
       if [ -n "$extra_args" ]; then
         log_warn "set action: ignoring extra arguments: $extra_args"
       fi
+      if ! _cfg_is_known_key "$key"; then
+        log_warn "Unknown config key: $key (not a recognized gtr.* key)"
+      fi
       cfg_set "$key" "$value" "$resolved_scope"
       log_info "Config set: $key = $value ($resolved_scope)"
       ;;
@@ -1537,6 +1561,9 @@ cmd_config() {
       if [ -n "$extra_args" ]; then
         log_warn "add action: ignoring extra arguments: $extra_args"
       fi
+      if ! _cfg_is_known_key "$key"; then
+        log_warn "Unknown config key: $key (not a recognized gtr.* key)"
+      fi
       cfg_add "$key" "$value" "$resolved_scope"
       log_info "Config added: $key = $value ($resolved_scope)"
       ;;
@@ -1548,6 +1575,9 @@ cmd_config() {
       # Warn on unexpected extra arguments (including value which unset doesn't use)
       if [ -n "$value" ] || [ -n "$extra_args" ]; then
         log_warn "unset action: ignoring extra arguments: ${value}${value:+ }${extra_args}"
+      fi
+      if ! _cfg_is_known_key "$key"; then
+        log_warn "Unknown config key: $key (not a recognized gtr.* key)"
       fi
       cfg_unset "$key" "$resolved_scope"
       log_info "Config unset: $key ($resolved_scope)"
@@ -1878,7 +1908,7 @@ _load_adapter() {
     log_error "$label '$name' not found"
     log_info "Built-in adapters: $builtin_list"
     log_info "Or use any $label command available in your PATH (e.g., $path_hint)"
-    exit 1
+    return 1
   fi
 
   # Set globals for generic adapter functions
