@@ -271,6 +271,15 @@ resolve_target() {
   return 1
 }
 
+# Unpack TSV output from resolve_target into globals.
+# Sets: _ctx_is_main, _ctx_worktree_path, _ctx_branch
+# Usage: unpack_target "$target_string"
+unpack_target() {
+  local IFS=$'\t'
+  # shellcheck disable=SC2162
+  read _ctx_is_main _ctx_worktree_path _ctx_branch <<< "$1"
+}
+
 # Create a new git worktree
 # Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override]
 # track_mode: auto, remote, local, or none
