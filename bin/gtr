@@ -1818,9 +1818,11 @@ resolve_workspace_file() {
 }
 
 # Load editor adapter
-load_editor_adapter() {
-  local editor="$1"
-  local adapter_file="$GTR_DIR/adapters/editor/${editor}.sh"
+# Load an adapter by type (shared implementation for editor and AI adapters)
+# Usage: _load_adapter <type> <name> <label> <builtin_list> <path_hint>
+_load_adapter() {
+  local type="$1" name="$2" label="$3" builtin_list="$4" path_hint="$5"
+  local adapter_file="$GTR_DIR/adapters/${type}/${name}.sh"
 
   # Try loading explicit adapter first (allows special handling)
   if [ -f "$adapter_file" ]; then
@@ -1830,47 +1832,36 @@ load_editor_adapter() {
 
   # Generic fallback: check if command exists in PATH
   # Extract first word (command name) from potentially multi-word string
-  local cmd_name="${editor%% *}"
+  local cmd_name="${name%% *}"
 
   if ! command -v "$cmd_name" >/dev/null 2>&1; then
-    log_error "Editor '$editor' not found"
-    log_info "Built-in adapters: cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom"
-    log_info "Or use any editor command available in your PATH (e.g., code-insiders, fleet)"
+    log_error "$label '$name' not found"
+    log_info "Built-in adapters: $builtin_list"
+    log_info "Or use any $label command available in your PATH (e.g., $path_hint)"
     exit 1
   fi
 
   # Set globals for generic adapter functions
-  # Note: $editor may contain arguments (e.g., "code --wait")
-  GTR_EDITOR_CMD="$editor"
-  GTR_EDITOR_CMD_NAME="$cmd_name"
+  # Note: $name may contain arguments (e.g., "code --wait", "bunx @github/copilot@latest")
+  if [ "$type" = "editor" ]; then
+    GTR_EDITOR_CMD="$name"
+    GTR_EDITOR_CMD_NAME="$cmd_name"
+  else
+    GTR_AI_CMD="$name"
+    GTR_AI_CMD_NAME="$cmd_name"
+  fi
 }
 
-# Load AI adapter
+load_editor_adapter() {
+  _load_adapter "editor" "$1" "Editor" \
+    "cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom" \
+    "code-insiders, fleet"
+}
+
 load_ai_adapter() {
-  local ai_tool="$1"
-  local adapter_file="$GTR_DIR/adapters/ai/${ai_tool}.sh"
-
-  # Try loading explicit adapter first (allows special handling)
-  if [ -f "$adapter_file" ]; then
-    . "$adapter_file"
-    return 0
-  fi
-
-  # Generic fallback: check if command exists in PATH
-  # Extract first word (command name) from potentially multi-word string
-  local cmd_name="${ai_tool%% *}"
-
-  if ! command -v "$cmd_name" >/dev/null 2>&1; then
-    log_error "AI tool '$ai_tool' not found"
-    log_info "Built-in adapters: aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode"
-    log_info "Or use any AI tool command available in your PATH (e.g., bunx, gpt)"
-    exit 1
-  fi
-
-  # Set globals for generic adapter functions
-  # Note: $ai_tool may contain arguments (e.g., "bunx @github/copilot@latest")
-  GTR_AI_CMD="$ai_tool"
-  GTR_AI_CMD_NAME="$cmd_name"
+  _load_adapter "ai" "$1" "AI tool" \
+    "aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode" \
+    "bunx, gpt"
 }
 
 # Help command
