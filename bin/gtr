@@ -179,9 +179,8 @@ _post_create_next_steps() {
     # Check if folder_name would resolve to main repo (collision with current branch)
     local resolve_result
     if resolve_result=$(resolve_target "$folder_name" "$repo_root" "$base_dir" "$prefix" 2>/dev/null); then
-      local is_main
-      is_main=$(printf "%s" "$resolve_result" | cut -f1)
-      if [ "$is_main" = "1" ]; then
+      unpack_target "$resolve_result"
+      if [ "$_ctx_is_main" = "1" ]; then
         # Collision: folder name matches current branch, use branch name instead
         next_steps_id="$branch_name"
       else
@@ -300,12 +299,8 @@ cmd_create() {
   fi
 
   # Get repo info
-  local repo_root
-  repo_root=$(discover_repo_root) || exit 1
-
-  local base_dir prefix
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Get branch name if not provided
   if [ -z "$branch_name" ]; then
@@ -449,18 +444,15 @@ cmd_remove() {
     exit 1
   fi
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   for identifier in $identifiers; do
     # Resolve target branch
     local target is_main worktree_path branch_name
     target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || continue
-    is_main=$(echo "$target" | cut -f1)
-    worktree_path=$(echo "$target" | cut -f2)
-    branch_name=$(echo "$target" | cut -f3)
+    unpack_target "$target"
+    is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch_name="$_ctx_branch"
 
     # Cannot remove main repository
     if [ "$is_main" = "1" ]; then
@@ -548,17 +540,14 @@ cmd_rename() {
     exit 1
   fi
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve old worktree
   local target is_main old_path old_branch
   target=$(resolve_target "$old_identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  is_main=$(echo "$target" | cut -f1)
-  old_path=$(echo "$target" | cut -f2)
-  old_branch=$(echo "$target" | cut -f3)
+  unpack_target "$target"
+  is_main="$_ctx_is_main" old_path="$_ctx_worktree_path" old_branch="$_ctx_branch"
 
   # Cannot rename main repository
   if [ "$is_main" = "1" ]; then
@@ -636,17 +625,14 @@ cmd_go() {
   fi
 
   local identifier="$1"
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local target is_main worktree_path branch
   target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  is_main=$(echo "$target" | cut -f1)
-  worktree_path=$(echo "$target" | cut -f2)
-  branch=$(echo "$target" | cut -f3)
+  unpack_target "$target"
+  is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   # Human messages to stderr so stdout can be used in command substitution
   if [ "$is_main" = "1" ]; then
@@ -696,17 +682,14 @@ cmd_run() {
     exit 1
   fi
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local target is_main worktree_path branch
   target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  is_main=$(echo "$target" | cut -f1)
-  worktree_path=$(echo "$target" | cut -f2)
-  branch=$(echo "$target" | cut -f3)
+  unpack_target "$target"
+  is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   # Human messages to stderr (like cmd_go)
   if [ "$is_main" = "1" ]; then
@@ -775,15 +758,14 @@ cmd_copy() {
   fi
 
   # Get repo context
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve source path
   local src_target src_path
   src_target=$(resolve_target "$source" "$repo_root" "$base_dir" "$prefix") || exit 1
-  src_path=$(echo "$src_target" | cut -f2)
+  unpack_target "$src_target"
+  src_path="$_ctx_worktree_path"
 
   # Get patterns (flag > config)
   if [ -z "$patterns" ]; then
@@ -824,8 +806,8 @@ cmd_copy() {
   for target_id in $targets; do
     local dst_target dst_path dst_branch
     dst_target=$(resolve_target "$target_id" "$repo_root" "$base_dir" "$prefix") || continue
-    dst_path=$(echo "$dst_target" | cut -f2)
-    dst_branch=$(echo "$dst_target" | cut -f3)
+    unpack_target "$dst_target"
+    dst_path="$_ctx_worktree_path" dst_branch="$_ctx_branch"
 
     # Skip if source == destination
     [ "$src_path" = "$dst_path" ] && continue
@@ -880,16 +862,14 @@ cmd_editor() {
     editor=$(cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor)
   fi
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local target worktree_path branch
   target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  worktree_path=$(echo "$target" | cut -f2)
-  branch=$(echo "$target" | cut -f3)
+  unpack_target "$target"
+  worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   if [ "$editor" = "none" ]; then
     # Just open in GUI file browser
@@ -956,16 +936,14 @@ cmd_ai() {
   # Load AI adapter
   load_ai_adapter "$ai_tool"
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local target worktree_path branch
   target=$(resolve_target "$identifier" "$repo_root" "$base_dir" "$prefix") || exit 1
-  worktree_path=$(echo "$target" | cut -f2)
-  branch=$(echo "$target" | cut -f3)
+  unpack_target "$target"
+  worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   log_step "Starting $ai_tool for: $branch"
   echo "Directory: $worktree_path"
@@ -1092,10 +1070,8 @@ cmd_clean() {
     log_info "Pruned stale worktree administrative files"
   fi
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) || exit 1
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   if [ ! -d "$base_dir" ]; then
     log_info "No worktrees directory to clean"
@@ -1830,9 +1806,11 @@ resolve_workspace_file() {
 }
 
 # Load editor adapter
-load_editor_adapter() {
-  local editor="$1"
-  local adapter_file="$GTR_DIR/adapters/editor/${editor}.sh"
+# Load an adapter by type (shared implementation for editor and AI adapters)
+# Usage: _load_adapter <type> <name> <label> <builtin_list> <path_hint>
+_load_adapter() {
+  local type="$1" name="$2" label="$3" builtin_list="$4" path_hint="$5"
+  local adapter_file="$GTR_DIR/adapters/${type}/${name}.sh"
 
   # Try loading explicit adapter first (allows special handling)
   if [ -f "$adapter_file" ]; then
@@ -1842,47 +1820,36 @@ load_editor_adapter() {
 
   # Generic fallback: check if command exists in PATH
   # Extract first word (command name) from potentially multi-word string
-  local cmd_name="${editor%% *}"
+  local cmd_name="${name%% *}"
 
   if ! command -v "$cmd_name" >/dev/null 2>&1; then
-    log_error "Editor '$editor' not found"
-    log_info "Built-in adapters: cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom"
-    log_info "Or use any editor command available in your PATH (e.g., code-insiders, fleet)"
+    log_error "$label '$name' not found"
+    log_info "Built-in adapters: $builtin_list"
+    log_info "Or use any $label command available in your PATH (e.g., $path_hint)"
     exit 1
   fi
 
   # Set globals for generic adapter functions
-  # Note: $editor may contain arguments (e.g., "code --wait")
-  GTR_EDITOR_CMD="$editor"
-  GTR_EDITOR_CMD_NAME="$cmd_name"
+  # Note: $name may contain arguments (e.g., "code --wait", "bunx @github/copilot@latest")
+  if [ "$type" = "editor" ]; then
+    GTR_EDITOR_CMD="$name"
+    GTR_EDITOR_CMD_NAME="$cmd_name"
+  else
+    GTR_AI_CMD="$name"
+    GTR_AI_CMD_NAME="$cmd_name"
+  fi
 }
 
-# Load AI adapter
+load_editor_adapter() {
+  _load_adapter "editor" "$1" "Editor" \
+    "cursor, vscode, zed, idea, pycharm, webstorm, vim, nvim, emacs, sublime, nano, atom" \
+    "code-insiders, fleet"
+}
+
 load_ai_adapter() {
-  local ai_tool="$1"
-  local adapter_file="$GTR_DIR/adapters/ai/${ai_tool}.sh"
-
-  # Try loading explicit adapter first (allows special handling)
-  if [ -f "$adapter_file" ]; then
-    . "$adapter_file"
-    return 0
-  fi
-
-  # Generic fallback: check if command exists in PATH
-  # Extract first word (command name) from potentially multi-word string
-  local cmd_name="${ai_tool%% *}"
-
-  if ! command -v "$cmd_name" >/dev/null 2>&1; then
-    log_error "AI tool '$ai_tool' not found"
-    log_info "Built-in adapters: aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode"
-    log_info "Or use any AI tool command available in your PATH (e.g., bunx, gpt)"
-    exit 1
-  fi
-
-  # Set globals for generic adapter functions
-  # Note: $ai_tool may contain arguments (e.g., "bunx @github/copilot@latest")
-  GTR_AI_CMD="$ai_tool"
-  GTR_AI_CMD_NAME="$cmd_name"
+  _load_adapter "ai" "$1" "AI tool" \
+    "aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode" \
+    "bunx, gpt"
 }
 
 # Help command

@@ -271,6 +271,15 @@ resolve_target() {
   return 1
 }
 
+# Unpack TSV output from resolve_target into globals.
+# Sets: _ctx_is_main, _ctx_worktree_path, _ctx_branch
+# Usage: unpack_target "$target_string"
+unpack_target() {
+  local IFS=$'\t'
+  # shellcheck disable=SC2162
+  read _ctx_is_main _ctx_worktree_path _ctx_branch <<< "$1"
+}
+
 # Create a new git worktree
 # Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override]
 # track_mode: auto, remote, local, or none
@@ -454,6 +463,15 @@ remove_worktree() {
 # List all worktrees
 list_worktrees() {
   git worktree list
+}
+
+# Resolve common repo context used by most cmd_* handlers.
+# Sets globals: _ctx_repo_root, _ctx_base_dir, _ctx_prefix
+# Usage: resolve_repo_context || exit 1
+resolve_repo_context() {
+  _ctx_repo_root=$(discover_repo_root) || return 1
+  _ctx_base_dir=$(resolve_base_dir "$_ctx_repo_root")
+  _ctx_prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
 }
 
 # List all worktree branch names (excluding main repo)
