@@ -143,11 +143,13 @@ resolve_default_branch() {
 # Usage: get_current_branch [directory]
 # Returns: branch name, "HEAD" if detached, or empty
 get_current_branch() {
-  local dir_flag=""
-  # shellcheck disable=SC2086
-  [ -n "${1:-}" ] && dir_flag="-C $1"
-  git $dir_flag branch --show-current 2>/dev/null ||
-    git $dir_flag rev-parse --abbrev-ref HEAD 2>/dev/null
+  if [ -n "${1:-}" ]; then
+    git -C "$1" branch --show-current 2>/dev/null ||
+      git -C "$1" rev-parse --abbrev-ref HEAD 2>/dev/null
+  else
+    git branch --show-current 2>/dev/null ||
+      git rev-parse --abbrev-ref HEAD 2>/dev/null
+  fi
 }
 
 # Get the current branch of a worktree (with detached HEAD normalization)
