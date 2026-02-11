@@ -130,6 +130,77 @@ main() {
 }
 
 # Create command
+# Copy files and directories to newly created worktree
+# Usage: _post_create_copy repo_root worktree_path
+_post_create_copy() {
+  local repo_root="$1"
+  local worktree_path="$2"
+
+  local includes excludes file_includes
+  includes=$(cfg_get_all gtr.copy.include copy.include)
+  excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
+
+  # Read .worktreeinclude file if exists
+  file_includes=$(parse_pattern_file "$repo_root/.worktreeinclude")
+
+  # Merge patterns (newline-separated)
+  if [ -n "$file_includes" ]; then
+    if [ -n "$includes" ]; then
+      includes="$includes"$'\n'"$file_includes"
+    else
+      includes="$file_includes"
+    fi
+  fi
+
+  if [ -n "$includes" ]; then
+    log_step "Copying files..."
+    copy_patterns "$repo_root" "$worktree_path" "$includes" "$excludes"
+  fi
+
+  # Copy directories (typically git-ignored dirs like node_modules, .venv)
+  local dir_includes dir_excludes
+  dir_includes=$(cfg_get_all gtr.copy.includeDirs copy.includeDirs)
+  dir_excludes=$(cfg_get_all gtr.copy.excludeDirs copy.excludeDirs)
+
+  if [ -n "$dir_includes" ]; then
+    log_step "Copying directories..."
+    copy_directories "$repo_root" "$worktree_path" "$dir_includes" "$dir_excludes"
+  fi
+}
+
+# Show next steps after worktree creation (resolves collision for --folder overrides)
+# Usage: _post_create_next_steps branch_name folder_name folder_override repo_root base_dir prefix
+_post_create_next_steps() {
+  local branch_name="$1" folder_name="$2" folder_override="$3"
+  local repo_root="$4" base_dir="$5" prefix="$6"
+
+  local next_steps_id
+  if [ -n "$folder_override" ]; then
+    # Check if folder_name would resolve to main repo (collision with current branch)
+    local resolve_result
+    if resolve_result=$(resolve_target "$folder_name" "$repo_root" "$base_dir" "$prefix" 2>/dev/null); then
+      local is_main
+      is_main=$(printf "%s" "$resolve_result" | cut -f1)
+      if [ "$is_main" = "1" ]; then
+        # Collision: folder name matches current branch, use branch name instead
+        next_steps_id="$branch_name"
+      else
+        next_steps_id="$folder_name"
+      fi
+    else
+      next_steps_id="$folder_name"
+    fi
+  else
+    next_steps_id="$branch_name"
+  fi
+
+  echo ""
+  echo "Next steps:"
+  echo "  git gtr editor $next_steps_id  # Open in editor"
+  echo "  git gtr ai $next_steps_id      # Start AI tool"
+  echo "  cd \"\$(git gtr go $next_steps_id)\"  # Navigate to worktree"
+}
+
 cmd_create() {
   local branch_name=""
   local from_ref=""
@@ -291,38 +362,7 @@ cmd_create() {
 
   # Copy files based on patterns
   if [ "$skip_copy" -eq 0 ]; then
-    local includes excludes file_includes
-    # Pass .gtrconfig keys as second argument for file-based config
-    includes=$(cfg_get_all gtr.copy.include copy.include)
-    excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
-
-    # Read .worktreeinclude file if exists
-    file_includes=$(parse_pattern_file "$repo_root/.worktreeinclude")
-
-    # Merge patterns (newline-separated)
-    if [ -n "$file_includes" ]; then
-      if [ -n "$includes" ]; then
-        includes="$includes"$'\n'"$file_includes"
-      else
-        includes="$file_includes"
-      fi
-    fi
-
-    if [ -n "$includes" ]; then
-      log_step "Copying files..."
-      copy_patterns "$repo_root" "$worktree_path" "$includes" "$excludes"
-    fi
-
-    # Copy directories (typically git-ignored dirs like node_modules, .venv)
-    local dir_includes dir_excludes
-    # Pass .gtrconfig keys as second argument for file-based config
-    dir_includes=$(cfg_get_all gtr.copy.includeDirs copy.includeDirs)
-    dir_excludes=$(cfg_get_all gtr.copy.excludeDirs copy.excludeDirs)
-
-    if [ -n "$dir_includes" ]; then
-      log_step "Copying directories..."
-      copy_directories "$repo_root" "$worktree_path" "$dir_includes" "$dir_excludes"
-    fi
+    _post_create_copy "$repo_root" "$worktree_path"
   fi
 
   # Run post-create hooks (unless --no-hooks)
@@ -367,35 +407,7 @@ cmd_create() {
 
   # Show next steps only if no auto-launch flags were used
   if [ "$open_editor" -eq 0 ] && [ "$start_ai" -eq 0 ]; then
-    # Determine identifier to show in next steps
-    # Use custom folder when --folder specified, otherwise use original branch name
-    # Guard against collision where folder name resolves to main repo
-    local next_steps_id
-    if [ -n "$folder_override" ]; then
-      # Check if folder_name would resolve to main repo (collision with current branch)
-      local resolve_result
-      if resolve_result=$(resolve_target "$folder_name" "$repo_root" "$base_dir" "$prefix" 2>/dev/null); then
-        local is_main
-        is_main=$(printf "%s" "$resolve_result" | cut -f1)
-        if [ "$is_main" = "1" ]; then
-          # Collision: folder name matches current branch, use branch name instead
-          next_steps_id="$branch_name"
-        else
-          next_steps_id="$folder_name"
-        fi
-      else
-        # resolve_target failed (shouldn't happen for new worktree), fall back to folder_name
-        next_steps_id="$folder_name"
-      fi
-    else
-      next_steps_id="$branch_name"
-    fi
-
-    echo ""
-    echo "Next steps:"
-    echo "  git gtr editor $next_steps_id  # Open in editor"
-    echo "  git gtr ai $next_steps_id      # Start AI tool"
-    echo "  cd \"\$(git gtr go $next_steps_id)\"  # Navigate to worktree"
+    _post_create_next_steps "$branch_name" "$folder_name" "$folder_override" "$repo_root" "$base_dir" "$prefix"
   fi
 }
 
