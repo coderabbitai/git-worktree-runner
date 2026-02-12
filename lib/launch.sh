@@ -30,7 +30,7 @@ _auto_launch_editor() {
   local editor
   editor=$(_cfg_editor_default)
   if [ "$editor" != "none" ]; then
-    _open_editor "$editor" "$worktree_path"
+    _open_editor "$editor" "$worktree_path" || log_warn "Failed to open editor"
   else
     if ! open_in_gui "$worktree_path"; then
       log_warn "Could not open file browser"
@@ -50,6 +50,6 @@ _auto_launch_ai() {
   else
     load_ai_adapter "$ai_tool" || return 1
     log_step "Starting $ai_tool..."
-    ai_start "$worktree_path"
+    ai_start "$worktree_path" || log_warn "Failed to start AI tool"
   fi
 }

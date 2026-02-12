@@ -48,7 +48,7 @@ _clean_merged() {
     [ -d "$dir" ] || continue
 
     local branch
-    branch=$(current_branch "$dir")
+    branch=$(current_branch "$dir") || true
 
     if [ -z "$branch" ] || [ "$branch" = "(detached)" ]; then
       log_warn "Skipping $dir (detached HEAD)"

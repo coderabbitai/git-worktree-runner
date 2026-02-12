@@ -29,8 +29,11 @@ cmd_editor() {
   worktree_path="$_ctx_worktree_path"
 
   if [ "$editor" = "none" ]; then
-    open_in_gui "$worktree_path"
-    log_info "Opened in file browser"
+    if ! open_in_gui "$worktree_path"; then
+      log_warn "Could not open file browser"
+    else
+      log_info "Opened in file browser"
+    fi
   else
     _open_editor "$editor" "$worktree_path" || exit 1
   fi

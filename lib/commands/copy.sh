@@ -65,6 +65,7 @@ cmd_copy() {
       log_error "No worktrees found"
       exit 1
     fi
+    local _branch
     while IFS= read -r _branch; do
       [ -n "$_branch" ] && targets+=("$_branch")
     done <<< "$all_branches"
@@ -72,6 +73,7 @@ cmd_copy() {
 
   # Process each target
   local copied_any=0
+  local target_id
   for target_id in "${targets[@]}"; do
     local dst_path dst_branch
     resolve_worktree "$target_id" "$repo_root" "$base_dir" "$prefix" || continue
