@@ -307,17 +307,16 @@ resolve_worktree() {
 }
 
 # Try to create a worktree, handling the common log/add/report pattern.
-# Usage: _try_worktree_add <path> <step_msg> <ok_msg> <force_flag> [git_worktree_add_args...]
+# Usage: _try_worktree_add <path> <step_msg> <ok_msg> [git_worktree_add_args...]
 # Prints worktree path on success; returns 1 on failure (caller handles error).
 # Note: step_msg may be empty to skip the log_step call.
 _try_worktree_add() {
-  local wt_path="$1" step_msg="$2" ok_msg="$3" force_flag="$4"
-  shift 4
+  local wt_path="$1" step_msg="$2" ok_msg="$3"
+  shift 3
 
   [ -n "$step_msg" ] && log_step "$step_msg"
 
-  # shellcheck disable=SC2086
-  if git worktree add $force_flag "$wt_path" "$@" >&2; then
+  if git worktree add "$wt_path" "$@" >&2; then
     log_info "$ok_msg"
     printf "%s" "$wt_path"
     return 0
@@ -364,10 +363,10 @@ create_worktree() {
   fi
 
   worktree_path="$base_dir/${prefix}${sanitized_name}"
-  local force_flag=""
+  local force_args=()
 
   if [ "$force" -eq 1 ]; then
-    force_flag="--force"
+    force_args=(--force)
   fi
 
   # Check if worktree already exists
@@ -398,10 +397,10 @@ create_worktree() {
         _try_worktree_add "$worktree_path" \
           "Creating worktree from remote branch origin/$branch_name" \
           "Worktree created tracking origin/$branch_name" \
-          "$force_flag" -b "$branch_name" "origin/$branch_name" && return 0
+          "${force_args[@]}" -b "$branch_name" "origin/$branch_name" && return 0
         _try_worktree_add "$worktree_path" "" \
           "Worktree created tracking origin/$branch_name" \
-          "$force_flag" "$branch_name" && return 0
+          "${force_args[@]}" "$branch_name" && return 0
       fi
       log_error "Remote branch origin/$branch_name does not exist"
       return 1
@@ -412,7 +411,7 @@ create_worktree() {
         _try_worktree_add "$worktree_path" \
           "Creating worktree from local branch $branch_name" \
           "Worktree created with local branch $branch_name" \
-          "$force_flag" "$branch_name" && return 0
+          "${force_args[@]}" "$branch_name" && return 0
       fi
       log_error "Local branch $branch_name does not exist"
       return 1
@@ -422,7 +421,7 @@ create_worktree() {
       _try_worktree_add "$worktree_path" \
         "Creating new branch $branch_name from $from_ref" \
         "Worktree created with new branch $branch_name" \
-        "$force_flag" -b "$branch_name" "$from_ref" && return 0
+        "${force_args[@]}" -b "$branch_name" "$from_ref" && return 0
       log_error "Failed to create worktree with new branch"
       return 1
       ;;
@@ -436,17 +435,17 @@ create_worktree() {
         fi
         _try_worktree_add "$worktree_path" "" \
           "Worktree created tracking origin/$branch_name" \
-          "$force_flag" "$branch_name" && return 0
+          "${force_args[@]}" "$branch_name" && return 0
       elif [ "$local_exists" -eq 1 ]; then
         _try_worktree_add "$worktree_path" \
           "Using existing local branch $branch_name" \
           "Worktree created with local branch $branch_name" \
-          "$force_flag" "$branch_name" && return 0
+          "${force_args[@]}" "$branch_name" && return 0
       else
         _try_worktree_add "$worktree_path" \
           "Creating new branch $branch_name from $from_ref" \
           "Worktree created with new branch $branch_name" \
-          "$force_flag" -b "$branch_name" "$from_ref" && return 0
+          "${force_args[@]}" -b "$branch_name" "$from_ref" && return 0
       fi
       ;;
   esac
@@ -466,13 +465,13 @@ remove_worktree() {
     return 1
   fi
 
-  local force_flag=""
+  local force_args=()
   if [ "$force" -eq 1 ]; then
-    force_flag="--force"
+    force_args=(--force)
   fi
 
   local remove_output
-  if remove_output=$(git worktree remove $force_flag "$worktree_path" 2>&1); then
+  if remove_output=$(git worktree remove "${force_args[@]}" "$worktree_path" 2>&1); then
     log_info "Worktree removed: $worktree_path"
     return 0
   else
