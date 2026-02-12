@@ -4,14 +4,10 @@
 # shellcheck disable=SC2154  # _arg_* _pa_* set by parse_args, _ctx_* set by resolve_*
 cmd_editor() {
   parse_args "--editor: value" "$@"
+  require_args 1 "Usage: git gtr editor <id|branch> [--editor <name>]"
 
-  local identifier="${_pa_positional[0]:-}"
+  local identifier="${_pa_positional[0]}"
   local editor="${_arg_editor:-}"
-
-  if [ -z "$identifier" ]; then
-    log_error "Usage: git gtr editor <id|branch> [--editor <name>]"
-    exit 1
-  fi
 
   # Get editor from flag or config (with .gtrconfig support)
   if [ -z "$editor" ]; then

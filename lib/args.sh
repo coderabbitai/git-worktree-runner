@@ -123,3 +123,13 @@ EOF
     esac
   done
 }
+
+# Validate that at least N positional arguments were provided.
+# Call after parse_args. Exits with error message if insufficient args.
+# Usage: require_args <min_count> "<usage message>"
+require_args() {
+  if [ "${#_pa_positional[@]}" -lt "$1" ]; then
+    log_error "$2"
+    exit 1
+  fi
+}

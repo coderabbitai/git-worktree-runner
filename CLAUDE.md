@@ -14,10 +14,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Testing
 
-This project uses **BATS tests** for core functions and **manual smoke tests** for end-to-end workflows. After any change:
+This project uses **BATS tests** for core functions and **manual smoke tests** for end-to-end workflows. CI runs ShellCheck + BATS automatically on PRs (`.github/workflows/lint.yml`).
 
 1. Run automated tests: `bats tests/`
-2. Run relevant manual smoke tests:
+2. Run a single test file: `bats tests/config.bats`
+3. Run a single test by name: `bats tests/config.bats --filter "cfg_map_to_file_key"`
+4. Run relevant manual smoke tests:
 
 ```bash
 ./bin/gtr new test-feature          # Create worktree
@@ -29,6 +31,8 @@ This project uses **BATS tests** for core functions and **manual smoke tests** f
 ```
 
 For exhaustive manual testing (hooks, copy patterns, adapters, `--force`, `--from-current`, etc.), see the full checklist in CONTRIBUTING.md or `.github/instructions/testing.instructions.md`.
+
+**Test files**: `adapters`, `config`, `copy_safety`, `integration_lifecycle`, `parse_args`, `provider`, `resolve_base_dir`, `sanitize_branch_name` (all in `tests/`). Shared fixtures in `tests/test_helper.bash`.
 
 **Tip**: Use a disposable repo for testing to avoid polluting your working tree:
 
@@ -42,20 +46,25 @@ mkdir -p /tmp/gtr-test && cd /tmp/gtr-test && git init && git commit --allow-emp
 ### Binary Structure
 
 - `bin/git-gtr` — Thin wrapper enabling `git gtr` subcommand invocation
-- `bin/gtr` — Entry point (~105 lines): sources libraries and commands, contains `main()` dispatcher
+- `bin/gtr` — Entry point: sources libraries and commands, contains `main()` dispatcher
 
 ### Module Structure
 
-| File               | Purpose                                                                                                     |
-| ------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `lib/core.sh`      | Worktree CRUD: `create_worktree`, `remove_worktree`, `list_worktrees`, `resolve_target`, `resolve_base_dir` |
-| `lib/config.sh`    | Git config wrapper with precedence: `cfg_get`, `cfg_default`, `cfg_get_all`                                 |
-| `lib/copy.sh`      | File/directory copying with glob patterns: `copy_patterns`, `copy_directories`                              |
-| `lib/hooks.sh`     | Hook execution: `run_hooks_in` for postCreate/preRemove/postRemove                                          |
-| `lib/ui.sh`        | Logging (`log_error`, `log_info`, `log_warn`), prompts, formatting                                          |
-| `lib/platform.sh`  | OS detection, GUI helpers                                                                                   |
-| `lib/adapters.sh`  | Adapter registry, builder functions, generic fallbacks, loader functions                                    |
-| `lib/commands/*.sh` | One file per subcommand: `cmd_create`, `cmd_remove`, etc. (16 files)                                       |
+| File                | Purpose                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `lib/ui.sh`         | Logging (`log_error`, `log_info`, `log_warn`), prompts, formatting                                          |
+| `lib/args.sh`       | Shared argument parser: flag specs (`--flag`, `--flag: val`, aliases), populates `_arg_*` vars              |
+| `lib/config.sh`     | Git config wrapper with precedence: `cfg_get`, `cfg_default`, `cfg_get_all`                                 |
+| `lib/platform.sh`   | OS detection, GUI helpers                                                                                   |
+| `lib/core.sh`       | Worktree CRUD: `create_worktree`, `remove_worktree`, `list_worktrees`, `resolve_target`, `resolve_base_dir` |
+| `lib/copy.sh`       | File/directory copying with glob patterns: `copy_patterns`, `copy_directories`                              |
+| `lib/hooks.sh`      | Hook execution: `run_hooks_in` for postCreate/preRemove/postRemove                                          |
+| `lib/provider.sh`   | Remote hosting detection (GitHub/GitLab) and CLI integration for `clean --merged`                           |
+| `lib/adapters.sh`   | Adapter registry, builder functions, generic fallbacks, loader functions                                    |
+| `lib/launch.sh`     | Editor/AI launch orchestration: `_open_editor`, `_auto_launch_editor`, `_auto_launch_ai`                    |
+| `lib/commands/*.sh` | One file per subcommand: `cmd_create`, `cmd_remove`, etc. (16 files)                                        |
+
+Libraries are sourced in the order listed above (ui → args → config → ... → launch → commands/\*.sh glob).
 
 ### Adapters
 
@@ -134,6 +143,17 @@ When adding commands or flags, update all three files:
 - `completions/gtr.bash` (Bash)
 - `completions/_git-gtr` (Zsh)
 - `completions/git-gtr.fish` (Fish)
+
+## Critical Gotcha: `set -e`
+
+`bin/gtr` runs with `set -e`. Any unguarded non-zero return silently exits the entire script. When calling functions that may `return 1`, guard with `|| true`:
+
+```bash
+result=$(my_func) || true           # Prevents silent exit
+if my_func; then ...; fi            # Also safe (if guards the return)
+```
+
+This is the most common source of subtle bugs in this codebase.
 
 ## Code Style
 

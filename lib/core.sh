@@ -324,26 +324,13 @@ _try_worktree_add() {
   return 1
 }
 
-# Create a new git worktree
-# Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override]
-# track_mode: auto, remote, local, or none
-# skip_fetch: 0 (default, fetch) or 1 (skip)
-# force: 0 (default, check branch) or 1 (allow same branch in multiple worktrees)
-# custom_name: optional custom name suffix (e.g., "backend" creates "feature-auth-backend")
-# folder_override: optional complete folder name override (replaces default naming)
-create_worktree() {
-  local base_dir="$1"
-  local prefix="$2"
-  local branch_name="$3"
-  local from_ref="$4"
-  local track_mode="${5:-auto}"
-  local skip_fetch="${6:-0}"
-  local force="${7:-0}"
-  local custom_name="${8:-}"
-  local folder_override="${9:-}"
-  local sanitized_name worktree_path
+# Build and validate folder name from branch/custom/override.
+# Prints sanitized folder name on success; returns 1 on validation failure.
+# Usage: _resolve_folder_name <branch_name> [custom_name] [folder_override]
+_resolve_folder_name() {
+  local branch_name="$1" custom_name="${2:-}" folder_override="${3:-}"
+  local sanitized_name
 
-  # Construct folder name
   if [ -n "$folder_override" ]; then
     sanitized_name=$(sanitize_branch_name "$folder_override")
   elif [ -n "$custom_name" ]; then
@@ -352,7 +339,6 @@ create_worktree() {
     sanitized_name=$(sanitize_branch_name "$branch_name")
   fi
 
-  # Validate sanitized name is not empty or path traversal attempt
   if [ -z "$sanitized_name" ] || [ "$sanitized_name" = "." ] || [ "$sanitized_name" = ".." ]; then
     if [ -n "$folder_override" ]; then
       log_error "Invalid --folder value: $folder_override"
@@ -362,38 +348,73 @@ create_worktree() {
     return 1
   fi
 
-  worktree_path="$base_dir/${prefix}${sanitized_name}"
-  local force_args=()
+  printf "%s" "$sanitized_name"
+}
 
-  if [ "$force" -eq 1 ]; then
-    force_args=(--force)
+# Check if a branch exists on remote and/or locally.
+# Sets globals: _wt_remote_exists, _wt_local_exists (0 or 1)
+# Usage: _check_branch_refs <branch_name>
+declare _wt_remote_exists _wt_local_exists
+_check_branch_refs() {
+  _wt_remote_exists=0
+  _wt_local_exists=0
+  git show-ref --verify --quiet "refs/remotes/origin/$1" && _wt_remote_exists=1
+  git show-ref --verify --quiet "refs/heads/$1" && _wt_local_exists=1
+  return 0
+}
+
+# Auto-track: create local tracking branch from remote if needed, then add worktree.
+# Usage: _worktree_add_tracked <worktree_path> <branch_name> [force_args...]
+# shellcheck disable=SC2317  # Called indirectly from create_worktree
+_worktree_add_tracked() {
+  local wt_path="$1" branch_name="$2"
+  shift 2
+
+  log_step "Branch '$branch_name' exists on remote"
+  if git branch --track "$branch_name" "origin/$branch_name" >/dev/null 2>&1; then
+    log_info "Created local branch tracking origin/$branch_name"
   fi
+  _try_worktree_add "$wt_path" "" \
+    "Worktree created tracking origin/$branch_name" \
+    "$@" "$branch_name"
+}
 
-  # Check if worktree already exists
+# Create a new git worktree
+# Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override]
+# track_mode: auto, remote, local, or none
+# skip_fetch: 0 (default, fetch) or 1 (skip)
+# force: 0 (default, check branch) or 1 (allow same branch in multiple worktrees)
+# custom_name: optional custom name suffix (e.g., "backend" creates "feature-auth-backend")
+# folder_override: optional complete folder name override (replaces default naming)
+create_worktree() {
+  local base_dir="$1" prefix="$2" branch_name="$3" from_ref="$4"
+  local track_mode="${5:-auto}" skip_fetch="${6:-0}" force="${7:-0}"
+  local custom_name="${8:-}" folder_override="${9:-}"
+
+  local sanitized_name
+  sanitized_name=$(_resolve_folder_name "$branch_name" "$custom_name" "$folder_override") || return 1
+
+  local worktree_path="$base_dir/${prefix}${sanitized_name}"
+  local force_args=()
+  [ "$force" -eq 1 ] && force_args=(--force)
+
   if [ -d "$worktree_path" ]; then
     log_error "Worktree $sanitized_name already exists at $worktree_path"
     return 1
   fi
 
-  # Create base directory if needed
   mkdir -p "$base_dir"
 
-  # Fetch latest refs (unless --no-fetch)
   if [ "$skip_fetch" -eq 0 ]; then
     log_step "Fetching remote branches..."
     git fetch origin 2>/dev/null || log_warn "Could not fetch from origin"
   fi
 
-  local remote_exists=0
-  local local_exists=0
-
-  git show-ref --verify --quiet "refs/remotes/origin/$branch_name" && remote_exists=1
-  git show-ref --verify --quiet "refs/heads/$branch_name" && local_exists=1
+  _check_branch_refs "$branch_name"
 
   case "$track_mode" in
     remote)
-      if [ "$remote_exists" -eq 1 ]; then
-        # Try creating with -b first (new local branch tracking remote), fallback to direct checkout
+      if [ "$_wt_remote_exists" -eq 1 ]; then
         _try_worktree_add "$worktree_path" \
           "Creating worktree from remote branch origin/$branch_name" \
           "Worktree created tracking origin/$branch_name" \
@@ -407,7 +428,7 @@ create_worktree() {
       ;;
 
     local)
-      if [ "$local_exists" -eq 1 ]; then
+      if [ "$_wt_local_exists" -eq 1 ]; then
         _try_worktree_add "$worktree_path" \
           "Creating worktree from local branch $branch_name" \
           "Worktree created with local branch $branch_name" \
@@ -427,16 +448,9 @@ create_worktree() {
       ;;
 
     auto|*)
-      if [ "$remote_exists" -eq 1 ] && [ "$local_exists" -eq 0 ]; then
-        # Remote exists, no local branch — create local tracking branch first
-        log_step "Branch '$branch_name' exists on remote"
-        if git branch --track "$branch_name" "origin/$branch_name" >/dev/null 2>&1; then
-          log_info "Created local branch tracking origin/$branch_name"
-        fi
-        _try_worktree_add "$worktree_path" "" \
-          "Worktree created tracking origin/$branch_name" \
-          "${force_args[@]}" "$branch_name" && return 0
-      elif [ "$local_exists" -eq 1 ]; then
+      if [ "$_wt_remote_exists" -eq 1 ] && [ "$_wt_local_exists" -eq 0 ]; then
+        _worktree_add_tracked "$worktree_path" "$branch_name" "${force_args[@]}" && return 0
+      elif [ "$_wt_local_exists" -eq 1 ]; then
         _try_worktree_add "$worktree_path" \
           "Using existing local branch $branch_name" \
           "Worktree created with local branch $branch_name" \

@@ -117,6 +117,37 @@ _copy_pattern_file() {
   fi
 }
 
+# Process a single glob pattern: expand via globstar or find fallback, copy matching files.
+# Must be called from within the source directory with shell options already configured.
+# Prints the number of files copied to stdout.
+# Usage: _expand_and_copy_pattern <pattern> <dst_root> <excludes> <preserve_paths> <dry_run> <have_globstar>
+_expand_and_copy_pattern() {
+  local pattern="$1" dst_root="$2" excludes="$3"
+  local preserve_paths="$4" dry_run="$5" have_globstar="$6"
+  local count=0
+
+  if [ "$have_globstar" -eq 0 ] && echo "$pattern" | grep -q '\*\*'; then
+    # Fallback to find for ** patterns on Bash 3.2
+    while IFS= read -r file; do
+      if _copy_pattern_file "$file" "$dst_root" "$excludes" "$preserve_paths" "$dry_run"; then
+        count=$((count + 1))
+      fi
+    done <<EOF
+$(find . -path "./$pattern" -type f 2>/dev/null || true)
+EOF
+  else
+    # Use native Bash glob expansion (supports ** if available)
+    for file in $pattern; do
+      [ -f "$file" ] || continue
+      if _copy_pattern_file "$file" "$dst_root" "$excludes" "$preserve_paths" "$dry_run"; then
+        count=$((count + 1))
+      fi
+    done
+  fi
+
+  printf "%s" "$count"
+}
+
 # Copy files matching patterns from source to destination
 # Usage: copy_patterns src_root dst_root includes excludes [preserve_paths] [dry_run]
 # includes: newline-separated glob patterns to include
@@ -124,31 +155,18 @@ _copy_pattern_file() {
 # preserve_paths: true (default) to preserve directory structure
 # dry_run: true to only show what would be copied without copying
 copy_patterns() {
-  local src_root="$1"
-  local dst_root="$2"
-  local includes="$3"
-  local excludes="$4"
-  local preserve_paths="${5:-true}"
-  local dry_run="${6:-false}"
+  local src_root="$1" dst_root="$2" includes="$3" excludes="$4"
+  local preserve_paths="${5:-true}" dry_run="${6:-false}"
 
-  if [ -z "$includes" ]; then
-    # No patterns to copy
-    return 0
-  fi
+  [ -z "$includes" ] && return 0
 
-  # Change to source directory
   local old_pwd
   old_pwd=$(pwd)
   cd "$src_root" || return 1
 
-  # Save current shell options
+  # Save and configure shell options for glob expansion
   local shopt_save
   shopt_save="$(shopt -p nullglob dotglob globstar 2>/dev/null || true)"
-
-  # Try to enable globstar for ** patterns (Bash 4.0+)
-  # nullglob: patterns that don't match expand to nothing
-  # dotglob: * matches hidden files
-  # globstar: ** matches directories recursively
   local have_globstar=0
   if shopt -s globstar 2>/dev/null; then
     have_globstar=1
@@ -157,44 +175,22 @@ copy_patterns() {
 
   local copied_count=0
 
-  # Process each include pattern (avoid pipeline subshell)
   while IFS= read -r pattern; do
     [ -z "$pattern" ] && continue
 
-    # Security: reject absolute paths and parent directory traversal
     if _is_unsafe_path "$pattern"; then
       log_warn "Skipping unsafe pattern (absolute path or '..' path segment): $pattern"
       continue
     fi
 
-    # Detect if pattern uses ** (requires globstar)
-    if [ "$have_globstar" -eq 0 ] && echo "$pattern" | grep -q '\*\*'; then
-      # Fallback to find for ** patterns on Bash 3.2
-      while IFS= read -r file; do
-        if _copy_pattern_file "$file" "$dst_root" "$excludes" "$preserve_paths" "$dry_run"; then
-          copied_count=$((copied_count + 1))
-        fi
-      done <<EOF
-$(find . -path "./$pattern" -type f 2>/dev/null || true)
-EOF
-    else
-      # Use native Bash glob expansion (supports ** if available)
-      for file in $pattern; do
-        # Skip if not a file
-        [ -f "$file" ] || continue
-
-        if _copy_pattern_file "$file" "$dst_root" "$excludes" "$preserve_paths" "$dry_run"; then
-          copied_count=$((copied_count + 1))
-        fi
-      done
-    fi
+    local pattern_copied
+    pattern_copied=$(_expand_and_copy_pattern "$pattern" "$dst_root" "$excludes" "$preserve_paths" "$dry_run" "$have_globstar")
+    copied_count=$((copied_count + pattern_copied))
   done <<EOF
 $includes
 EOF
 
-  # Restore previous shell options
   eval "$shopt_save" 2>/dev/null || true
-
   cd "$old_pwd" || return 1
 
   if [ "$copied_count" -gt 0 ]; then

@@ -4,11 +4,7 @@
 # shellcheck disable=SC2154  # _pa_* set by parse_args, _ctx_* set by resolve_*
 cmd_go() {
   parse_args "" "$@"
-
-  if [ "${#_pa_positional[@]}" -ne 1 ]; then
-    log_error "Usage: git gtr go <id|branch>"
-    exit 1
-  fi
+  require_args 1 "Usage: git gtr go <id|branch>"
 
   local identifier="${_pa_positional[0]}"
   resolve_repo_context || exit 1

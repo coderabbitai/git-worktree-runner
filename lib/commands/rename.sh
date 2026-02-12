@@ -8,16 +8,12 @@ cmd_rename() {
 --yes"
   parse_args "$_spec" "$@"
 
-  local old_identifier="${_pa_positional[0]:-}"
-  local new_name="${_pa_positional[1]:-}"
+  require_args 2 "Usage: git gtr mv <old> <new> [--force] [--yes]"
+
+  local old_identifier="${_pa_positional[0]}"
+  local new_name="${_pa_positional[1]}"
   local force="${_arg_force:-0}"
   local yes_mode="${_arg_yes:-0}"
-
-  # Validate arguments
-  if [ -z "$old_identifier" ] || [ -z "$new_name" ]; then
-    log_error "Usage: git gtr mv <old> <new> [--force] [--yes]"
-    exit 1
-  fi
 
   resolve_repo_context || exit 1
 

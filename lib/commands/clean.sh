@@ -1,6 +1,58 @@
 #!/usr/bin/env bash
 
 # Clean command (remove prunable worktrees)
+
+# Detect hosting provider with error messaging.
+# Prints provider name on success; returns 1 on failure.
+_clean_detect_provider() {
+  local provider
+  provider=$(detect_provider) || true
+  if [ -n "$provider" ]; then
+    printf "%s" "$provider"
+    return 0
+  fi
+
+  local remote_url
+  remote_url=$(git remote get-url origin 2>/dev/null || true)
+  if [ -z "$remote_url" ]; then
+    log_error "No remote URL configured for 'origin'"
+  else
+    # Sanitize URL to avoid leaking embedded credentials (e.g., https://token@host/...)
+    local safe_url="${remote_url%%@*}"
+    if [ "$safe_url" != "$remote_url" ]; then
+      safe_url="<redacted>@${remote_url#*@}"
+    fi
+    log_error "Could not detect hosting provider from remote URL: $safe_url"
+    log_info "Set manually: git gtr config set gtr.provider github  (or gitlab)"
+  fi
+  return 1
+}
+
+# Check if a worktree should be skipped during merged cleanup.
+# Returns 0 if should skip, 1 if should process.
+# Usage: _clean_should_skip <dir> <branch>
+_clean_should_skip() {
+  local dir="$1" branch="$2"
+
+  if [ -z "$branch" ] || [ "$branch" = "(detached)" ]; then
+    log_warn "Skipping $dir (detached HEAD)"
+    return 0
+  fi
+
+  if ! git -C "$dir" diff --quiet 2>/dev/null || \
+     ! git -C "$dir" diff --cached --quiet 2>/dev/null; then
+    log_warn "Skipping $branch (has uncommitted changes)"
+    return 0
+  fi
+
+  if [ -n "$(git -C "$dir" ls-files --others --exclude-standard 2>/dev/null)" ]; then
+    log_warn "Skipping $branch (has untracked files)"
+    return 0
+  fi
+
+  return 1
+}
+
 # Remove worktrees whose PRs/MRs are merged (handles squash merges)
 # Usage: _clean_merged repo_root base_dir prefix yes_mode dry_run
 _clean_merged() {
@@ -8,69 +60,27 @@ _clean_merged() {
 
   log_step "Checking for worktrees with merged PRs/MRs..."
 
-  # Detect hosting provider (GitHub, GitLab, etc.)
   local provider
-  provider=$(detect_provider) || true
-  if [ -z "$provider" ]; then
-    local remote_url
-    remote_url=$(git remote get-url origin 2>/dev/null || true)
-    if [ -z "$remote_url" ]; then
-      log_error "No remote URL configured for 'origin'"
-    else
-      # Sanitize URL to avoid leaking embedded credentials (e.g., https://token@host/...)
-      local safe_url="${remote_url%%@*}"
-      if [ "$safe_url" != "$remote_url" ]; then
-        safe_url="<redacted>@${remote_url#*@}"
-      fi
-      log_error "Could not detect hosting provider from remote URL: $safe_url"
-      log_info "Set manually: git gtr config set gtr.provider github  (or gitlab)"
-    fi
-    exit 1
-  fi
-
-  # Ensure provider CLI is available and authenticated
+  provider=$(_clean_detect_provider) || exit 1
   ensure_provider_cli "$provider" || exit 1
 
-  # Fetch latest from origin
   log_step "Fetching from origin..."
   git fetch origin --prune 2>/dev/null || log_warn "Could not fetch from origin"
 
-  local removed=0
-  local skipped=0
-
-  # Get main repo branch to exclude it
+  local removed=0 skipped=0
   local main_branch
   main_branch=$(current_branch "$repo_root")
 
-  # Iterate through worktree directories
   for dir in "$base_dir/${prefix}"*; do
     [ -d "$dir" ] || continue
 
     local branch
     branch=$(current_branch "$dir") || true
 
-    if [ -z "$branch" ] || [ "$branch" = "(detached)" ]; then
-      log_warn "Skipping $dir (detached HEAD)"
-      skipped=$((skipped + 1))
-      continue
-    fi
+    # Skip main repo branch silently (not counted)
+    [ "$branch" = "$main_branch" ] && continue
 
-    # Skip if same as main repo branch
-    if [ "$branch" = "$main_branch" ]; then
-      continue
-    fi
-
-    # Check if worktree has uncommitted changes
-    if ! git -C "$dir" diff --quiet 2>/dev/null || \
-       ! git -C "$dir" diff --cached --quiet 2>/dev/null; then
-      log_warn "Skipping $branch (has uncommitted changes)"
-      skipped=$((skipped + 1))
-      continue
-    fi
-
-    # Check for untracked files
-    if [ -n "$(git -C "$dir" ls-files --others --exclude-standard 2>/dev/null)" ]; then
-      log_warn "Skipping $branch (has untracked files)"
+    if _clean_should_skip "$dir" "$branch"; then
       skipped=$((skipped + 1))
       continue
     fi
@@ -83,7 +93,6 @@ _clean_merged() {
       elif [ "$yes_mode" -eq 1 ] || prompt_yes_no "Remove worktree and delete branch '$branch'?"; then
         log_step "Removing worktree: $branch"
 
-        # Run pre-remove hooks (skip worktree on failure)
         if ! run_hooks_in preRemove "$dir" \
           REPO_ROOT="$repo_root" \
           WORKTREE_PATH="$dir" \
@@ -94,11 +103,9 @@ _clean_merged() {
         fi
 
         if remove_worktree "$dir" 0; then
-          # Delete the local branch (safe: already merged)
           git branch -d "$branch" 2>/dev/null || git branch -D "$branch" 2>/dev/null || true
           removed=$((removed + 1))
 
-          # Run post-remove hooks (worktree already removed, don't abort)
           if ! run_hooks postRemove \
             REPO_ROOT="$repo_root" \
             WORKTREE_PATH="$dir" \
@@ -111,7 +118,6 @@ _clean_merged() {
         skipped=$((skipped + 1))
       fi
     fi
-    # Branches without merged PRs are silently skipped (this is the normal case)
   done
 
   echo ""

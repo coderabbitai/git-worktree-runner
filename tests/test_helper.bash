@@ -73,3 +73,36 @@ source_gtr_libs() {
   # shellcheck disable=SC1091
   . "$PROJECT_ROOT/lib/adapters.sh"
 }
+
+# Source command files + launch.sh (for cmd_* function testing)
+source_gtr_commands() {
+  source_gtr_libs
+  # shellcheck disable=SC1091
+  . "$PROJECT_ROOT/lib/launch.sh"
+  for cmd_file in "$PROJECT_ROOT"/lib/commands/*.sh; do
+    # shellcheck disable=SC1090
+    . "$cmd_file"
+  done
+}
+
+# Create a worktree quickly for testing (skips hooks/copy/fetch)
+# Usage: create_test_worktree <branch>
+# Sets: TEST_WT_PATH (path to created worktree)
+create_test_worktree() {
+  local branch="$1"
+  TEST_WT_PATH=$(create_worktree "$TEST_WORKTREES_DIR" "" "$branch" "HEAD" "none" "1" "0")
+}
+
+# Create a stub CLI in PATH for provider testing
+# Usage: mock_provider_cli <name> <exit_code> [stdout]
+mock_provider_cli() {
+  local name="$1" exit_code="${2:-0}" stdout="${3:-}"
+  MOCK_BIN_DIR=$(mktemp -d)
+  cat > "$MOCK_BIN_DIR/$name" <<SCRIPT
+#!/bin/bash
+echo "$stdout"
+exit $exit_code
+SCRIPT
+  chmod +x "$MOCK_BIN_DIR/$name"
+  export PATH="$MOCK_BIN_DIR:$PATH"
+}

@@ -9,14 +9,11 @@ cmd_remove() {
 --force"
   parse_args "$_spec" "$@"
 
+  require_args 1 "Usage: git gtr rm <id|branch> [<id|branch>...] [--delete-branch] [--force] [--yes]"
+
   local delete_branch="${_arg_delete_branch:-0}"
   local yes_mode="${_arg_yes:-0}"
   local force="${_arg_force:-0}"
-
-  if [ ${#_pa_positional[@]} -eq 0 ]; then
-    log_error "Usage: git gtr rm <id|branch> [<id|branch>...] [--delete-branch] [--force] [--yes]"
-    exit 1
-  fi
 
   resolve_repo_context || exit 1
 

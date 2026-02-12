@@ -4,15 +4,11 @@
 # shellcheck disable=SC2154  # _arg_* _pa_* set by parse_args, _ctx_* set by resolve_*
 cmd_ai() {
   parse_args "--ai: value" "$@"
+  require_args 1 "Usage: git gtr ai <id|branch> [--ai <name>] [-- args...]"
 
-  local identifier="${_pa_positional[0]:-}"
+  local identifier="${_pa_positional[0]}"
   local ai_tool="${_arg_ai:-}"
   local -a ai_args=("${_pa_passthrough[@]}")
-
-  if [ -z "$identifier" ]; then
-    log_error "Usage: git gtr ai <id|branch> [--ai <name>] [-- args...]"
-    exit 1
-  fi
 
   # Get AI tool from flag or config (with .gtrconfig support)
   if [ -z "$ai_tool" ]; then

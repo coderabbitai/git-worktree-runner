@@ -1,0 +1,90 @@
+#!/usr/bin/env bats
+# Tests for lib/hooks.sh
+
+load test_helper
+
+setup() {
+  setup_integration_repo
+  source_gtr_libs
+}
+
+teardown() {
+  teardown_integration_repo
+}
+
+@test "run_hooks returns 0 when no hooks configured" {
+  run run_hooks postCreate REPO_ROOT="$TEST_REPO"
+  [ "$status" -eq 0 ]
+}
+
+@test "run_hooks executes single hook" {
+  git config --add gtr.hook.postCreate "touch $TEST_REPO/hook-ran"
+  run_hooks postCreate REPO_ROOT="$TEST_REPO"
+  [ -f "$TEST_REPO/hook-ran" ]
+}
+
+@test "run_hooks passes environment variables" {
+  git config --add gtr.hook.postCreate 'echo "$MY_VAR" > "$REPO_ROOT/env-test"'
+  run_hooks postCreate REPO_ROOT="$TEST_REPO" MY_VAR="hello-world"
+  [ "$(cat "$TEST_REPO/env-test")" = "hello-world" ]
+}
+
+@test "run_hooks returns 1 when hook fails" {
+  git config --add gtr.hook.preRemove "exit 1"
+  run run_hooks preRemove REPO_ROOT="$TEST_REPO"
+  [ "$status" -eq 1 ]
+}
+
+@test "run_hooks executes multiple hooks in order" {
+  git config --add gtr.hook.postCreate "echo first >> $TEST_REPO/order"
+  git config --add gtr.hook.postCreate "echo second >> $TEST_REPO/order"
+  run_hooks postCreate REPO_ROOT="$TEST_REPO"
+  [ "$(head -1 "$TEST_REPO/order")" = "first" ]
+  [ "$(tail -1 "$TEST_REPO/order")" = "second" ]
+}
+
+@test "run_hooks reports failure count when multiple hooks fail" {
+  git config --add gtr.hook.postCreate "exit 1"
+  git config --add gtr.hook.postCreate "exit 2"
+  run run_hooks postCreate REPO_ROOT="$TEST_REPO"
+  [ "$status" -eq 1 ]
+}
+
+@test "run_hooks isolates hook side effects in subshell" {
+  git config --add gtr.hook.postCreate "MY_LEAK=leaked"
+  run_hooks postCreate REPO_ROOT="$TEST_REPO"
+  [ -z "${MY_LEAK:-}" ]
+}
+
+@test "run_hooks_in changes to target directory" {
+  mkdir -p "$TEST_REPO/subdir"
+  git config --add gtr.hook.postCreate 'pwd > "$REPO_ROOT/cwd-test"'
+  run_hooks_in postCreate "$TEST_REPO/subdir" REPO_ROOT="$TEST_REPO"
+  [ "$(cat "$TEST_REPO/cwd-test")" = "$TEST_REPO/subdir" ]
+}
+
+@test "run_hooks_in restores original directory" {
+  mkdir -p "$TEST_REPO/subdir"
+  local before_pwd
+  before_pwd=$(pwd)
+  run_hooks_in postCreate "$TEST_REPO/subdir" REPO_ROOT="$TEST_REPO"
+  [ "$(pwd)" = "$before_pwd" ]
+}
+
+@test "run_hooks_in returns 1 for nonexistent directory" {
+  run run_hooks_in postCreate "/nonexistent/path" REPO_ROOT="$TEST_REPO"
+  [ "$status" -eq 1 ]
+}
+
+@test "run_hooks_in propagates hook failure" {
+  mkdir -p "$TEST_REPO/subdir"
+  git config --add gtr.hook.preRemove "exit 1"
+  run run_hooks_in preRemove "$TEST_REPO/subdir" REPO_ROOT="$TEST_REPO"
+  [ "$status" -eq 1 ]
+}
+
+@test "run_hooks REPO_ROOT and BRANCH env vars available" {
+  git config --add gtr.hook.postCreate 'echo "$REPO_ROOT|$BRANCH" > "$REPO_ROOT/vars"'
+  run_hooks postCreate REPO_ROOT="$TEST_REPO" BRANCH="test-branch"
+  [ "$(cat "$TEST_REPO/vars")" = "$TEST_REPO|test-branch" ]
+}
