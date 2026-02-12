@@ -239,6 +239,79 @@ cfg_unset() {
   git config $flag --unset-all "$1" 2>/dev/null || true
 }
 
+# ── cfg_list helpers ──────────────────────────────────────────────────
+# Module-level state for cfg_list auto-mode deduplication.
+# Reset by cfg_list() at the start of each "auto" invocation.
+_cfg_list_seen=""
+_cfg_list_result=""
+
+# Add a config entry, deduplicating by key+value combo.
+# Uses Unit Separator ($'\x1f') as delimiter to avoid collision with any value content.
+# Usage: _cfg_list_add_entry <origin> <key> <value>
+_cfg_list_add_entry() {
+  local origin="$1" entry_key="$2" entry_value="$3"
+  local id=$'\x1f'"${entry_key}=${entry_value}"$'\x1f'
+
+  # Use [[ ]] for literal string matching (no glob interpretation)
+  if [[ "$_cfg_list_seen" == *"$id"* ]]; then
+    return 0
+  fi
+
+  _cfg_list_seen="${_cfg_list_seen}${id}"
+  _cfg_list_result="${_cfg_list_result}${entry_key}"$'\x1f'"${entry_value}"$'\x1f'"${origin}"$'\n'
+}
+
+# Parse git config --get-regexp output and add each entry with an origin label.
+# Usage: _cfg_list_parse_entries <origin> <get-regexp-output>
+_cfg_list_parse_entries() {
+  local origin="$1" entries="$2"
+  local line key value
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    key="${line%% *}"
+    if [[ "$line" == *" "* ]]; then
+      value="${line#* }"
+    else
+      value=""
+    fi
+    _cfg_list_add_entry "$origin" "$key" "$value"
+  done <<< "$entries"
+}
+
+# Format cfg_list output with alignment.
+# Detects auto-mode (Unit Separator delimited with origin) vs scoped (space delimited).
+# Usage: _cfg_list_format <output>
+_cfg_list_format() {
+  local output="$1"
+  if [ -z "$output" ]; then
+    echo "No gtr configuration found"
+    return 0
+  fi
+
+  printf '%s\n' "$output" | while IFS= read -r line; do
+    [ -z "$line" ] && continue
+
+    local key value origin rest
+    if [[ "$line" == *$'\x1f'* ]]; then
+      # Auto-mode format: key<US>value<US>origin
+      key="${line%%$'\x1f'*}"
+      rest="${line#*$'\x1f'}"
+      value="${rest%%$'\x1f'*}"
+      origin="${rest#*$'\x1f'}"
+      printf "%-35s = %-25s [%s]\n" "$key" "$value" "$origin"
+    else
+      # Scoped format: key value (no origin)
+      key="${line%% *}"
+      if [[ "$line" == *" "* ]]; then
+        value="${line#* }"
+      else
+        value=""
+      fi
+      printf "%-35s = %s\n" "$key" "$value"
+    fi
+  done
+}
+
 # List all gtr.* config values
 # Usage: cfg_list [scope]
 # scope: auto (default), local, global, system
@@ -262,51 +335,10 @@ cfg_list() {
       output=$(git config --system --get-regexp '^gtr\.' 2>/dev/null || true)
       ;;
     auto)
-      # Merge all sources with origin labels
-      # Deduplicates by key+value combo, preserving all multi-values from highest priority source
-      local seen_keys=""
-      local result=""
+      # Reset module-level state for this invocation
+      _cfg_list_seen=""
+      _cfg_list_result=""
       local key value line
-
-      # Set up cleanup trap for helper functions (protects against early exit/return)
-      trap 'unset -f _cfg_list_add_entry _cfg_list_parse_entries 2>/dev/null' RETURN
-
-      # Helper function to add entries with origin (inline to avoid Bash 3.2 nameref issues)
-      # Uses Unit Separator ($'\x1f') as delimiter to avoid conflicts with any values
-      _cfg_list_add_entry() {
-        local origin="$1"
-        local entry_key="$2"
-        local entry_value="$3"
-
-        # For multi-valued keys: check if key+value combo already seen
-        # This allows multiple values for the same key from the same source
-        # Use Unit Separator as delimiter in seen_keys to avoid collision with any value content
-        local id=$'\x1f'"${entry_key}=${entry_value}"$'\x1f'
-        # Use [[ ]] for literal string matching (no glob interpretation)
-        if [[ "$seen_keys" == *"$id"* ]]; then
-          return 0
-        fi
-
-        seen_keys="${seen_keys}${id}"
-        # Use Unit Separator ($'\x1f') as delimiter - won't appear in normal values
-        result="${result}${entry_key}"$'\x1f'"${entry_value}"$'\x1f'"${origin}"$'\n'
-      }
-
-      # Parse get-regexp output and add each entry with an origin label
-      _cfg_list_parse_entries() {
-        local origin="$1"
-        local entries="$2"
-        while IFS= read -r line; do
-          [ -z "$line" ] && continue
-          key="${line%% *}"
-          if [[ "$line" == *" "* ]]; then
-            value="${line#* }"
-          else
-            value=""
-          fi
-          _cfg_list_add_entry "$origin" "$key" "$value"
-        done <<< "$entries"
-      }
 
       # Process in priority order: local > .gtrconfig > global > system
       _cfg_list_parse_entries "local" \
@@ -334,52 +366,16 @@ cfg_list() {
       _cfg_list_parse_entries "system" \
         "$(git config --system --get-regexp '^gtr\.' 2>/dev/null || true)"
 
-      # Clean up helper functions and clear trap (trap handles early exit cases)
-      unset -f _cfg_list_add_entry _cfg_list_parse_entries
-      trap - RETURN
-
-      output="$result"
+      output="$_cfg_list_result"
       ;;
     *)
-      # Unknown scope - warn and fall back to auto
       log_warn "Unknown scope '$scope', using 'auto'"
       cfg_list "auto"
       return $?
       ;;
   esac
 
-  # Format and display output
-  if [ -z "$output" ]; then
-    echo "No gtr configuration found"
-    return 0
-  fi
-
-  # Format output with alignment
-  # Use printf '%s\n' instead of echo for safety with special characters
-  printf '%s\n' "$output" | while IFS= read -r line; do
-    [ -z "$line" ] && continue
-
-    local key value origin rest
-    # Check if line uses Unit Separator delimiter (auto mode with origin)
-    if [[ "$line" == *$'\x1f'* ]]; then
-      # Format: key<US>value<US>origin
-      key="${line%%$'\x1f'*}"
-      rest="${line#*$'\x1f'}"
-      value="${rest%%$'\x1f'*}"
-      origin="${rest#*$'\x1f'}"
-      printf "%-35s = %-25s [%s]\n" "$key" "$value" "$origin"
-    else
-      # Format: key value (no origin, for scoped queries)
-      key="${line%% *}"
-      # Handle empty values (no space in line means value is empty)
-      if [[ "$line" == *" "* ]]; then
-        value="${line#* }"
-      else
-        value=""
-      fi
-      printf "%-35s = %s\n" "$key" "$value"
-    fi
-  done
+  _cfg_list_format "$output"
 }
 
 # Get config value with environment variable fallback

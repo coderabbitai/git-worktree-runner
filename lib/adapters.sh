@@ -2,10 +2,20 @@
 # Adapter loading infrastructure — registries, builders, generic fallbacks, and loaders
 # shellcheck disable=SC2329 # Functions defined inside adapter builders are invoked indirectly
 
-# Adapter registries — declarative definitions for standard adapters
-# Custom adapters (nano, claude, cursor-ai) remain as override files in adapters/
-# Format — editor: name|cmd|type|err_msg|flags (comma-separated: workspace, background)
-# Format — ai:     name|cmd|err_msg|info_lines (semicolon-separated)
+# ── Editor Registry ────────────────────────────────────────────────────
+# Declarative definitions for standard editor adapters.
+# Custom adapters (nano) remain as override files in adapters/editor/.
+#
+# Format: name|cmd|type|err_msg|flags
+#   name    — adapter name (used in --editor flag, config, completions)
+#   cmd     — executable to check/invoke (must be in PATH)
+#   type    — "standard" (GUI, opens directory) or "terminal" (runs in current tty)
+#   err_msg — user-facing message when cmd is not found
+#   flags   — comma-separated modifiers (optional):
+#               "workspace" — pass .code-workspace file instead of directory
+#               "background" — launch with & (for terminal editors that fork)
+#
+# Loading: file override (adapters/editor/<name>.sh) → registry → generic PATH fallback
 _EDITOR_REGISTRY="
 atom|atom|standard|Atom not found. Install from https://atom.io|
 cursor|cursor|standard|Cursor not found. Install from https://cursor.com or enable the shell command.|workspace
@@ -20,6 +30,17 @@ webstorm|webstorm|standard|WebStorm 'webstorm' command not found. Enable shell l
 zed|zed|standard|Zed not found. Install from https://zed.dev|
 "
 
+# ── AI Tool Registry ──────────────────────────────────────────────────
+# Declarative definitions for standard AI coding tool adapters.
+# Custom adapters (claude, cursor) remain as override files in adapters/ai/.
+#
+# Format: name|cmd|err_msg|info_lines
+#   name       — adapter name (used in --ai flag, config, completions)
+#   cmd        — executable to check/invoke (must be in PATH)
+#   err_msg    — user-facing message when cmd is not found
+#   info_lines — semicolon-separated additional help lines shown on error
+#
+# Loading: file override (adapters/ai/<name>.sh) → registry → generic PATH fallback
 _AI_REGISTRY="
 aider|aider|Aider not found. Install with: pip install aider-chat|See https://aider.chat for more information
 auggie|auggie|Auggie CLI not found. Install with: npm install -g @augmentcode/auggie|See https://www.augmentcode.com/product/CLI for more information

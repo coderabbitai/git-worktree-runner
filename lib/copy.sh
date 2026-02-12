@@ -208,6 +208,65 @@ EOF
   return 0
 }
 
+# Remove excluded subdirectories from a copied directory.
+# Supports patterns like "node_modules/.cache", "*/.cache", "node_modules/*", "*/.*"
+# Usage: _apply_directory_excludes <dest_parent> <dir_path> <excludes>
+_apply_directory_excludes() {
+  local dest_parent="$1" dir_path="$2" excludes="$3"
+
+  [ -z "$excludes" ] && return 0
+
+  local exclude_pattern
+  while IFS= read -r exclude_pattern; do
+    [ -z "$exclude_pattern" ] && continue
+
+    if _is_unsafe_path "$exclude_pattern"; then
+      log_warn "Skipping unsafe exclude pattern: $exclude_pattern"
+      continue
+    fi
+
+    # Only process patterns with directory separators
+    case "$exclude_pattern" in
+      */*)
+        local pattern_prefix="${exclude_pattern%%/*}"
+        local pattern_suffix="${exclude_pattern#*/}"
+
+        # Intentional glob pattern matching for directory prefix
+        # shellcheck disable=SC2254
+        case "$dir_path" in
+          $pattern_prefix)
+            local exclude_old_pwd
+            exclude_old_pwd=$(pwd)
+            cd "$dest_parent/$dir_path" 2>/dev/null || continue
+
+            local exclude_shopt_save
+            exclude_shopt_save="$(shopt -p dotglob 2>/dev/null || true)"
+            shopt -s dotglob 2>/dev/null || true
+
+            local removed_any=0
+            for matched_path in $pattern_suffix; do
+              if [ -e "$matched_path" ]; then
+                if rm -rf "$matched_path" 2>/dev/null; then
+                  removed_any=1
+                fi
+              fi
+            done
+
+            eval "$exclude_shopt_save" 2>/dev/null || true
+            cd "$exclude_old_pwd" || true
+
+            if [ "$removed_any" -eq 1 ]; then
+              log_info "Excluded subdirectory $exclude_pattern"
+            fi
+            ;;
+        esac
+        ;;
+    esac
+  done <<EOF
+$excludes
+EOF
+}
+
 # Copy directories matching patterns (typically git-ignored directories like node_modules)
 # Usage: copy_directories src_root dst_root dir_patterns excludes
 # dir_patterns: newline-separated directory names to copy (e.g., "node_modules", ".venv")
@@ -224,18 +283,15 @@ copy_directories() {
     return 0
   fi
 
-  # Change to source directory
   local old_pwd
   old_pwd=$(pwd)
   cd "$src_root" || return 1
 
   local copied_count=0
 
-  # Process each directory pattern
   while IFS= read -r pattern; do
     [ -z "$pattern" ] && continue
 
-    # Security: reject absolute paths and parent directory traversal
     if _is_unsafe_path "$pattern"; then
       log_warn "Skipping unsafe pattern: $pattern"
       continue
@@ -245,100 +301,21 @@ copy_directories() {
     # Use -path for patterns with slashes (e.g., vendor/bundle), -name for basenames
     while IFS= read -r dir_path; do
       [ -z "$dir_path" ] && continue
-
-      # Remove leading ./
       dir_path="${dir_path#./}"
 
-      # Skip if excluded
       is_excluded "$dir_path" "$excludes" && continue
-
-      # Ensure source directory exists
       [ ! -d "$dir_path" ] && continue
 
-      # Determine destination
       local dest_dir="$dst_root/$dir_path"
       local dest_parent
       dest_parent=$(dirname "$dest_dir")
-
-      # Create parent directory
       mkdir -p "$dest_parent"
 
       # Copy directory (cp -RP preserves symlinks as symlinks)
       if cp -RP "$dir_path" "$dest_parent/" 2>/dev/null; then
         log_info "Copied directory $dir_path"
         copied_count=$((copied_count + 1))
-
-        # Remove excluded subdirectories after copying
-        if [ -n "$excludes" ]; then
-          while IFS= read -r exclude_pattern; do
-            [ -z "$exclude_pattern" ] && continue
-
-            # Security: reject absolute paths and parent directory traversal in excludes
-            if _is_unsafe_path "$exclude_pattern"; then
-              log_warn "Skipping unsafe exclude pattern: $exclude_pattern"
-              continue
-            fi
-
-            # Check if pattern applies to this copied directory
-            # Supports patterns like:
-            #   "node_modules/.cache" - exact path
-            #   "*/.cache" - wildcard prefix (matches any directory)
-            #   "node_modules/*" - wildcard suffix (matches all subdirectories)
-            #   "*/.*" - both (matches all hidden subdirectories in any directory)
-
-            # Only process patterns with directory separators
-            case "$exclude_pattern" in
-              */*)
-                # Extract prefix (before first /) and suffix (after first /)
-                local pattern_prefix="${exclude_pattern%%/*}"
-                local pattern_suffix="${exclude_pattern#*/}"
-
-                # Check if our copied directory matches the prefix pattern
-                # Intentional glob pattern matching for directory prefix
-                # shellcheck disable=SC2254
-                case "$dir_path" in
-                  $pattern_prefix)
-                    # Match! Remove matching subdirectories using suffix pattern
-
-                    # Save current directory
-                    local exclude_old_pwd
-                    exclude_old_pwd=$(pwd)
-
-                    # Change to destination directory for glob expansion
-                    cd "$dest_parent/$dir_path" 2>/dev/null || continue
-
-                    # Enable dotglob to match hidden files with wildcards
-                    local exclude_shopt_save
-                    exclude_shopt_save="$(shopt -p dotglob 2>/dev/null || true)"
-                    shopt -s dotglob 2>/dev/null || true
-
-                    # Expand glob pattern and remove matched paths
-                    local removed_any=0
-                    for matched_path in $pattern_suffix; do
-                      # Check if glob matched anything (avoid literal pattern if no match)
-                      if [ -e "$matched_path" ]; then
-                        if rm -rf "$matched_path" 2>/dev/null; then
-                          removed_any=1
-                        fi
-                      fi
-                    done
-
-                    # Restore shell options and directory
-                    eval "$exclude_shopt_save" 2>/dev/null || true
-                    cd "$exclude_old_pwd" || true
-
-                    # Log only if we actually removed something
-                    if [ "$removed_any" -eq 1 ]; then
-                      log_info "Excluded subdirectory $exclude_pattern"
-                    fi
-                    ;;
-                esac
-                ;;
-            esac
-          done <<EOF
-$excludes
-EOF
-        fi
+        _apply_directory_excludes "$dest_parent" "$dir_path" "$excludes"
       else
         log_warn "Failed to copy directory $dir_path"
       fi

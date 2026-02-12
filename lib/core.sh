@@ -306,6 +306,25 @@ resolve_worktree() {
   unpack_target "$target"
 }
 
+# Try to create a worktree, handling the common log/add/report pattern.
+# Usage: _try_worktree_add <path> <step_msg> <ok_msg> <force_flag> [git_worktree_add_args...]
+# Prints worktree path on success; returns 1 on failure (caller handles error).
+# Note: step_msg may be empty to skip the log_step call.
+_try_worktree_add() {
+  local wt_path="$1" step_msg="$2" ok_msg="$3" force_flag="$4"
+  shift 4
+
+  [ -n "$step_msg" ] && log_step "$step_msg"
+
+  # shellcheck disable=SC2086
+  if git worktree add $force_flag "$wt_path" "$@" >&2; then
+    log_info "$ok_msg"
+    printf "%s" "$wt_path"
+    return 0
+  fi
+  return 1
+}
+
 # Create a new git worktree
 # Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override]
 # track_mode: auto, remote, local, or none
@@ -374,80 +393,60 @@ create_worktree() {
 
   case "$track_mode" in
     remote)
-      # Force use of remote branch
       if [ "$remote_exists" -eq 1 ]; then
-        log_step "Creating worktree from remote branch origin/$branch_name"
-        if git worktree add $force_flag "$worktree_path" -b "$branch_name" "origin/$branch_name" >&2 || \
-           git worktree add $force_flag "$worktree_path" "$branch_name" >&2; then
-          log_info "Worktree created tracking origin/$branch_name"
-          printf "%s" "$worktree_path"
-          return 0
-        fi
-      else
-        log_error "Remote branch origin/$branch_name does not exist"
-        return 1
+        # Try creating with -b first (new local branch tracking remote), fallback to direct checkout
+        _try_worktree_add "$worktree_path" \
+          "Creating worktree from remote branch origin/$branch_name" \
+          "Worktree created tracking origin/$branch_name" \
+          "$force_flag" -b "$branch_name" "origin/$branch_name" && return 0
+        _try_worktree_add "$worktree_path" "" \
+          "Worktree created tracking origin/$branch_name" \
+          "$force_flag" "$branch_name" && return 0
       fi
+      log_error "Remote branch origin/$branch_name does not exist"
+      return 1
       ;;
 
     local)
-      # Force use of local branch
       if [ "$local_exists" -eq 1 ]; then
-        log_step "Creating worktree from local branch $branch_name"
-        if git worktree add $force_flag "$worktree_path" "$branch_name" >&2; then
-          log_info "Worktree created with local branch $branch_name"
-          printf "%s" "$worktree_path"
-          return 0
-        fi
-      else
-        log_error "Local branch $branch_name does not exist"
-        return 1
+        _try_worktree_add "$worktree_path" \
+          "Creating worktree from local branch $branch_name" \
+          "Worktree created with local branch $branch_name" \
+          "$force_flag" "$branch_name" && return 0
       fi
+      log_error "Local branch $branch_name does not exist"
+      return 1
       ;;
 
     none)
-      # Create new branch from from_ref
-      log_step "Creating new branch $branch_name from $from_ref"
-      if git worktree add $force_flag "$worktree_path" -b "$branch_name" "$from_ref" >&2; then
-        log_info "Worktree created with new branch $branch_name"
-        printf "%s" "$worktree_path"
-        return 0
-      else
-        log_error "Failed to create worktree with new branch"
-        return 1
-      fi
+      _try_worktree_add "$worktree_path" \
+        "Creating new branch $branch_name from $from_ref" \
+        "Worktree created with new branch $branch_name" \
+        "$force_flag" -b "$branch_name" "$from_ref" && return 0
+      log_error "Failed to create worktree with new branch"
+      return 1
       ;;
 
     auto|*)
-      # Auto-detect best option with proper tracking
       if [ "$remote_exists" -eq 1 ] && [ "$local_exists" -eq 0 ]; then
-        # Remote exists, no local branch - create local with tracking
+        # Remote exists, no local branch — create local tracking branch first
         log_step "Branch '$branch_name' exists on remote"
-
-        # Create tracking branch first for explicit upstream configuration
         if git branch --track "$branch_name" "origin/$branch_name" >/dev/null 2>&1; then
           log_info "Created local branch tracking origin/$branch_name"
         fi
-
-        # Now add worktree using the tracking branch
-        if git worktree add $force_flag "$worktree_path" "$branch_name" >&2; then
-          log_info "Worktree created tracking origin/$branch_name"
-          printf "%s" "$worktree_path"
-          return 0
-        fi
+        _try_worktree_add "$worktree_path" "" \
+          "Worktree created tracking origin/$branch_name" \
+          "$force_flag" "$branch_name" && return 0
       elif [ "$local_exists" -eq 1 ]; then
-        log_step "Using existing local branch $branch_name"
-        if git worktree add $force_flag "$worktree_path" "$branch_name" >&2; then
-          log_info "Worktree created with local branch $branch_name"
-          printf "%s" "$worktree_path"
-          return 0
-        fi
+        _try_worktree_add "$worktree_path" \
+          "Using existing local branch $branch_name" \
+          "Worktree created with local branch $branch_name" \
+          "$force_flag" "$branch_name" && return 0
       else
-        log_step "Creating new branch $branch_name from $from_ref"
-        if git worktree add $force_flag "$worktree_path" -b "$branch_name" "$from_ref" >&2; then
-          log_info "Worktree created with new branch $branch_name"
-          printf "%s" "$worktree_path"
-          return 0
-        fi
+        _try_worktree_add "$worktree_path" \
+          "Creating new branch $branch_name from $from_ref" \
+          "Worktree created with new branch $branch_name" \
+          "$force_flag" -b "$branch_name" "$from_ref" && return 0
       fi
       ;;
   esac
