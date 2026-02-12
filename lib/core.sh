@@ -166,8 +166,8 @@ current_branch() {
   local branch
   branch=$(get_current_branch "$worktree_path")
 
-  # Normalize detached HEAD
-  if [ "$branch" = "HEAD" ]; then
+  # Normalize detached HEAD or empty (failed detection)
+  if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
     branch="(detached)"
   fi
 

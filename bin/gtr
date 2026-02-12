@@ -1055,10 +1055,7 @@ cmd_list() {
   if [ "$porcelain" -eq 1 ]; then
     # Output: path<tab>branch<tab>status
     local branch status
-    branch=$(get_current_branch "$repo_root")
-    if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
-      branch="(detached)"
-    fi
+    branch=$(current_branch "$repo_root")
     status=$(worktree_status "$repo_root")
     printf "%s\t%s\t%s\n" "$repo_root" "$branch" "$status"
 
@@ -1086,10 +1083,7 @@ cmd_list() {
 
   # Always show repo root first
   local branch
-  branch=$(get_current_branch "$repo_root")
-  if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
-    branch="(detached)"
-  fi
+  branch=$(current_branch "$repo_root")
   printf "%-30s %s\n" "$branch [main repo]" "$repo_root"
 
   # Show worktrees sorted by branch name
