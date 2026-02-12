@@ -299,7 +299,9 @@ copy_directories() {
                     cd "$exclude_old_pwd" || true
 
                     # Log only if we actually removed something
-                    [ "$removed_any" -eq 1 ] && log_info "Excluded subdirectory $exclude_pattern" || true
+                    if [ "$removed_any" -eq 1 ]; then
+                      log_info "Excluded subdirectory $exclude_pattern"
+                    fi
                     ;;
                 esac
                 ;;

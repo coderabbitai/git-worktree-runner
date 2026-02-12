@@ -96,6 +96,12 @@ spawn_terminal_in() {
       safe_title=$(_escape_applescript "$title")
       safe_cmd=$(_escape_applescript "$cmd")
 
+      # Pre-compute optional AppleScript write-text line (avoids set -e abort in heredoc)
+      local iterm_cmd_line=""
+      if [ -n "$safe_cmd" ]; then
+        iterm_cmd_line="write text \"$safe_cmd\""
+      fi
+
       # Try iTerm2 first, then Terminal.app
       if osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null | grep -q "iTerm"; then
         osascript <<-EOF 2>/dev/null || true
@@ -105,7 +111,7 @@ spawn_terminal_in() {
 							tell current session
 								write text "cd \"$safe_path\""
 								set name to "$safe_title"
-								$([ -n "$safe_cmd" ] && echo "write text \"$safe_cmd\"")
+								$iterm_cmd_line
 							end tell
 						end tell
 					end tell

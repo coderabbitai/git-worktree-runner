@@ -40,7 +40,7 @@ setup() {
   [ "$result" = "trailing-slash" ]
 }
 
-@test "multiple special chars produce single hyphens" {
+@test "multiple special chars are each replaced" {
   result=$(sanitize_branch_name "a//b")
   [ "$result" = "a--b" ]
 }

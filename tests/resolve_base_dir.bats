@@ -7,6 +7,8 @@ setup() {
   # Create a temporary git repo for testing
   TEST_REPO=$(mktemp -d)
   git -C "$TEST_REPO" init --quiet
+  git -C "$TEST_REPO" config user.name "Test User"
+  git -C "$TEST_REPO" config user.email "test@example.com"
   git -C "$TEST_REPO" commit --allow-empty -m "init" --quiet
 }
 

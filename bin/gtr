@@ -69,10 +69,12 @@ ai_start() {
 # Standard AI adapter builder — used by adapter files that follow the common pattern
 # Sets globals then call this: _AI_CMD, _AI_ERR_MSG, _AI_INFO_LINES (array)
 _ai_define_standard() {
+  # shellcheck disable=SC2317 # Functions are called indirectly via adapter dispatch
   ai_can_start() {
     command -v "$_AI_CMD" >/dev/null 2>&1
   }
 
+  # shellcheck disable=SC2317
   ai_start() {
     local path="$1"; shift
     if ! ai_can_start; then
@@ -94,10 +96,12 @@ _ai_define_standard() {
 # Standard editor adapter builder — used by adapter files that follow the common pattern
 # Sets globals then call this: _EDITOR_CMD, _EDITOR_ERR_MSG, _EDITOR_WORKSPACE (optional, 0 or 1)
 _editor_define_standard() {
+  # shellcheck disable=SC2317 # Functions are called indirectly via adapter dispatch
   editor_can_open() {
     command -v "$_EDITOR_CMD" >/dev/null 2>&1
   }
 
+  # shellcheck disable=SC2317
   editor_open() {
     local path="$1"
     local workspace="${2:-}"
@@ -116,10 +120,12 @@ _editor_define_standard() {
 # Terminal editor adapter builder — for editors that run in the current terminal
 # Sets globals then call this: _EDITOR_CMD, _EDITOR_ERR_MSG, _EDITOR_BACKGROUND (optional, 0 or 1)
 _editor_define_terminal() {
+  # shellcheck disable=SC2317 # Functions are called indirectly via adapter dispatch
   editor_can_open() {
     command -v "$_EDITOR_CMD" >/dev/null 2>&1
   }
 
+  # shellcheck disable=SC2317
   editor_open() {
     local path="$1"
     if ! editor_can_open; then
