@@ -36,9 +36,9 @@
 # === AI Tool Settings ===
 
 # Default AI coding tool
-# Options: aider, or none
+# Options: aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode, none
 # Default: none
-# gtr.ai.default = aider
+# gtr.ai.default = claude
 
 # === File Copying ===
 

@@ -8,6 +8,9 @@ cmd_run() {
   # Parse arguments
   while [ $# -gt 0 ]; do
     case "$1" in
+      -h|--help)
+        show_command_help
+        ;;
       -*)
         log_error "Unknown flag: $1"
         exit 1

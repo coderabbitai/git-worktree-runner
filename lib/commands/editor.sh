@@ -12,6 +12,9 @@ cmd_editor() {
         editor="$2"
         shift 2
         ;;
+      -h|--help)
+        show_command_help
+        ;;
       -*)
         log_error "Unknown flag: $1"
         exit 1

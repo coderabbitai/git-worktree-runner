@@ -2,6 +2,10 @@
 
 # Go command (navigate to worktree - prints path for shell integration)
 cmd_go() {
+  if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+    show_command_help
+  fi
+
   if [ $# -ne 1 ]; then
     log_error "Usage: git gtr go <id|branch>"
     exit 1

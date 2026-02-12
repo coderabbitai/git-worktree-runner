@@ -2,6 +2,10 @@
 
 # Init command (generate shell integration for cd support)
 cmd_init() {
+  if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+    show_command_help
+  fi
+
   local shell="${1:-}"
 
   case "$shell" in

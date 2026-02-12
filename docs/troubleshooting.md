@@ -165,7 +165,7 @@ git gtr config get gtr.copy.exclude
 git-worktree-runner/
 ├── bin/
 │   ├── git-gtr         # Git subcommand entry point (wrapper)
-│   └── gtr             # Core implementation (1000+ lines)
+│   └── gtr             # Entry point (~105 lines, sources lib/*.sh)
 ├── lib/                 # Core libraries
 │   ├── core.sh         # Git worktree operations
 │   ├── config.sh       # Configuration management
@@ -211,9 +211,10 @@ git-worktree-runner/
 
 ### Testing Approach
 
-- Core functionality tested across macOS, Linux, WSL2
-- Manual testing with Cursor, VS Code, Aider, Claude Code
-- Used in production for parallel agent workflows
+- **Automated tests**: BATS test suite (`tests/`) covers core functions
+- **CI**: ShellCheck linting + BATS tests run on all PRs
+- **Manual testing**: End-to-end workflows tested across macOS, Linux, WSL2
+- **Production use**: Battle-tested with Cursor, VS Code, Aider, Claude Code
 - Community testing appreciated - please report issues!
 
 ### Experimental Features

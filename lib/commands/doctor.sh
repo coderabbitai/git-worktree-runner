@@ -2,6 +2,10 @@
 
 # Doctor command (health check)
 cmd_doctor() {
+  if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+    show_command_help
+  fi
+
   echo "Running git gtr health check..."
   echo ""
 

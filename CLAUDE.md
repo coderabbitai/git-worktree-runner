@@ -12,9 +12,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Development/testing**: `./bin/gtr <command>` (direct execution)
 - **User-facing docs**: Always reference `git gtr`, never `./bin/gtr`
 
-## CRITICAL: No Automated Tests
+## Testing
 
-This project has **no test suite**. All testing is manual. After any change, run the relevant smoke tests:
+This project uses **BATS tests** for core functions and **manual smoke tests** for end-to-end workflows. After any change:
+
+1. Run automated tests: `bats tests/`
+2. Run relevant manual smoke tests:
 
 ```bash
 ./bin/gtr new test-feature          # Create worktree
@@ -25,7 +28,7 @@ This project has **no test suite**. All testing is manual. After any change, run
 ./bin/gtr rm test-feature           # Clean up
 ```
 
-For exhaustive testing (hooks, copy patterns, adapters, `--force`, `--from-current`, etc.), see the full checklist in CONTRIBUTING.md or `.github/instructions/testing.instructions.md`.
+For exhaustive manual testing (hooks, copy patterns, adapters, `--force`, `--from-current`, etc.), see the full checklist in CONTRIBUTING.md or `.github/instructions/testing.instructions.md`.
 
 **Tip**: Use a disposable repo for testing to avoid polluting your working tree:
 

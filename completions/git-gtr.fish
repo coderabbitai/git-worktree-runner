@@ -136,6 +136,7 @@ complete -f -c git -n '__fish_git_gtr_using_command config' -a "
   gtr.worktrees.prefix\t'Worktree folder prefix'
   gtr.defaultBranch\t'Default branch'
   gtr.editor.default\t'Default editor'
+  gtr.editor.workspace\t'Path to workspace file (.code-workspace)'
   gtr.ai.default\t'Default AI tool'
   gtr.provider\t'Hosting provider (github, gitlab)'
   gtr.copy.include\t'Files to copy'

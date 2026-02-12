@@ -48,6 +48,29 @@ parse_pattern_file() {
   grep -v '^#' "$file_path" 2>/dev/null | grep -v '^[[:space:]]*$' || true
 }
 
+# Merge copy patterns from config and .worktreeinclude file
+# Usage: merge_copy_patterns repo_root
+# Sets: _ctx_copy_includes, _ctx_copy_excludes (newline-separated patterns)
+merge_copy_patterns() {
+  local repo_root="$1"
+
+  _ctx_copy_includes=$(cfg_get_all gtr.copy.include copy.include)
+  _ctx_copy_excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
+
+  # Read .worktreeinclude file if exists
+  local file_includes
+  file_includes=$(parse_pattern_file "$repo_root/.worktreeinclude")
+
+  # Merge file patterns into includes
+  if [ -n "$file_includes" ]; then
+    if [ -n "$_ctx_copy_includes" ]; then
+      _ctx_copy_includes="$_ctx_copy_includes"$'\n'"$file_includes"
+    else
+      _ctx_copy_includes="$file_includes"
+    fi
+  fi
+}
+
 # Copy a single file to destination, handling exclusion, path preservation, and dry-run
 # Usage: _copy_pattern_file file dst_root excludes preserve_paths dry_run
 # Returns: 0 if file was copied (or would be in dry-run), 1 if skipped/failed

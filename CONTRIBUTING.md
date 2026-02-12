@@ -150,7 +150,20 @@ For changes to core functionality (`lib/*.sh`):
 
 ### Testing
 
-Currently, testing is manual. Please test your changes on:
+#### Automated Tests (BATS)
+
+Run the test suite before submitting PRs:
+
+```bash
+bats tests/            # Run all tests
+bats tests/copy_safety.bats  # Run a specific test file
+```
+
+CI runs ShellCheck + BATS automatically on all PRs (`.github/workflows/lint.yml`).
+
+#### Manual Testing
+
+Please also test your changes manually on:
 
 1. **macOS** (if available)
 2. **Linux** (Ubuntu, Fedora, or Arch recommended)

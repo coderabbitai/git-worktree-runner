@@ -18,6 +18,9 @@ cmd_ai() {
         ai_args=("$@")
         break
         ;;
+      -h|--help)
+        show_command_help
+        ;;
       -*)
         log_error "Unknown flag: $1"
         exit 1
@@ -48,12 +51,12 @@ cmd_ai() {
     exit 1
   fi
 
-  # Load AI adapter
-  load_ai_adapter "$ai_tool" || exit 1
-
   resolve_repo_context || exit 1
   # shellcheck disable=SC2154
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
+
+  # Load AI adapter (after context — fail fast on bad repo first)
+  load_ai_adapter "$ai_tool" || exit 1
 
   # Resolve target branch
   local worktree_path branch

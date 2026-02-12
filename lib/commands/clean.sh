@@ -131,6 +131,9 @@ cmd_clean() {
         dry_run=1
         shift
         ;;
+      -h|--help)
+        show_command_help
+        ;;
       -*)
         log_error "Unknown flag: $1"
         exit 1

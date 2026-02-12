@@ -2,6 +2,10 @@
 
 # Completion command (generate shell completions)
 cmd_completion() {
+  if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+    show_command_help
+  fi
+
   local shell="${1:-}"
 
   case "$shell" in

@@ -21,6 +21,12 @@ log_question() {
   printf "[?] %s" "$*"
 }
 
+# Show help and exit (for --help flag in subcommands)
+show_command_help() {
+  cmd_help
+  exit 0
+}
+
 # Prompt for yes/no confirmation
 # Usage: prompt_yes_no "Question text" [default]
 # Returns: 0 for yes, 1 for no

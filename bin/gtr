@@ -29,6 +29,7 @@ resolve_script_dir() {
 . "$GTR_DIR/lib/hooks.sh"
 . "$GTR_DIR/lib/provider.sh"
 . "$GTR_DIR/lib/adapters.sh"
+. "$GTR_DIR/lib/launch.sh"
 
 # Source command handlers
 for _cmd_file in "$GTR_DIR"/lib/commands/*.sh; do

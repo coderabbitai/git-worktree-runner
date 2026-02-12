@@ -21,6 +21,9 @@ cmd_config() {
         scope="system"
         shift
         ;;
+      -h|--help)
+        show_command_help
+        ;;
       get|set|unset|add|list)
         action="$1"
         shift

@@ -11,16 +11,18 @@ cmd_list() {
         porcelain=1
         shift
         ;;
+      -h|--help)
+        show_command_help
+        ;;
       *)
         shift
         ;;
     esac
   done
 
-  local repo_root base_dir prefix
-  repo_root=$(discover_repo_root) 2>/dev/null || return 0
-  base_dir=$(resolve_base_dir "$repo_root")
-  prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  resolve_repo_context || exit 1
+  # shellcheck disable=SC2154
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Machine-readable output (porcelain)
   if [ "$porcelain" -eq 1 ]; then

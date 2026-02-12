@@ -36,6 +36,9 @@ cmd_copy() {
         done
         break
         ;;
+      -h|--help)
+        show_command_help
+        ;;
       -*)
         log_error "Unknown flag: $1"
         exit 1
@@ -64,30 +67,20 @@ cmd_copy() {
   # shellcheck disable=SC2154
   src_path="$_ctx_worktree_path"
 
-  # Get patterns (flag > config)
+  # Get patterns (flag > config + .worktreeinclude)
+  local excludes
   if [ -z "$patterns" ]; then
-    patterns=$(cfg_get_all gtr.copy.include copy.include)
-    # Also check .worktreeinclude
-    if [ -f "$repo_root/.worktreeinclude" ]; then
-      local file_patterns
-      file_patterns=$(parse_pattern_file "$repo_root/.worktreeinclude")
-      if [ -n "$file_patterns" ]; then
-        if [ -n "$patterns" ]; then
-          patterns="$patterns"$'\n'"$file_patterns"
-        else
-          patterns="$file_patterns"
-        fi
-      fi
-    fi
+    merge_copy_patterns "$repo_root"
+    # shellcheck disable=SC2154
+    patterns="$_ctx_copy_includes" excludes="$_ctx_copy_excludes"
+  else
+    excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
   fi
 
   if [ -z "$patterns" ]; then
     log_error "No patterns specified. Use '-- <pattern>...' or configure gtr.copy.include"
     exit 1
   fi
-
-  local excludes
-  excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
 
   # Build target list for --all mode
   if [ "$all_mode" -eq 1 ]; then
