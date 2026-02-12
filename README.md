@@ -42,7 +42,14 @@
 
 ## Quick Start
 
-**Install:**
+**Homebrew (macOS):**
+
+```bash
+brew tap coderabbitai/tap
+brew install git-gtr
+```
+
+**Script installer (macOS / Linux):**
 
 ```bash
 git clone https://github.com/coderabbitai/git-worktree-runner.git
@@ -51,13 +58,7 @@ cd git-worktree-runner
 ```
 
 <details>
-<summary><b>Manual installation options</b></summary>
-
-**macOS (Apple Silicon with Homebrew):**
-
-```bash
-ln -s "$(pwd)/bin/git-gtr" "$(brew --prefix)/bin/git-gtr"
-```
+<summary><b>Other installation options</b></summary>
 
 **macOS (Intel) / Linux:**
 
@@ -336,6 +337,9 @@ git gtr config add gtr.hook.postCreate "npm install"
 
 # Re-source environment after gtr cd (runs in current shell)
 git gtr config add gtr.hook.postCd "source ./vars.sh"
+
+# Disable color output (or use "always" to force it)
+git gtr config set gtr.ui.color never
 ```
 
 ### Team Configuration (.gtrconfig)

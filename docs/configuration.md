@@ -17,6 +17,7 @@
 - [File Copying](#file-copying)
 - [Directory Copying](#directory-copying)
 - [Hooks](#hooks)
+- [UI Settings](#ui-settings)
 - [Shell Completions](#shell-completions)
 - [Configuration Examples](#configuration-examples)
 - [Environment Variables](#environment-variables)
@@ -337,6 +338,28 @@ git gtr config add gtr.hook.postCreate "cargo build"
 
 ---
 
+## UI Settings
+
+Control color output behavior.
+
+| Git Config Key | `.gtrconfig` Key | Description       | Values                              |
+| -------------- | ---------------- | ----------------- | ----------------------------------- |
+| `gtr.ui.color` | `ui.color`       | Color output mode | `auto` (default), `always`, `never` |
+
+```bash
+# Disable color output
+git gtr config set gtr.ui.color never
+
+# Force color output (e.g., when piping to a pager)
+git gtr config set gtr.ui.color always
+```
+
+**Precedence**: `NO_COLOR` env (highest) > `GTR_COLOR` env > `gtr.ui.color` config > auto-detect (TTY).
+
+The `NO_COLOR` environment variable ([no-color.org](https://no-color.org)) always wins regardless of other settings.
+
+---
+
 ## Shell Completions
 
 Enable tab completion using the built-in `completion` command.
@@ -420,15 +443,17 @@ git gtr config set gtr.ai.default claude --global
 
 ## Environment Variables
 
-| Variable              | Description                                            | Default                    |
-| --------------------- | ------------------------------------------------------ | -------------------------- |
-| `GTR_DIR`             | Override script directory location                     | Auto-detected              |
-| `GTR_WORKTREES_DIR`   | Override base worktrees directory                      | `gtr.worktrees.dir` config |
-| `GTR_EDITOR_CMD`      | Custom editor command (e.g., `emacs`)                  | None                       |
-| `GTR_EDITOR_CMD_NAME` | First word of `GTR_EDITOR_CMD` for availability checks | None                       |
-| `GTR_AI_CMD`          | Custom AI tool command (e.g., `copilot`)               | None                       |
-| `GTR_AI_CMD_NAME`     | First word of `GTR_AI_CMD` for availability checks     | None                       |
-| `GTR_PROVIDER`        | Override hosting provider (`github` or `gitlab`)       | Auto-detected from URL     |
+| Variable              | Description                                                          | Default                    |
+| --------------------- | -------------------------------------------------------------------- | -------------------------- |
+| `GTR_DIR`             | Override script directory location                                   | Auto-detected              |
+| `GTR_WORKTREES_DIR`   | Override base worktrees directory                                    | `gtr.worktrees.dir` config |
+| `GTR_EDITOR_CMD`      | Custom editor command (e.g., `emacs`)                                | None                       |
+| `GTR_EDITOR_CMD_NAME` | First word of `GTR_EDITOR_CMD` for availability checks               | None                       |
+| `GTR_AI_CMD`          | Custom AI tool command (e.g., `copilot`)                             | None                       |
+| `GTR_AI_CMD_NAME`     | First word of `GTR_AI_CMD` for availability checks                   | None                       |
+| `GTR_COLOR`           | Override color output (`always`, `never`, `auto`)                    | `auto`                     |
+| `GTR_PROVIDER`        | Override hosting provider (`github` or `gitlab`)                     | Auto-detected from URL     |
+| `NO_COLOR`            | Disable color output when set ([no-color.org](https://no-color.org)) | Unset                      |
 
 **Hook environment variables** (available in hook scripts):
 

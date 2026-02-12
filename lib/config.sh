@@ -95,6 +95,7 @@ _CFG_KEY_MAP=(
   "gtr.worktrees.prefix|worktrees.prefix"
   "gtr.defaultBranch|defaults.branch"
   "gtr.provider|defaults.provider"
+  "gtr.ui.color|ui.color"
 )
 
 # Map a gtr.* config key to its .gtrconfig equivalent

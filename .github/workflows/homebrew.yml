@@ -1,0 +1,25 @@
+name: Update Homebrew Formula
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  homebrew:
+    name: Bump Homebrew formula
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.release.prerelease }}
+    steps:
+      - uses: mislav/bump-homebrew-formula-action@v3
+        with:
+          formula-name: git-gtr
+          formula-path: Formula/git-gtr.rb
+          homebrew-tap: coderabbitai/homebrew-tap
+          tag-name: ${{ github.event.release.tag_name }}
+          create-pullrequest: false
+          commit-message: |
+            {{formulaName}} {{version}}
+
+            Automated update from https://github.com/coderabbitai/git-worktree-runner
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
