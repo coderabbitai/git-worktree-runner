@@ -135,7 +135,7 @@ While `git worktree` is powerful, it's verbose and manual. `git gtr` adds qualit
 - **Simple commands** - Create and manage worktrees with intuitive CLI
 - **Repository-scoped** - Each repo has independent worktrees
 - **Configuration over flags** - Set defaults once, use simple commands
-- **Editor integration** - Open worktrees in Cursor, VS Code, Zed, and more
+- **Editor integration** - Open worktrees in Cursor, VS Code, Antigravity, Zed, and more
 - **AI tool support** - Launch Aider, Claude Code, or other AI coding tools
 - **Smart file copying** - Selectively copy configs/env files to new worktrees
 - **Hooks system** - Run custom commands after create/remove
@@ -323,7 +323,7 @@ All configuration is stored via `git config`. For team settings, create a `.gtrc
 ### Quick Setup
 
 ```bash
-# Set your editor (cursor, vscode, zed)
+# Set your editor (antigravity, cursor, vscode, zed)
 git gtr config set gtr.editor.default cursor
 
 # Set your AI tool (aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode)

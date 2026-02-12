@@ -91,7 +91,7 @@ complete -c git -n '__fish_git_gtr_using_command list' -l porcelain -d 'Machine-
 complete -c git -n '__fish_git_gtr_using_command ls' -l porcelain -d 'Machine-readable output'
 
 # Editor command options
-complete -c git -n '__fish_git_gtr_using_command editor' -l editor -d 'Editor to use' -r -a 'atom cursor emacs idea nano none nvim pycharm sublime vim vscode webstorm zed'
+complete -c git -n '__fish_git_gtr_using_command editor' -l editor -d 'Editor to use' -r -a 'antigravity atom cursor emacs idea nano none nvim pycharm sublime vim vscode webstorm zed'
 
 # AI command options
 complete -c git -n '__fish_git_gtr_using_command ai' -l ai -d 'AI tool to use' -r -a 'aider auggie claude codex continue copilot cursor gemini none opencode'
@@ -139,7 +139,7 @@ complete -f -c git -n '__fish_git_gtr_using_command config' -a "
   gtr.worktrees.prefix	'Worktree folder prefix'
   gtr.defaultBranch	'Default branch'
   gtr.provider	'Hosting provider (github, gitlab)'
-  gtr.ui.color	'Color output mode (auto, always, never)'
+  gtr.ui.color	'gtr.ui.color'
 "
 
 # Helper function to get branch names and special '1' for main repo

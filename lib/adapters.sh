@@ -17,6 +17,7 @@
 #
 # Loading: file override (adapters/editor/<name>.sh) → registry → generic PATH fallback
 _EDITOR_REGISTRY="
+antigravity|agy|standard|Antigravity 'agy' command not found. Install from https://antigravity.google|workspace
 atom|atom|standard|Atom not found. Install from https://atom.io|
 cursor|cursor|standard|Cursor not found. Install from https://cursor.com or enable the shell command.|workspace
 emacs|emacs|terminal|Emacs not found. Install from https://www.gnu.org/software/emacs/|background
@@ -252,7 +253,7 @@ _editor_define_terminal() {
   }
 }
 
-# Resolve workspace file for VS Code/Cursor editors
+# Resolve workspace file for Antigravity/VS Code/Cursor editors
 # Returns the workspace file path if found, empty otherwise
 resolve_workspace_file() {
   local worktree_path="$1"

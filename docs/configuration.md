@@ -134,10 +134,10 @@ git gtr config set gtr.provider github
 ## Editor Settings
 
 ```bash
-# Default editor: cursor, vscode, zed, or none
+# Default editor: antigravity, cursor, vscode, zed, or none
 gtr.editor.default = cursor
 
-# Workspace file for VS Code/Cursor (relative path from worktree root)
+# Workspace file for Antigravity/VS Code/Cursor (relative path from worktree root)
 # If set, opens the workspace file instead of the folder
 # If not set, auto-detects *.code-workspace files in worktree root
 # Set to "none" to disable workspace lookup entirely
@@ -146,13 +146,14 @@ gtr.editor.workspace = project.code-workspace
 
 **Setup editors:**
 
+- **Antigravity**: Install from [antigravity.google](https://antigravity.google), `agy` command available after installation
 - **Cursor**: Install from [cursor.com](https://cursor.com), enable shell command
 - **VS Code**: Install from [code.visualstudio.com](https://code.visualstudio.com), enable `code` command
 - **Zed**: Install from [zed.dev](https://zed.dev), `zed` command available automatically
 
 **Workspace files:**
 
-VS Code and Cursor support `.code-workspace` files for multi-root workspaces, custom settings, and recommended extensions. When opening a worktree:
+Antigravity, VS Code, and Cursor support `.code-workspace` files for multi-root workspaces, custom settings, and recommended extensions. When opening a worktree:
 
 1. If `gtr.editor.workspace` is set to a path, opens that file (relative to worktree root)
 2. If set to `none`, disables workspace lookup (always opens folder)
