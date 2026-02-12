@@ -39,12 +39,14 @@ cmd_remove() {
   fi
 
   resolve_repo_context || exit 1
+  # shellcheck disable=SC2154
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   for identifier in $identifiers; do
     # Resolve target branch
     local is_main worktree_path branch_name
     resolve_worktree "$identifier" "$repo_root" "$base_dir" "$prefix" || continue
+    # shellcheck disable=SC2154
     is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch_name="$_ctx_branch"
 
     # Cannot remove main repository

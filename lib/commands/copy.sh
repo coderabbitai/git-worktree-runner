@@ -55,11 +55,13 @@ cmd_copy() {
 
   # Get repo context
   resolve_repo_context || exit 1
+  # shellcheck disable=SC2154
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve source path
   local src_path
   resolve_worktree "$source" "$repo_root" "$base_dir" "$prefix" || exit 1
+  # shellcheck disable=SC2154
   src_path="$_ctx_worktree_path"
 
   # Get patterns (flag > config)
@@ -101,6 +103,7 @@ cmd_copy() {
   for target_id in $targets; do
     local dst_path dst_branch
     resolve_worktree "$target_id" "$repo_root" "$base_dir" "$prefix" || continue
+    # shellcheck disable=SC2154
     dst_path="$_ctx_worktree_path" dst_branch="$_ctx_branch"
 
     # Skip if source == destination

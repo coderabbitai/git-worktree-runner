@@ -133,6 +133,7 @@ editor_open() {
 
   # Use workspace file if provided and exists
   if [ -n "$workspace" ] && [ -f "$workspace" ]; then
+    # shellcheck disable=SC2034
     target="$workspace"
   fi
 

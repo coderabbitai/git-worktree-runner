@@ -149,6 +149,7 @@ cmd_clean() {
   fi
 
   resolve_repo_context || exit 1
+  # shellcheck disable=SC2154
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   if [ ! -d "$base_dir" ]; then

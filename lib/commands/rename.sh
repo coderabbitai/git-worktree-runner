@@ -40,11 +40,13 @@ cmd_rename() {
   fi
 
   resolve_repo_context || exit 1
+  # shellcheck disable=SC2154
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve old worktree
   local is_main old_path old_branch
   resolve_worktree "$old_identifier" "$repo_root" "$base_dir" "$prefix" || exit 1
+  # shellcheck disable=SC2154
   is_main="$_ctx_is_main" old_path="$_ctx_worktree_path" old_branch="$_ctx_branch"
 
   # Cannot rename main repository

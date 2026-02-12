@@ -52,11 +52,13 @@ cmd_ai() {
   load_ai_adapter "$ai_tool" || exit 1
 
   resolve_repo_context || exit 1
+  # shellcheck disable=SC2154
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local worktree_path branch
   resolve_worktree "$identifier" "$repo_root" "$base_dir" "$prefix" || exit 1
+  # shellcheck disable=SC2154
   worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   log_step "Starting $ai_tool for: $branch"

@@ -36,12 +36,14 @@ cmd_editor() {
   fi
 
   resolve_repo_context || exit 1
+  # shellcheck disable=SC2154
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
-  local worktree_path branch
+  local worktree_path
   resolve_worktree "$identifier" "$repo_root" "$base_dir" "$prefix" || exit 1
-  worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
+  # shellcheck disable=SC2154
+  worktree_path="$_ctx_worktree_path"
 
   if [ "$editor" = "none" ]; then
     open_in_gui "$worktree_path"

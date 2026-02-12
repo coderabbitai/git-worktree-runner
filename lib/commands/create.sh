@@ -51,6 +51,7 @@ _post_create_next_steps() {
     local resolve_result
     if resolve_result=$(resolve_target "$folder_name" "$repo_root" "$base_dir" "$prefix" 2>/dev/null); then
       unpack_target "$resolve_result"
+      # shellcheck disable=SC2154
       if [ "$_ctx_is_main" = "1" ]; then
         # Collision: folder name matches current branch, use branch name instead
         next_steps_id="$branch_name"
@@ -242,6 +243,7 @@ cmd_create() {
 
   # Get repo info
   resolve_repo_context || exit 1
+  # shellcheck disable=SC2154
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Get branch name if not provided
