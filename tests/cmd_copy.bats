@@ -58,4 +58,5 @@ teardown() {
   # cmd_copy skips unknown targets with || continue, then warns
   run cmd_copy nonexistent -- ".env"
   [ "$status" -eq 0 ]
+  [[ "$output" == *"No files copied"* ]]
 }

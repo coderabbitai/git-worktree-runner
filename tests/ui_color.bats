@@ -16,7 +16,7 @@ _source_ui() {
   [ "$status" -ne 0 ]
 }
 
-@test "_ui_should_color returns 1 when NO_COLOR is empty string (unset wins)" {
+@test "_ui_should_color returns 1 when GTR_COLOR=never" {
   _source_ui
   unset NO_COLOR
   GTR_COLOR=never run _ui_should_color 2
