@@ -485,11 +485,6 @@ remove_worktree() {
   fi
 }
 
-# List all worktrees
-list_worktrees() {
-  git worktree list
-}
-
 # Resolve common repo context used by most cmd_* handlers.
 # Sets globals: _ctx_repo_root, _ctx_base_dir, _ctx_prefix
 # Usage: resolve_repo_context || exit 1

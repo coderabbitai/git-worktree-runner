@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
 
 # Go command (navigate to worktree - prints path for shell integration)
+# shellcheck disable=SC2154  # _pa_* set by parse_args, _ctx_* set by resolve_*
 cmd_go() {
   parse_args "" "$@"
 

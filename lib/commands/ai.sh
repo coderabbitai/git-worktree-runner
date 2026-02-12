@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
 
 # AI command
+# shellcheck disable=SC2154  # _arg_* _pa_* set by parse_args, _ctx_* set by resolve_*
 cmd_ai() {
   parse_args "--ai: value" "$@"
 

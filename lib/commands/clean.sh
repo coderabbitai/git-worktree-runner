@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
 
 # Clean command (remove prunable worktrees)
 # Remove worktrees whose PRs/MRs are merged (handles squash merges)
@@ -83,17 +82,28 @@ _clean_merged() {
         removed=$((removed + 1))
       elif [ "$yes_mode" -eq 1 ] || prompt_yes_no "Remove worktree and delete branch '$branch'?"; then
         log_step "Removing worktree: $branch"
-        local remove_output
-        if remove_output=$(git worktree remove "$dir" 2>&1); then
-          # Also delete the local branch
+
+        # Run pre-remove hooks (skip worktree on failure)
+        if ! run_hooks_in preRemove "$dir" \
+          REPO_ROOT="$repo_root" \
+          WORKTREE_PATH="$dir" \
+          BRANCH="$branch"; then
+          log_warn "Pre-remove hook failed for $branch, skipping"
+          skipped=$((skipped + 1))
+          continue
+        fi
+
+        if remove_worktree "$dir" 0; then
+          # Delete the local branch (safe: already merged)
           git branch -d "$branch" 2>/dev/null || git branch -D "$branch" 2>/dev/null || true
-          log_info "Removed: $branch"
           removed=$((removed + 1))
-        else
-          if [ -n "$remove_output" ]; then
-            log_error "Failed to remove worktree: $remove_output"
-          else
-            log_error "Failed to remove worktree: $branch"
+
+          # Run post-remove hooks (worktree already removed, don't abort)
+          if ! run_hooks postRemove \
+            REPO_ROOT="$repo_root" \
+            WORKTREE_PATH="$dir" \
+            BRANCH="$branch"; then
+            log_warn "Post-remove hook failed for $branch"
           fi
         fi
       else
@@ -112,6 +122,7 @@ _clean_merged() {
   fi
 }
 
+# shellcheck disable=SC2154  # _arg_* set by parse_args, _ctx_* set by resolve_*
 cmd_clean() {
   local _spec
   _spec="--merged

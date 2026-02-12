@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
 
 # Run command (execute command in worktree directory)
+# shellcheck disable=SC2154  # _ctx_* set by resolve_*
 cmd_run() {
   local identifier=""
   local -a run_args=()

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
 
 # Copy command (copy files between worktrees)
+# shellcheck disable=SC2154  # _arg_* _pa_* set by parse_args, _ctx_* set by resolve_*/merge_copy_patterns
 cmd_copy() {
   local _spec
   _spec="--from: value

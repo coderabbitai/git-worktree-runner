@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
 
 # List command
+# shellcheck disable=SC2154  # _arg_* set by parse_args, _ctx_* set by resolve_*
 cmd_list() {
   parse_args "--porcelain" "$@"
 

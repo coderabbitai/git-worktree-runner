@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
 
 # Create command
 # Copy files and directories to newly created worktree
 # Usage: _post_create_copy repo_root worktree_path
+# shellcheck disable=SC2154  # _ctx_copy_* set by merge_copy_patterns
 _post_create_copy() {
   local repo_root="$1"
   local worktree_path="$2"
@@ -30,6 +30,7 @@ _post_create_copy() {
 
 # Show next steps after worktree creation (resolves collision for --folder overrides)
 # Usage: _post_create_next_steps branch_name folder_name folder_override repo_root base_dir prefix
+# shellcheck disable=SC2154  # _ctx_is_main set by resolve_target/unpack_target
 _post_create_next_steps() {
   local branch_name="$1" folder_name="$2" folder_override="$3"
   local repo_root="$4" base_dir="$5" prefix="$6"
@@ -83,6 +84,7 @@ _create_resolve_from_ref() {
 
   printf "%s" "$from_ref"
 }
+# shellcheck disable=SC2154  # _arg_* _pa_* set by parse_args, _ctx_* set by resolve_*
 cmd_create() {
   local _spec
   _spec="--from: value

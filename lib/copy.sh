@@ -334,20 +334,3 @@ EOF
 
   return 0
 }
-
-# Copy a single file, creating directories as needed
-# Usage: copy_file src_file dst_file
-copy_file() {
-  local src="$1"
-  local dst="$2"
-  local dst_dir
-
-  dst_dir=$(dirname "$dst")
-  mkdir -p "$dst_dir"
-
-  if cp "$src" "$dst" 2>/dev/null; then
-    return 0
-  else
-    return 1
-  fi
-}

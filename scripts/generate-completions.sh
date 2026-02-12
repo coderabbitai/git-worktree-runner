@@ -580,17 +580,6 @@ function __fish_git_gtr_config_is_read
   return 1
 end
 
-# Helper to check if config action is a write operation (set, add, unset)
-function __fish_git_gtr_config_is_write
-  set -l cmd (commandline -opc)
-  for i in $cmd
-    if test "$i" = "set" -o "$i" = "add" -o "$i" = "unset"
-      return 0
-    end
-  end
-  return 1
-end
-
 # Scope flags for config command
 # --local and --global available for all operations
 complete -f -c git -n '__fish_git_gtr_using_command config' -l local -d 'Use local git config'
