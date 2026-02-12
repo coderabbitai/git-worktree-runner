@@ -337,6 +337,9 @@ git gtr config add gtr.hook.postCreate "npm install"
 
 # Re-source environment after gtr cd (runs in current shell)
 git gtr config add gtr.hook.postCd "source ./vars.sh"
+
+# Disable color output (or use "always" to force it)
+git gtr config set gtr.ui.color never
 ```
 
 ### Team Configuration (.gtrconfig)
