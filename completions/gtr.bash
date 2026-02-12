@@ -131,7 +131,7 @@ _git_gtr() {
             if [[ "$cur" == -* ]]; then
               COMPREPLY=($(compgen -W "--local --global --system" -- "$cur"))
             else
-              COMPREPLY=($(compgen -W "gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.provider" -- "$cur"))
+              COMPREPLY=($(compgen -W "gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.provider gtr.ui.color" -- "$cur"))
             fi
             ;;
           set|add|unset)
@@ -139,7 +139,7 @@ _git_gtr() {
             if [[ "$cur" == -* ]]; then
               COMPREPLY=($(compgen -W "--local --global" -- "$cur"))
             else
-              COMPREPLY=($(compgen -W "gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.provider" -- "$cur"))
+              COMPREPLY=($(compgen -W "gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.provider gtr.ui.color" -- "$cur"))
             fi
             ;;
         esac

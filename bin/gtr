@@ -4,6 +4,11 @@
 
 set -e
 
+# Debug: show file:line:function on set -e failures
+if [ -n "${GTR_DEBUG:-}" ]; then
+  trap 'printf "ERROR at %s:%s in %s()\n" "${BASH_SOURCE[0]}" "$LINENO" "${FUNCNAME[0]:-main}" >&2' ERR
+fi
+
 # Version
 GTR_VERSION="2.2.0"
 
@@ -24,6 +29,7 @@ resolve_script_dir() {
 . "$GTR_DIR/lib/ui.sh"
 . "$GTR_DIR/lib/args.sh"
 . "$GTR_DIR/lib/config.sh"
+_ui_apply_color_config
 . "$GTR_DIR/lib/platform.sh"
 . "$GTR_DIR/lib/core.sh"
 . "$GTR_DIR/lib/copy.sh"
@@ -43,6 +49,9 @@ unset _cmd_file
 main() {
   local cmd="${1:-help}"
   shift 2>/dev/null || true
+
+  # Set for per-command help (used by show_command_help in ui.sh)
+  _GTR_CURRENT_COMMAND="$cmd"
 
   case "$cmd" in
     new)
@@ -94,7 +103,7 @@ main() {
       echo "git gtr version $GTR_VERSION"
       ;;
     help|--help|-h)
-      cmd_help
+      cmd_help "$@"
       ;;
     *)
       log_error "Unknown command: $cmd"
