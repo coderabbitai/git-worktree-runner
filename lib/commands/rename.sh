@@ -1,40 +1,17 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
 
 # Rename command (rename worktree and branch)
 cmd_rename() {
-  local old_identifier=""
-  local new_name=""
-  local force=0
-  local yes_mode=0
+  local _spec
+  _spec="--force
+--yes"
+  parse_args "$_spec" "$@"
 
-  # Parse flags and arguments
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --force)
-        force=1
-        shift
-        ;;
-      --yes)
-        yes_mode=1
-        shift
-        ;;
-      -h|--help)
-        show_command_help
-        ;;
-      -*)
-        log_error "Unknown flag: $1"
-        exit 1
-        ;;
-      *)
-        if [ -z "$old_identifier" ]; then
-          old_identifier="$1"
-        elif [ -z "$new_name" ]; then
-          new_name="$1"
-        fi
-        shift
-        ;;
-    esac
-  done
+  local old_identifier="${_pa_positional[0]:-}"
+  local new_name="${_pa_positional[1]:-}"
+  local force="${_arg_force:-0}"
+  local yes_mode="${_arg_yes:-0}"
 
   # Validate arguments
   if [ -z "$old_identifier" ] || [ -z "$new_name" ]; then
@@ -43,13 +20,13 @@ cmd_rename() {
   fi
 
   resolve_repo_context || exit 1
-  # shellcheck disable=SC2154
+
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve old worktree
   local is_main old_path old_branch
   resolve_worktree "$old_identifier" "$repo_root" "$base_dir" "$prefix" || exit 1
-  # shellcheck disable=SC2154
+
   is_main="$_ctx_is_main" old_path="$_ctx_worktree_path" old_branch="$_ctx_branch"
 
   # Cannot rename main repository

@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # Core git worktree operations
 
+# --- Context Globals Contract ---
+# Resolver functions set these globals as a return mechanism (Bash lacks multi-return).
+# Callers should copy into locals immediately after calling the resolver.
+#
+# resolve_repo_context() -> _ctx_repo_root  _ctx_base_dir  _ctx_prefix
+# resolve_worktree()     -> _ctx_is_main    _ctx_worktree_path  _ctx_branch
+declare _ctx_repo_root _ctx_base_dir _ctx_prefix
+declare _ctx_is_main _ctx_worktree_path _ctx_branch
+
 # Discover the root of the current git repository
 # Returns: absolute path to repo root
 # Exit code: 0 on success, 1 if not in a git repo

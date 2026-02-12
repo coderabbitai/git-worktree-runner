@@ -32,8 +32,11 @@ _auto_launch_editor() {
   if [ "$editor" != "none" ]; then
     _open_editor "$editor" "$worktree_path"
   else
-    open_in_gui "$worktree_path"
-    log_info "Opened in file browser (no editor configured)"
+    if ! open_in_gui "$worktree_path"; then
+      log_warn "Could not open file browser"
+    else
+      log_info "Opened in file browser (no editor configured)"
+    fi
   fi
 }
 

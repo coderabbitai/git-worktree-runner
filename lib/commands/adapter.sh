@@ -45,9 +45,7 @@ EOF
 }
 
 cmd_adapter() {
-  if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-    show_command_help
-  fi
+  parse_args "" "$@"
 
   echo "Available Adapters"
   echo ""

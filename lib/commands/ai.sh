@@ -1,38 +1,13 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
 
 # AI command
 cmd_ai() {
-  local identifier=""
-  local ai_tool=""
-  local -a ai_args=()
+  parse_args "--ai: value" "$@"
 
-  # Parse arguments
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --ai)
-        ai_tool="$2"
-        shift 2
-        ;;
-      --)
-        shift
-        ai_args=("$@")
-        break
-        ;;
-      -h|--help)
-        show_command_help
-        ;;
-      -*)
-        log_error "Unknown flag: $1"
-        exit 1
-        ;;
-      *)
-        if [ -z "$identifier" ]; then
-          identifier="$1"
-        fi
-        shift
-        ;;
-    esac
-  done
+  local identifier="${_pa_positional[0]:-}"
+  local ai_tool="${_arg_ai:-}"
+  local -a ai_args=("${_pa_passthrough[@]}")
 
   if [ -z "$identifier" ]; then
     log_error "Usage: git gtr ai <id|branch> [--ai <name>] [-- args...]"
@@ -52,7 +27,7 @@ cmd_ai() {
   fi
 
   resolve_repo_context || exit 1
-  # shellcheck disable=SC2154
+
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Load AI adapter (after context — fail fast on bad repo first)
@@ -61,12 +36,12 @@ cmd_ai() {
   # Resolve target branch
   local worktree_path branch
   resolve_worktree "$identifier" "$repo_root" "$base_dir" "$prefix" || exit 1
-  # shellcheck disable=SC2154
+
   worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   log_step "Starting $ai_tool for: $branch"
-  echo "Directory: $worktree_path"
-  echo "Branch: $branch"
+  log_info "Directory: $worktree_path"
+  log_info "Branch: $branch"
 
   ai_start "$worktree_path" "${ai_args[@]}"
 }

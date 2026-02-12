@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
 
 # Run command (execute command in worktree directory)
 cmd_run() {
@@ -11,7 +12,20 @@ cmd_run() {
       -h|--help)
         show_command_help
         ;;
+      --)
+        shift
+        if [ -z "$identifier" ]; then
+          log_error "Usage: git gtr run <id|branch> [--] <command...>"
+          exit 1
+        fi
+        run_args=("$@")
+        break
+        ;;
       -*)
+        if [ -n "$identifier" ]; then
+          run_args=("$@")  # Flag-like args are part of the command
+          break
+        fi
         log_error "Unknown flag: $1"
         exit 1
         ;;
@@ -40,13 +54,13 @@ cmd_run() {
   fi
 
   resolve_repo_context || exit 1
-  # shellcheck disable=SC2154
+
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local is_main worktree_path branch
   resolve_worktree "$identifier" "$repo_root" "$base_dir" "$prefix" || exit 1
-  # shellcheck disable=SC2154
+
   is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   # Human messages to stderr (like cmd_go)

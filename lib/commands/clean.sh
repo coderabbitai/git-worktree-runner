@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
 
 # Clean command (remove prunable worktrees)
 # Remove worktrees whose PRs/MRs are merged (handles squash merges)
@@ -112,37 +113,15 @@ _clean_merged() {
 }
 
 cmd_clean() {
-  local merged_mode=0
-  local yes_mode=0
-  local dry_run=0
+  local _spec
+  _spec="--merged
+--yes|-y
+--dry-run|-n"
+  parse_args "$_spec" "$@"
 
-  # Parse flags
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --merged)
-        merged_mode=1
-        shift
-        ;;
-      --yes|-y)
-        yes_mode=1
-        shift
-        ;;
-      --dry-run|-n)
-        dry_run=1
-        shift
-        ;;
-      -h|--help)
-        show_command_help
-        ;;
-      -*)
-        log_error "Unknown flag: $1"
-        exit 1
-        ;;
-      *)
-        shift
-        ;;
-    esac
-  done
+  local merged_mode="${_arg_merged:-0}"
+  local yes_mode="${_arg_yes:-0}"
+  local dry_run="${_arg_dry_run:-0}"
 
   log_step "Cleaning up stale worktrees..."
 
@@ -152,7 +131,7 @@ cmd_clean() {
   fi
 
   resolve_repo_context || exit 1
-  # shellcheck disable=SC2154
+
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   if [ ! -d "$base_dir" ]; then

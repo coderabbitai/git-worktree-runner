@@ -1,55 +1,32 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
 
 # Remove command
 cmd_remove() {
-  local delete_branch=0
-  local yes_mode=0
-  local force=0
-  local identifiers=""
+  local _spec
+  _spec="--delete-branch
+--yes
+--force"
+  parse_args "$_spec" "$@"
 
-  # Parse flags
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --delete-branch)
-        delete_branch=1
-        shift
-        ;;
-      --yes)
-        yes_mode=1
-        shift
-        ;;
-      --force)
-        force=1
-        shift
-        ;;
-      -h|--help)
-        show_command_help
-        ;;
-      -*)
-        log_error "Unknown flag: $1"
-        exit 1
-        ;;
-      *)
-        identifiers="$identifiers $1"
-        shift
-        ;;
-    esac
-  done
+  local delete_branch="${_arg_delete_branch:-0}"
+  local yes_mode="${_arg_yes:-0}"
+  local force="${_arg_force:-0}"
 
-  if [ -z "$identifiers" ]; then
+  if [ ${#_pa_positional[@]} -eq 0 ]; then
     log_error "Usage: git gtr rm <id|branch> [<id|branch>...] [--delete-branch] [--force] [--yes]"
     exit 1
   fi
 
   resolve_repo_context || exit 1
-  # shellcheck disable=SC2154
+
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
-  for identifier in $identifiers; do
+  for identifier in "${_pa_positional[@]}"; do
     # Resolve target branch
     local is_main worktree_path branch_name
     resolve_worktree "$identifier" "$repo_root" "$base_dir" "$prefix" || continue
-    # shellcheck disable=SC2154
+  
     is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch_name="$_ctx_branch"
 
     # Cannot remove main repository
@@ -91,10 +68,12 @@ cmd_remove() {
       fi
     fi
 
-    # Run post-remove hooks
-    run_hooks postRemove \
+    # Run post-remove hooks (don't abort on failure — worktree already removed)
+    if ! run_hooks postRemove \
       REPO_ROOT="$repo_root" \
       WORKTREE_PATH="$worktree_path" \
-      BRANCH="$branch_name"
+      BRANCH="$branch_name"; then
+      log_warn "Post-remove hook failed for $branch_name"
+    fi
   done
 }

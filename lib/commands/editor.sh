@@ -1,32 +1,12 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
 
 # Editor command
 cmd_editor() {
-  local identifier=""
-  local editor=""
+  parse_args "--editor: value" "$@"
 
-  # Parse flags
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --editor)
-        editor="$2"
-        shift 2
-        ;;
-      -h|--help)
-        show_command_help
-        ;;
-      -*)
-        log_error "Unknown flag: $1"
-        exit 1
-        ;;
-      *)
-        if [ -z "$identifier" ]; then
-          identifier="$1"
-        fi
-        shift
-        ;;
-    esac
-  done
+  local identifier="${_pa_positional[0]:-}"
+  local editor="${_arg_editor:-}"
 
   if [ -z "$identifier" ]; then
     log_error "Usage: git gtr editor <id|branch> [--editor <name>]"
@@ -39,13 +19,13 @@ cmd_editor() {
   fi
 
   resolve_repo_context || exit 1
-  # shellcheck disable=SC2154
+
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local worktree_path
   resolve_worktree "$identifier" "$repo_root" "$base_dir" "$prefix" || exit 1
-  # shellcheck disable=SC2154
+
   worktree_path="$_ctx_worktree_path"
 
   if [ "$editor" = "none" ]; then

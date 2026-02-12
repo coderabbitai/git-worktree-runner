@@ -96,8 +96,10 @@ _load_from_ai_registry() {
   if [ -n "$info_lines_raw" ]; then
     local old_ifs="$IFS"
     IFS=';'
+    set -f  # Disable globbing during split
     # shellcheck disable=SC2086
     set -- $info_lines_raw
+    set +f
     _AI_INFO_LINES=("$@")
     IFS="$old_ifs"
   fi

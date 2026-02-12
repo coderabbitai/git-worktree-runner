@@ -22,6 +22,7 @@ resolve_script_dir() {
 
 # Source library files
 . "$GTR_DIR/lib/ui.sh"
+. "$GTR_DIR/lib/args.sh"
 . "$GTR_DIR/lib/config.sh"
 . "$GTR_DIR/lib/platform.sh"
 . "$GTR_DIR/lib/core.sh"

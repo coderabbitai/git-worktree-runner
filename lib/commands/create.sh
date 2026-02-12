@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
 
 # Create command
 # Copy files and directories to newly created worktree
@@ -8,7 +9,7 @@ _post_create_copy() {
   local worktree_path="$2"
 
   merge_copy_patterns "$repo_root"
-  # shellcheck disable=SC2154
+
   local includes="$_ctx_copy_includes" excludes="$_ctx_copy_excludes"
 
   if [ -n "$includes" ]; then
@@ -39,7 +40,7 @@ _post_create_next_steps() {
     local resolve_result
     if resolve_result=$(resolve_target "$folder_name" "$repo_root" "$base_dir" "$prefix" 2>/dev/null); then
       unpack_target "$resolve_result"
-      # shellcheck disable=SC2154
+    
       if [ "$_ctx_is_main" = "1" ]; then
         # Collision: folder name matches current branch, use branch name instead
         next_steps_id="$branch_name"
@@ -83,87 +84,34 @@ _create_resolve_from_ref() {
   printf "%s" "$from_ref"
 }
 cmd_create() {
-  local branch_name=""
-  local from_ref=""
-  local from_current=0
-  local track_mode="auto"
-  local skip_copy=0
-  local skip_fetch=0
-  local skip_hooks=0
-  local yes_mode=0
-  local force=0
-  local custom_name=""
-  local folder_override=""
-  local open_editor=0
-  local start_ai=0
+  local _spec
+  _spec="--from: value
+--from-current
+--track: value
+--no-copy
+--no-fetch
+--no-hooks
+--yes
+--force
+--name: value
+--folder: value
+--editor|-e
+--ai|-a"
+  parse_args "$_spec" "$@"
 
-  # Parse flags and arguments
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --from)
-        from_ref="$2"
-        shift 2
-        ;;
-      --from-current)
-        from_current=1
-        shift
-        ;;
-      --track)
-        track_mode="$2"
-        shift 2
-        ;;
-      --no-copy)
-        skip_copy=1
-        shift
-        ;;
-      --no-fetch)
-        skip_fetch=1
-        shift
-        ;;
-      --no-hooks)
-        skip_hooks=1
-        shift
-        ;;
-      --yes)
-        yes_mode=1
-        shift
-        ;;
-      --force)
-        force=1
-        shift
-        ;;
-      --name)
-        custom_name="$2"
-        shift 2
-        ;;
-      --folder)
-        folder_override="$2"
-        shift 2
-        ;;
-      --editor|-e)
-        open_editor=1
-        shift
-        ;;
-      --ai|-a)
-        start_ai=1
-        shift
-        ;;
-      -h|--help)
-        show_command_help
-        ;;
-      -*)
-        log_error "Unknown flag: $1"
-        exit 1
-        ;;
-      *)
-        # Positional argument: treat as branch name
-        if [ -z "$branch_name" ]; then
-          branch_name="$1"
-        fi
-        shift
-        ;;
-    esac
-  done
+  local branch_name="${_pa_positional[0]:-}"
+  local from_ref="${_arg_from:-}"
+  local from_current="${_arg_from_current:-0}"
+  local track_mode="${_arg_track:-auto}"
+  local skip_copy="${_arg_no_copy:-0}"
+  local skip_fetch="${_arg_no_fetch:-0}"
+  local skip_hooks="${_arg_no_hooks:-0}"
+  local yes_mode="${_arg_yes:-0}"
+  local force="${_arg_force:-0}"
+  local custom_name="${_arg_name:-}"
+  local folder_override="${_arg_folder:-}"
+  local open_editor="${_arg_editor:-0}"
+  local start_ai="${_arg_ai:-0}"
 
   # Validate flag combinations
   if [ -n "$folder_override" ] && [ -n "$custom_name" ]; then
@@ -185,7 +133,7 @@ cmd_create() {
 
   # Get repo info
   resolve_repo_context || exit 1
-  # shellcheck disable=SC2154
+
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Get branch name if not provided

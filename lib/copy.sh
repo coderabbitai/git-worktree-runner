@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # File copying utilities with pattern matching
 
+# --- Context Globals Contract ---
+# merge_copy_patterns() -> _ctx_copy_includes  _ctx_copy_excludes
+declare _ctx_copy_includes _ctx_copy_excludes
+
 # Check if a path/pattern is unsafe (absolute or contains directory traversal)
 # Usage: _is_unsafe_path "pattern"
 # Returns: 0 if unsafe, 1 if safe
@@ -171,7 +175,7 @@ copy_patterns() {
           copied_count=$((copied_count + 1))
         fi
       done <<EOF
-$(find . -path "./$pattern" -type f 2>/dev/null)
+$(find . -path "./$pattern" -type f 2>/dev/null || true)
 EOF
     else
       # Use native Bash glob expansion (supports ** if available)
@@ -339,7 +343,7 @@ EOF
         log_warn "Failed to copy directory $dir_path"
       fi
     done <<EOF
-$(if [[ "$pattern" == */* ]]; then find . -type d -path "./$pattern" 2>/dev/null; else find . -type d -name "$pattern" 2>/dev/null; fi)
+$(if [[ "$pattern" == */* ]]; then find . -type d -path "./$pattern" 2>/dev/null; else find . -type d -name "$pattern" 2>/dev/null; fi || true)
 EOF
   done <<EOF
 $dir_patterns

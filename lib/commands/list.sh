@@ -1,27 +1,14 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
 
 # List command
 cmd_list() {
-  local porcelain=0
+  parse_args "--porcelain" "$@"
 
-  # Parse flags
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --porcelain)
-        porcelain=1
-        shift
-        ;;
-      -h|--help)
-        show_command_help
-        ;;
-      *)
-        shift
-        ;;
-    esac
-  done
+  local porcelain="${_arg_porcelain:-0}"
 
   resolve_repo_context || exit 1
-  # shellcheck disable=SC2154
+
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Machine-readable output (porcelain)

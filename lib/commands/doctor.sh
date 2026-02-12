@@ -2,9 +2,7 @@
 
 # Doctor command (health check)
 cmd_doctor() {
-  if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-    show_command_help
-  fi
+  parse_args "" "$@"
 
   echo "Running git gtr health check..."
   echo ""
@@ -33,7 +31,9 @@ cmd_doctor() {
 
     if [ -d "$base_dir" ]; then
       local count
-      count=$(find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | wc -l | tr -d ' ')
+      count=$(git worktree list --porcelain 2>/dev/null | grep -c '^worktree ' || true)
+      count=$((count - 1))  # Exclude main worktree
+      [ "$count" -lt 0 ] && count=0
       echo "[OK] Worktrees directory: $base_dir ($count worktrees)"
     else
       echo "[i] Worktrees directory: $base_dir (not created yet)"

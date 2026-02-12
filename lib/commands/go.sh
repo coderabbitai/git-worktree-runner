@@ -1,25 +1,24 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
 
 # Go command (navigate to worktree - prints path for shell integration)
 cmd_go() {
-  if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-    show_command_help
-  fi
+  parse_args "" "$@"
 
-  if [ $# -ne 1 ]; then
+  if [ ${#_pa_positional[@]} -ne 1 ]; then
     log_error "Usage: git gtr go <id|branch>"
     exit 1
   fi
 
-  local identifier="$1"
+  local identifier="${_pa_positional[0]}"
   resolve_repo_context || exit 1
-  # shellcheck disable=SC2154
+
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
   # Resolve target branch
   local is_main worktree_path branch
   resolve_worktree "$identifier" "$repo_root" "$base_dir" "$prefix" || exit 1
-  # shellcheck disable=SC2154
+
   is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
   # Human messages to stderr so stdout can be used in command substitution
