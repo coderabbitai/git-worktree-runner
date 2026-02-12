@@ -121,7 +121,7 @@ _git-gtr() {
   elif (( CURRENT >= 5 )); then
     case "$words[3]" in
       editor)
-        _arguments '--editor[Editor to use]:editor:(atom cursor emacs idea nano none nvim pycharm sublime vim vscode webstorm zed)'
+        _arguments '--editor[Editor to use]:editor:(antigravity atom cursor emacs idea nano none nvim pycharm sublime vim vscode webstorm zed)'
         ;;
       ai)
         _arguments '--ai[AI tool to use]:tool:(aider auggie claude codex continue copilot cursor gemini none opencode)'

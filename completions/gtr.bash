@@ -55,7 +55,7 @@ _git_gtr() {
       if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "--editor" -- "$cur"))
       elif [ "$prev" = "--editor" ]; then
-        COMPREPLY=($(compgen -W "atom cursor emacs idea nano none nvim pycharm sublime vim vscode webstorm zed" -- "$cur"))
+        COMPREPLY=($(compgen -W "antigravity atom cursor emacs idea nano none nvim pycharm sublime vim vscode webstorm zed" -- "$cur"))
       else
         local branches all_options
         branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)

@@ -57,7 +57,7 @@ Special:
 
 Available editors:
   atom, cursor, emacs, idea, nano, nvim, pycharm, sublime, vim, vscode,
-  webstorm, zed, none (or any command in your PATH)
+  webstorm, zed, antigravity, none (or any command in your PATH)
 
 Examples:
   git gtr editor my-feature                     # Uses default editor
@@ -595,8 +595,8 @@ CONFIGURATION OPTIONS:
   gtr.editor.default       Default editor
                            Options: cursor, vscode, zed, idea, pycharm,
                            webstorm, vim, nvim, emacs, sublime, nano,
-                           atom, none
-  gtr.editor.workspace     Workspace file for VS Code/Cursor
+                           atom, antigravity, none
+  gtr.editor.workspace     Workspace file for VS Code/Cursor/Antigravity
                            (relative path, auto-detects, or "none")
   gtr.ai.default           Default AI tool
                            Options: aider, auggie, claude, codex, continue,
