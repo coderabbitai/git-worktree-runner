@@ -609,6 +609,7 @@ MIDDLE2
       gtr.hook.preRemove)   desc="Pre-remove hook (abort on failure)" ;;
       gtr.hook.postRemove)  desc="Post-remove hook" ;;
       gtr.hook.postCd)      desc="Post-cd hook (shell integration only)" ;;
+      gtr.ui.color)         desc="Color output mode (auto, always, never)" ;;
       *)                    desc="$key" ;;
     esac
     printf "  %s\t'%s'\n" "$key" "$desc"
