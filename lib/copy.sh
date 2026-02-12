@@ -290,7 +290,9 @@ copy_directories() {
                     for matched_path in $pattern_suffix; do
                       # Check if glob matched anything (avoid literal pattern if no match)
                       if [ -e "$matched_path" ]; then
-                        rm -rf "$matched_path" 2>/dev/null && removed_any=1 || true
+                        if rm -rf "$matched_path" 2>/dev/null; then
+                          removed_any=1
+                        fi
                       fi
                     done
 
