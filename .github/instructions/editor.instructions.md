@@ -2,11 +2,28 @@
 applyTo: adapters/editor/**/*.sh
 ---
 
-# Editor Instructions
+# Editor Adapter Instructions
 
-## Adding Features
+## When to Use a File vs Registry
 
-### New Editor Adapter (`adapters/editor/<name>.sh`)
+Most editors are defined as **registry entries** in `lib/adapters.sh` — no adapter file needed.
+Only create an adapter file in `adapters/editor/` for editors that need **custom behavior** beyond what the standard/terminal builders provide (see `nano.sh` for an example).
+
+## Adding a Standard Editor (Registry)
+
+Add a line to `_EDITOR_REGISTRY` in `lib/adapters.sh`:
+
+```
+yourname|yourcmd|standard|EditorName not found. Install from https://...|flags
+```
+
+Format: `name|cmd|type|err_msg|flags`
+- `type`: `standard` (GUI app) or `terminal` (runs in terminal)
+- `flags`: comma-separated — `workspace` (supports .code-workspace), `background` (terminal bg)
+
+## Adding a Custom Editor (File Override)
+
+Create `adapters/editor/<name>.sh` implementing:
 
 ```bash
 #!/usr/bin/env bash
@@ -26,11 +43,13 @@ editor_open() {
 }
 ```
 
+File-based adapters take precedence over registry entries of the same name.
+
 **Also update**:
 
 - README.md (setup instructions)
 - All three completion files: `completions/gtr.bash`, `completions/_git-gtr`, `completions/gtr.fish`
-- Help text in `bin/gtr` (`cmd_help` function)
+- Help text in `lib/commands/help.sh` (`cmd_help` function)
 
 ## Contract & Guidelines
 
@@ -38,8 +57,7 @@ editor_open() {
 - Quote all paths; support spaces. Avoid changing PWD globally—no subshell needed (editor opens path).
 - Use `log_error` with actionable install guidance if command missing.
 - Keep adapter lean: no project scans, no blocking prompts.
-- Naming: file name = tool name (`zed.sh` → `zed` flag). Avoid uppercase.
+- Naming: file/registry name = tool name (`zed` → `zed` flag). Avoid uppercase.
 - Update: README editor list, completions (bash/zsh/fish), help (`Available editors:`), optional screenshots.
-- Manual test: `bash -c 'source adapters/editor/<tool>.sh && editor_can_open && editor_open . || echo fail'`.
 - Fallback behavior: if editor absent, fail clearly; do NOT silently defer to file browser.
 - Inspect function definition if needed: `declare -f editor_open`.

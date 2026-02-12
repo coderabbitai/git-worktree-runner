@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+
+# Doctor command (health check)
+cmd_doctor() {
+  echo "Running git gtr health check..."
+  echo ""
+
+  local issues=0
+
+  # Check git
+  if command -v git >/dev/null 2>&1; then
+    local git_version
+    git_version=$(git --version)
+    echo "[OK] Git: $git_version"
+  else
+    echo "[x] Git: not found"
+    issues=$((issues + 1))
+  fi
+
+  # Check repo
+  local repo_root
+  if repo_root=$(discover_repo_root 2>/dev/null); then
+    echo "[OK] Repository: $repo_root"
+
+    # Check worktree base dir
+    local base_dir prefix
+    base_dir=$(resolve_base_dir "$repo_root")
+    prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+
+    if [ -d "$base_dir" ]; then
+      local count
+      count=$(find "$base_dir" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null | wc -l | tr -d ' ')
+      echo "[OK] Worktrees directory: $base_dir ($count worktrees)"
+    else
+      echo "[i] Worktrees directory: $base_dir (not created yet)"
+    fi
+  else
+    echo "[x] Not in a git repository"
+    issues=$((issues + 1))
+  fi
+
+  # Check configured editor (with .gtrconfig support)
+  local editor
+  editor=$(_cfg_editor_default)
+  if [ "$editor" != "none" ]; then
+    if load_editor_adapter "$editor" 2>/dev/null; then
+      if editor_can_open 2>/dev/null; then
+        echo "[OK] Editor: $editor (found)"
+      else
+        echo "[!] Editor: $editor (configured but not found in PATH)"
+      fi
+    else
+      echo "[!] Editor: $editor (adapter not found)"
+    fi
+  else
+    echo "[i] Editor: none configured"
+  fi
+
+  # Check configured AI tool (with .gtrconfig support)
+  local ai_tool
+  ai_tool=$(_cfg_ai_default)
+  if [ "$ai_tool" != "none" ]; then
+    if load_ai_adapter "$ai_tool" 2>/dev/null; then
+      if ai_can_start 2>/dev/null; then
+        echo "[OK] AI tool: $ai_tool (found)"
+      else
+        echo "[!] AI tool: $ai_tool (configured but not found in PATH)"
+      fi
+    else
+      echo "[!] AI tool: $ai_tool (adapter not found)"
+    fi
+  else
+    echo "[i] AI tool: none configured"
+  fi
+
+  # Check OS
+  local os
+  os=$(detect_os)
+  echo "[OK] Platform: $os"
+
+  # Check hosting provider
+  if [ -n "$repo_root" ]; then
+    local provider
+    provider=$(detect_provider 2>/dev/null)
+    if [ -n "$provider" ]; then
+      echo "[OK] Provider: $provider"
+      case "$provider" in
+        github)
+          if command -v gh >/dev/null 2>&1; then
+            echo "[OK] GitHub CLI: $(gh --version 2>/dev/null | head -1)"
+          else
+            echo "[!] GitHub CLI: not found (needed for: clean --merged)"
+          fi
+          ;;
+        gitlab)
+          if command -v glab >/dev/null 2>&1; then
+            echo "[OK] GitLab CLI: $(glab --version 2>/dev/null | head -1)"
+          else
+            echo "[!] GitLab CLI: not found (needed for: clean --merged)"
+          fi
+          ;;
+      esac
+    else
+      echo "[i] Provider: unknown (set gtr.provider for clean --merged)"
+    fi
+  fi
+
+  echo ""
+  if [ "$issues" -eq 0 ]; then
+    echo "Everything looks good!"
+    return 0
+  else
+    echo "[!] Found $issues issue(s)"
+    return 1
+  fi
+}

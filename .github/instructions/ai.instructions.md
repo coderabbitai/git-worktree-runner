@@ -2,11 +2,26 @@
 applyTo: adapters/ai/**/*.sh
 ---
 
-# AI Instructions
+# AI Adapter Instructions
 
-## Adding Features
+## When to Use a File vs Registry
 
-### New AI Tool Adapter (`adapters/ai/<name>.sh`)
+Most AI tools are defined as **registry entries** in `lib/adapters.sh` — no adapter file needed.
+Only create an adapter file in `adapters/ai/` for tools that need **custom behavior** beyond the standard builder (see `claude.sh` or `cursor.sh` for examples).
+
+## Adding a Standard AI Tool (Registry)
+
+Add a line to `_AI_REGISTRY` in `lib/adapters.sh`:
+
+```
+yourname|yourcmd|ToolName not found. Install with: ...|Extra info;More info
+```
+
+Format: `name|cmd|err_msg|info_lines` (info lines are semicolon-separated)
+
+## Adding a Custom AI Tool (File Override)
+
+Create `adapters/ai/<name>.sh` implementing:
 
 ```bash
 #!/usr/bin/env bash
@@ -27,7 +42,9 @@ ai_start() {
 }
 ```
 
-**Also update**: Same as editor adapters (README, completions, help text)
+File-based adapters take precedence over registry entries of the same name.
+
+**Also update**: README, completions (bash/zsh/fish), help text in `lib/commands/help.sh`
 
 ## Contract & Guidelines
 
@@ -38,5 +55,4 @@ ai_start() {
 - Accept extra args after `--`: preserve ordering (`ai_start` receives already-shifted args).
 - Prefer fast startup; heavy initialization belongs in hooks (`postCreate`), not adapters.
 - When adding adapter: update `cmd_help`, README tool list, and completions (bash/zsh/fish).
-- Test manually: `bash -c 'source adapters/ai/<tool>.sh && ai_can_start && echo OK'`.
 - Inspect function definition if needed: `declare -f ai_start`.

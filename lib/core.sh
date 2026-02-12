@@ -241,17 +241,14 @@ resolve_target() {
   # Special case: ID 1 is always the repo root
   if [ "$identifier" = "1" ]; then
     path="$repo_root"
-    # Try --show-current (Git 2.22+), fallback to rev-parse for older Git
-    branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
-    [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    branch=$(get_current_branch "$repo_root")
     printf "1\t%s\t%s\n" "$path" "$branch"
     return 0
   fi
 
   # For all other identifiers, treat as branch name
   # First check if it's the current branch in repo root (if not ID 1)
-  branch=$(git -C "$repo_root" branch --show-current 2>/dev/null)
-  [ -z "$branch" ] && branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+  branch=$(get_current_branch "$repo_root")
   if [ "$branch" = "$identifier" ]; then
     printf "1\t%s\t%s\n" "$repo_root" "$identifier"
     return 0

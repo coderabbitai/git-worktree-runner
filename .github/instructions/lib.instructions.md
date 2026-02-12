@@ -21,7 +21,7 @@ applyTo: lib/**/*.sh
 
 ## Change Guidelines
 
-- Preserve adapter contracts; do not rename exported functions used by `bin/gtr`.
+- Preserve adapter contracts; do not rename exported functions used by command handlers in `lib/commands/`.
 - Add new config keys with `gtr.<name>` prefix; avoid collisions.
 - For performance-sensitive loops (e.g. directory scans) prefer built-ins (`find`, `grep`) with minimal subshells.
 - Any new Git command: add fallback for older versions or guard with detection.

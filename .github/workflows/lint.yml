@@ -18,7 +18,7 @@ jobs:
 
       - name: Run ShellCheck
         run: |
-          shellcheck bin/gtr bin/git-gtr lib/*.sh adapters/editor/*.sh adapters/ai/*.sh
+          shellcheck bin/gtr bin/git-gtr lib/*.sh lib/commands/*.sh adapters/editor/*.sh adapters/ai/*.sh
 
   test:
     name: Tests

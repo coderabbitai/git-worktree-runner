@@ -32,17 +32,25 @@ We welcome feature suggestions! Please:
 
 ```
 git-worktree-runner/
-├── bin/gtr              # Main executable dispatcher
+├── bin/gtr              # Main executable (~105 lines: sources libs, dispatches commands)
 ├── lib/                 # Core functionality
-│   ├── core.sh         # Git worktree operations
+│   ├── ui.sh           # User interface (logging, prompts)
 │   ├── config.sh       # Configuration (git-config wrapper)
 │   ├── platform.sh     # OS-specific utilities
-│   ├── ui.sh           # User interface (logging, prompts)
+│   ├── core.sh         # Git worktree operations
 │   ├── copy.sh         # File copying logic
-│   └── hooks.sh        # Hook execution
-├── adapters/           # Pluggable integrations
-│   ├── editor/         # Editor adapters (cursor, vscode, zed)
-│   └── ai/             # AI tool adapters (aider)
+│   ├── hooks.sh        # Hook execution
+│   ├── provider.sh     # GitHub/GitLab provider detection
+│   ├── adapters.sh     # Adapter registries, builders, and loaders
+│   └── commands/       # Command handlers (one file per command)
+│       ├── create.sh   # cmd_create + helpers
+│       ├── remove.sh   # cmd_remove
+│       ├── rename.sh   # cmd_rename
+│       ├── ...         # (16 files total, one per command)
+│       └── help.sh     # cmd_help
+├── adapters/           # Custom adapter overrides (non-registry)
+│   ├── editor/nano.sh  # nano (custom terminal behavior)
+│   └── ai/             # claude.sh, cursor.sh (custom logic)
 ├── completions/        # Shell completions (bash, zsh, fish)
 └── templates/          # Example configs and scripts
 ```
@@ -92,60 +100,43 @@ do_something() {
 
 #### Adding an Editor Adapter
 
-1. Create `adapters/editor/yourname.sh`:
+Most editors follow a standard pattern and can be added as a **registry entry** in `lib/adapters.sh` (no separate file needed).
 
-```bash
-#!/usr/bin/env bash
-# YourEditor adapter
+**Option A: Registry entry** (preferred for standard editors)
 
-editor_can_open() {
-  command -v yourcommand >/dev/null 2>&1
-}
+Add a line to `_EDITOR_REGISTRY` in `lib/adapters.sh`:
 
-editor_open() {
-  local path="$1"
-
-  if ! editor_can_open; then
-    log_error "YourEditor not found. Install from https://..."
-    return 1
-  fi
-
-  yourcommand "$path"
-}
+```
+yourname|yourcmd|standard|YourEditor not found. Install from https://...|flags
 ```
 
-2. Update README.md with setup instructions
-3. Update completions to include new editor
-4. Test on macOS, Linux, and Windows if possible
+Format: `name|cmd|type|err_msg|flags` where:
+- `type`: `standard` (GUI app) or `terminal` (runs in current terminal)
+- `flags`: comma-separated — `workspace` (supports .code-workspace files), `background` (run in background)
+
+**Option B: Custom adapter file** (for editors with non-standard behavior)
+
+Create `adapters/editor/yourname.sh` implementing `editor_can_open()` and `editor_open()`. See `adapters/editor/nano.sh` for an example.
+
+**Also update**: README.md, all three completion files, help text in `lib/commands/help.sh`.
 
 #### Adding an AI Tool Adapter
 
-1. Create `adapters/ai/yourtool.sh`:
+**Option A: Registry entry** (preferred for standard CLI tools)
 
-```bash
-#!/usr/bin/env bash
-# YourTool AI adapter
+Add a line to `_AI_REGISTRY` in `lib/adapters.sh`:
 
-ai_can_start() {
-  command -v yourtool >/dev/null 2>&1
-}
-
-ai_start() {
-  local path="$1"
-  shift
-
-  if ! ai_can_start; then
-    log_error "YourTool not found. Install with: ..."
-    return 1
-  fi
-
-  (cd "$path" && yourtool "$@")
-}
+```
+yourname|yourcmd|YourTool not found. Install with: ...|Extra info line 1;Extra info line 2
 ```
 
-2. Update README.md
-3. Update completions
-4. Add example usage
+Format: `name|cmd|err_msg|info_lines` (info lines are semicolon-separated).
+
+**Option B: Custom adapter file** (for tools with non-standard behavior)
+
+Create `adapters/ai/yourname.sh` implementing `ai_can_start()` and `ai_start()`. See `adapters/ai/claude.sh` for an example.
+
+**Also update**: README.md, completions, help text.
 
 #### Adding Core Features
 

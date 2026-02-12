@@ -1,0 +1,304 @@
+#!/usr/bin/env bash
+
+# Create command
+# Copy files and directories to newly created worktree
+# Usage: _post_create_copy repo_root worktree_path
+_post_create_copy() {
+  local repo_root="$1"
+  local worktree_path="$2"
+
+  local includes excludes file_includes
+  includes=$(cfg_get_all gtr.copy.include copy.include)
+  excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
+
+  # Read .worktreeinclude file if exists
+  file_includes=$(parse_pattern_file "$repo_root/.worktreeinclude")
+
+  # Merge patterns (newline-separated)
+  if [ -n "$file_includes" ]; then
+    if [ -n "$includes" ]; then
+      includes="$includes"$'\n'"$file_includes"
+    else
+      includes="$file_includes"
+    fi
+  fi
+
+  if [ -n "$includes" ]; then
+    log_step "Copying files..."
+    copy_patterns "$repo_root" "$worktree_path" "$includes" "$excludes"
+  fi
+
+  # Copy directories (typically git-ignored dirs like node_modules, .venv)
+  local dir_includes dir_excludes
+  dir_includes=$(cfg_get_all gtr.copy.includeDirs copy.includeDirs)
+  dir_excludes=$(cfg_get_all gtr.copy.excludeDirs copy.excludeDirs)
+
+  if [ -n "$dir_includes" ]; then
+    log_step "Copying directories..."
+    copy_directories "$repo_root" "$worktree_path" "$dir_includes" "$dir_excludes"
+  fi
+}
+
+# Show next steps after worktree creation (resolves collision for --folder overrides)
+# Usage: _post_create_next_steps branch_name folder_name folder_override repo_root base_dir prefix
+_post_create_next_steps() {
+  local branch_name="$1" folder_name="$2" folder_override="$3"
+  local repo_root="$4" base_dir="$5" prefix="$6"
+
+  local next_steps_id
+  if [ -n "$folder_override" ]; then
+    # Check if folder_name would resolve to main repo (collision with current branch)
+    local resolve_result
+    if resolve_result=$(resolve_target "$folder_name" "$repo_root" "$base_dir" "$prefix" 2>/dev/null); then
+      unpack_target "$resolve_result"
+      if [ "$_ctx_is_main" = "1" ]; then
+        # Collision: folder name matches current branch, use branch name instead
+        next_steps_id="$branch_name"
+      else
+        next_steps_id="$folder_name"
+      fi
+    else
+      next_steps_id="$folder_name"
+    fi
+  else
+    next_steps_id="$branch_name"
+  fi
+
+  echo ""
+  echo "Next steps:"
+  echo "  git gtr editor $next_steps_id  # Open in editor"
+  echo "  git gtr ai $next_steps_id      # Start AI tool"
+  echo "  cd \"\$(git gtr go $next_steps_id)\"  # Navigate to worktree"
+}
+
+# Determine the base ref for worktree creation
+# Usage: _create_resolve_from_ref <from_ref> <from_current> <repo_root>
+# Prints: resolved ref
+_create_resolve_from_ref() {
+  local from_ref="$1" from_current="$2" repo_root="$3"
+
+  if [ -z "$from_ref" ]; then
+    if [ "$from_current" -eq 1 ]; then
+      from_ref=$(get_current_branch)
+      if [ -z "$from_ref" ] || [ "$from_ref" = "HEAD" ]; then
+        log_warn "Currently in detached HEAD state - falling back to default branch"
+        from_ref=$(resolve_default_branch "$repo_root")
+      else
+        log_info "Creating from current branch: $from_ref"
+      fi
+    else
+      from_ref=$(resolve_default_branch "$repo_root")
+    fi
+  fi
+
+  printf "%s" "$from_ref"
+}
+
+# Config default helpers — single source of truth for editor/AI config keys
+_cfg_editor_default() {
+  cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor
+}
+
+_cfg_ai_default() {
+  cfg_default gtr.ai.default GTR_AI_DEFAULT "none" defaults.ai
+}
+
+# Open a worktree in an editor (shared by _auto_launch_editor and cmd_editor)
+# Usage: _open_editor <editor_name> <worktree_path>
+# Returns: 0 on success, 1 on adapter load failure
+_open_editor() {
+  local editor="$1" worktree_path="$2"
+  load_editor_adapter "$editor" || return 1
+  local workspace_file
+  workspace_file=$(resolve_workspace_file "$worktree_path")
+  log_step "Opening in $editor..."
+  editor_open "$worktree_path" "$workspace_file"
+}
+
+# Auto-launch editor for a worktree
+_auto_launch_editor() {
+  local worktree_path="$1"
+  local editor
+  editor=$(_cfg_editor_default)
+  if [ "$editor" != "none" ]; then
+    _open_editor "$editor" "$worktree_path"
+  else
+    open_in_gui "$worktree_path"
+    log_info "Opened in file browser (no editor configured)"
+  fi
+}
+
+# Auto-launch AI tool for a worktree
+_auto_launch_ai() {
+  local worktree_path="$1"
+  local ai_tool
+  ai_tool=$(_cfg_ai_default)
+  if [ "$ai_tool" = "none" ]; then
+    log_warn "No AI tool configured. Set with: git gtr config set gtr.ai.default claude"
+  else
+    load_ai_adapter "$ai_tool" || return 1
+    log_step "Starting $ai_tool..."
+    ai_start "$worktree_path"
+  fi
+}
+
+cmd_create() {
+  local branch_name=""
+  local from_ref=""
+  local from_current=0
+  local track_mode="auto"
+  local skip_copy=0
+  local skip_fetch=0
+  local skip_hooks=0
+  local yes_mode=0
+  local force=0
+  local custom_name=""
+  local folder_override=""
+  local open_editor=0
+  local start_ai=0
+
+  # Parse flags and arguments
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --from)
+        from_ref="$2"
+        shift 2
+        ;;
+      --from-current)
+        from_current=1
+        shift
+        ;;
+      --track)
+        track_mode="$2"
+        shift 2
+        ;;
+      --no-copy)
+        skip_copy=1
+        shift
+        ;;
+      --no-fetch)
+        skip_fetch=1
+        shift
+        ;;
+      --no-hooks)
+        skip_hooks=1
+        shift
+        ;;
+      --yes)
+        yes_mode=1
+        shift
+        ;;
+      --force)
+        force=1
+        shift
+        ;;
+      --name)
+        custom_name="$2"
+        shift 2
+        ;;
+      --folder)
+        folder_override="$2"
+        shift 2
+        ;;
+      --editor|-e)
+        open_editor=1
+        shift
+        ;;
+      --ai|-a)
+        start_ai=1
+        shift
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        # Positional argument: treat as branch name
+        if [ -z "$branch_name" ]; then
+          branch_name="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  # Validate flag combinations
+  if [ -n "$folder_override" ] && [ -n "$custom_name" ]; then
+    log_error "--folder and --name cannot be used together"
+    exit 1
+  fi
+
+  if [ "$force" -eq 1 ] && [ -z "$custom_name" ] && [ -z "$folder_override" ]; then
+    log_error "--force requires --name or --folder to distinguish worktrees"
+    if [ -n "$branch_name" ]; then
+      echo "Example: git gtr new $branch_name --force --name backend" >&2
+      echo "     or: git gtr new $branch_name --force --folder my-folder" >&2
+    else
+      echo "Example: git gtr new feature-auth --force --name backend" >&2
+      echo "     or: git gtr new feature-auth --force --folder my-folder" >&2
+    fi
+    exit 1
+  fi
+
+  # Get repo info
+  resolve_repo_context || exit 1
+  local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
+
+  # Get branch name if not provided
+  if [ -z "$branch_name" ]; then
+    if [ "$yes_mode" -eq 1 ]; then
+      log_error "Branch name required in non-interactive mode"
+      exit 1
+    fi
+    branch_name=$(prompt_input "Enter branch name:")
+    if [ -z "$branch_name" ]; then
+      log_error "Branch name required"
+      exit 1
+    fi
+  fi
+
+  # Determine from_ref with precedence: --from > --from-current > default
+  from_ref=$(_create_resolve_from_ref "$from_ref" "$from_current" "$repo_root")
+
+  # Construct folder name for display
+  local folder_name
+  if [ -n "$folder_override" ]; then
+    folder_name=$(sanitize_branch_name "$folder_override")
+  elif [ -n "$custom_name" ]; then
+    folder_name="$(sanitize_branch_name "$branch_name")-${custom_name}"
+  else
+    folder_name=$(sanitize_branch_name "$branch_name")
+  fi
+
+  log_step "Creating worktree: $folder_name"
+  echo "Location: $base_dir/${prefix}${folder_name}"
+  echo "Branch: $branch_name"
+
+  # Create the worktree
+  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name" "$folder_override"); then
+    exit 1
+  fi
+
+  # Copy files based on patterns
+  if [ "$skip_copy" -eq 0 ]; then
+    _post_create_copy "$repo_root" "$worktree_path"
+  fi
+
+  # Run post-create hooks (unless --no-hooks)
+  if [ "$skip_hooks" -eq 0 ]; then
+    run_hooks_in postCreate "$worktree_path" \
+      REPO_ROOT="$repo_root" \
+      WORKTREE_PATH="$worktree_path" \
+      BRANCH="$branch_name"
+  fi
+
+  echo ""
+  log_info "Worktree created: $worktree_path"
+
+  # Auto-launch editor/AI or show next steps
+  [ "$open_editor" -eq 1 ] && { _auto_launch_editor "$worktree_path" || true; }
+  [ "$start_ai" -eq 1 ] && { _auto_launch_ai "$worktree_path" || true; }
+  if [ "$open_editor" -eq 0 ] && [ "$start_ai" -eq 0 ]; then
+    _post_create_next_steps "$branch_name" "$folder_name" "$folder_override" "$repo_root" "$base_dir" "$prefix"
+  fi
+}
