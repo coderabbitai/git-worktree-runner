@@ -47,28 +47,28 @@ teardown() {
 # ── _clean_should_skip ──────────────────────────────────────────────────────
 
 @test "_clean_should_skip skips detached HEAD" {
-  _clean_should_skip "/some/dir" "(detached)"
-  # Returns 0 = should skip
+  run _clean_should_skip "/some/dir" "(detached)"
+  [ "$status" -eq 0 ]
 }
 
 @test "_clean_should_skip skips empty branch" {
-  _clean_should_skip "/some/dir" ""
-  # Returns 0 = should skip
+  run _clean_should_skip "/some/dir" ""
+  [ "$status" -eq 0 ]
 }
 
 @test "_clean_should_skip skips dirty worktree" {
   create_test_worktree "dirty-test"
   echo "dirty" > "$TEST_WORKTREES_DIR/dirty-test/untracked.txt"
   git -C "$TEST_WORKTREES_DIR/dirty-test" add untracked.txt
-  _clean_should_skip "$TEST_WORKTREES_DIR/dirty-test" "dirty-test"
-  # Returns 0 = should skip (staged changes)
+  run _clean_should_skip "$TEST_WORKTREES_DIR/dirty-test" "dirty-test"
+  [ "$status" -eq 0 ]
 }
 
 @test "_clean_should_skip skips worktree with untracked files" {
   create_test_worktree "untracked-test"
   echo "new" > "$TEST_WORKTREES_DIR/untracked-test/newfile.txt"
-  _clean_should_skip "$TEST_WORKTREES_DIR/untracked-test" "untracked-test"
-  # Returns 0 = should skip
+  run _clean_should_skip "$TEST_WORKTREES_DIR/untracked-test" "untracked-test"
+  [ "$status" -eq 0 ]
 }
 
 @test "_clean_should_skip does not skip clean worktree" {

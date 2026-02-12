@@ -18,7 +18,7 @@ teardown() {
 }
 
 @test "run_hooks executes single hook" {
-  git config --add gtr.hook.postCreate "touch $TEST_REPO/hook-ran"
+  git config --add gtr.hook.postCreate 'touch "$REPO_ROOT/hook-ran"'
   run_hooks postCreate REPO_ROOT="$TEST_REPO"
   [ -f "$TEST_REPO/hook-ran" ]
 }
@@ -36,8 +36,8 @@ teardown() {
 }
 
 @test "run_hooks executes multiple hooks in order" {
-  git config --add gtr.hook.postCreate "echo first >> $TEST_REPO/order"
-  git config --add gtr.hook.postCreate "echo second >> $TEST_REPO/order"
+  git config --add gtr.hook.postCreate 'echo first >> "$REPO_ROOT/order"'
+  git config --add gtr.hook.postCreate 'echo second >> "$REPO_ROOT/order"'
   run_hooks postCreate REPO_ROOT="$TEST_REPO"
   [ "$(head -1 "$TEST_REPO/order")" = "first" ]
   [ "$(tail -1 "$TEST_REPO/order")" = "second" ]

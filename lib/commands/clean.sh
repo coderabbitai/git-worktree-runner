@@ -159,7 +159,7 @@ cmd_clean() {
   # Find and remove empty directories
   local cleaned=0
   local empty_dirs
-  empty_dirs=$(find "$base_dir" -maxdepth 1 -type d -empty 2>/dev/null | grep -v "^${base_dir}$" || true)
+  empty_dirs=$(find "$base_dir" -maxdepth 1 -type d -empty 2>/dev/null | grep -Fxv "$base_dir" || true)
 
   if [ -n "$empty_dirs" ]; then
     while IFS= read -r dir; do
