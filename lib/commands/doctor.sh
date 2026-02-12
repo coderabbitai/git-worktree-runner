@@ -38,6 +38,9 @@ cmd_doctor() {
     else
       echo "[i] Worktrees directory: $base_dir (not created yet)"
     fi
+    if [ -n "$prefix" ]; then
+      echo "[i] Worktree prefix: $prefix"
+    fi
   else
     echo "[x] Not in a git repository"
     issues=$((issues + 1))
