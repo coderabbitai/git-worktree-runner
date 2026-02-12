@@ -169,6 +169,7 @@ cmd_create() {
   echo "Branch: $branch_name"
 
   # Create the worktree
+  local worktree_path
   if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name" "$folder_override"); then
     exit 1
   fi

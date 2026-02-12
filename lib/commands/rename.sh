@@ -76,7 +76,7 @@ cmd_rename() {
     move_args+=(--force)
   fi
 
-  if ! git -C "$repo_root" worktree move "$old_path" "$new_path" "${move_args[@]}"; then
+  if ! git -C "$repo_root" worktree move "${move_args[@]}" "$old_path" "$new_path"; then
     # Rollback: rename branch back
     log_warn "Worktree move failed, rolling back branch rename..."
     git -C "$repo_root" branch -m "$new_name" "$old_branch" 2>/dev/null || true

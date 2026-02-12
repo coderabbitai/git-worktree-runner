@@ -5,7 +5,7 @@
 cmd_go() {
   parse_args "" "$@"
 
-  if [ ${#_pa_positional[@]} -ne 1 ]; then
+  if [ "${#_pa_positional[@]}" -ne 1 ]; then
     log_error "Usage: git gtr go <id|branch>"
     exit 1
   fi

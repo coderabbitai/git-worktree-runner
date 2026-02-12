@@ -320,7 +320,7 @@ copy_directories() {
         log_warn "Failed to copy directory $dir_path"
       fi
     done <<EOF
-$(if [[ "$pattern" == */* ]]; then find . -type d -path "./$pattern" 2>/dev/null; else find . -type d -name "$pattern" 2>/dev/null; fi || true)
+$(case "$pattern" in */*) find . -type d -path "./$pattern" 2>/dev/null ;; *) find . -type d -name "$pattern" 2>/dev/null ;; esac)
 EOF
   done <<EOF
 $dir_patterns

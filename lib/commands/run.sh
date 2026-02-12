@@ -47,7 +47,7 @@ cmd_run() {
     exit 1
   fi
 
-  if [ ${#run_args[@]} -eq 0 ]; then
+  if [ "${#run_args[@]}" -eq 0 ]; then
     log_error "Usage: git gtr run <id|branch> <command...>"
     log_error "No command specified"
     exit 1
