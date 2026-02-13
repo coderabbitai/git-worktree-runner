@@ -79,10 +79,15 @@ merge_copy_patterns() {
 # macOS APFS: cp -cRP (clone); Linux Btrfs/XFS: cp --reflink=auto -RP
 # Callers must guard the return value with `if` or `|| true` (set -e safe).
 # Usage: _fast_copy_dir src dest
+# Cached OS value for _fast_copy_dir; set on first call.
+_fast_copy_os=""
+
 _fast_copy_dir() {
   local src="$1" dest="$2"
-  local os
-  os=$(detect_os)
+  if [ -z "$_fast_copy_os" ]; then
+    _fast_copy_os=$(detect_os)
+  fi
+  local os="$_fast_copy_os"
 
   case "$os" in
     darwin)
@@ -90,6 +95,9 @@ _fast_copy_dir() {
       if cp -cRP "$src" "$dest" 2>/dev/null; then
         return 0
       fi
+      # Clean up any partial clone output before fallback
+      local _clone_target="${dest%/}/$(basename "$src")"
+      [ -e "$_clone_target" ] && rm -rf "$_clone_target"
       cp -RP "$src" "$dest"
       ;;
     linux)
