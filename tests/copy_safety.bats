@@ -2,6 +2,7 @@
 
 setup() {
   load test_helper
+  source "$PROJECT_ROOT/lib/platform.sh"
   source "$PROJECT_ROOT/lib/copy.sh"
 }
 
@@ -81,4 +82,42 @@ setup() {
   local excludes
   excludes=$(printf '%s\n' "*.log" "dist/*")
   ! is_excluded "src/app.js" "$excludes"
+}
+
+# --- _fast_copy_dir tests ---
+
+@test "_fast_copy_dir copies directory contents" {
+  local src dst
+  src=$(mktemp -d)
+  dst=$(mktemp -d)
+  mkdir -p "$src/mydir/sub"
+  echo "hello" > "$src/mydir/sub/file.txt"
+
+  _fast_copy_dir "$src/mydir" "$dst/"
+
+  [ -f "$dst/mydir/sub/file.txt" ]
+  [ "$(cat "$dst/mydir/sub/file.txt")" = "hello" ]
+  rm -rf "$src" "$dst"
+}
+
+@test "_fast_copy_dir preserves symlinks" {
+  local src dst
+  src=$(mktemp -d)
+  dst=$(mktemp -d)
+  mkdir -p "$src/mydir"
+  echo "target" > "$src/mydir/real.txt"
+  ln -s real.txt "$src/mydir/link.txt"
+
+  _fast_copy_dir "$src/mydir" "$dst/"
+
+  [ -L "$dst/mydir/link.txt" ]
+  [ "$(readlink "$dst/mydir/link.txt")" = "real.txt" ]
+  rm -rf "$src" "$dst"
+}
+
+@test "_fast_copy_dir fails on nonexistent source" {
+  local dst
+  dst=$(mktemp -d)
+  ! _fast_copy_dir "/nonexistent/path" "$dst/"
+  rm -rf "$dst"
 }
