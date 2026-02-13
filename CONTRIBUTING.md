@@ -32,7 +32,8 @@ We welcome feature suggestions! Please:
 
 ```
 git-worktree-runner/
-├── bin/gtr              # Main executable (~105 lines: sources libs, dispatches commands)
+├── bin/git-gtr          # Main executable (sources libs, dispatches commands)
+├── bin/gtr              # Convenience wrapper (exec bin/git-gtr)
 ├── lib/                 # Core functionality
 │   ├── ui.sh           # User interface (logging, prompts)
 │   ├── config.sh       # Configuration (git-config wrapper)

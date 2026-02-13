@@ -2,20 +2,83 @@
 
 # Init command (generate shell integration for cd support)
 cmd_init() {
-  if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-    show_command_help
-  fi
+  local shell="" func_name="gtr"
 
-  local shell="${1:-}"
+  # Parse arguments
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -h|--help)
+        show_command_help
+        ;;
+      --as)
+        if [ -z "${2:-}" ]; then
+          log_error "--as requires a function name"
+          return 1
+        fi
+        func_name="$2"
+        shift 2
+        ;;
+      -*)
+        log_error "Unknown flag: $1"
+        log_info "Run 'git gtr init --help' for usage"
+        return 1
+        ;;
+      *)
+        if [ -n "$shell" ]; then
+          log_error "Unexpected argument: $1"
+          return 1
+        fi
+        shell="$1"
+        shift
+        ;;
+    esac
+  done
+
+  # Validate function name is a legal shell identifier
+  case "$func_name" in
+    [a-zA-Z_]*) ;;
+    *)
+      log_error "Invalid function name: $func_name (must start with a letter or underscore)"
+      return 1
+      ;;
+  esac
+  # Check remaining characters (Bash 3.2 compatible — no regex operator)
+  local _stripped
+  _stripped="$(printf '%s' "$func_name" | tr -d 'a-zA-Z0-9_')"
+  if [ -n "$_stripped" ]; then
+    log_error "Invalid function name: $func_name (only letters, digits, and underscores allowed)"
+    return 1
+  fi
 
   case "$shell" in
     bash)
-      cat <<'BASH'
+      _init_bash | sed "s/__FUNC__/$func_name/g"
+      ;;
+    zsh)
+      _init_zsh | sed "s/__FUNC__/$func_name/g"
+      ;;
+    fish)
+      _init_fish | sed "s/__FUNC__/$func_name/g"
+      ;;
+    "")
+      show_command_help
+      ;;
+    *)
+      log_error "Unknown shell: $shell"
+      log_error "Supported shells: bash, zsh, fish"
+      log_info "Run 'git gtr init --help' for usage"
+      return 1
+      ;;
+  esac
+}
+
+_init_bash() {
+  cat <<'BASH'
 # git-gtr shell integration
 # Add to ~/.bashrc:
 #   eval "$(git gtr init bash)"
 
-gtr() {
+__FUNC__() {
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
     shift
     local dir
@@ -48,7 +111,7 @@ gtr() {
           [ -z "$_gtr_hook" ] && continue
           case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
           _gtr_seen="$_gtr_seen|$_gtr_hook|"
-          eval "$_gtr_hook" || echo "gtr: postCd hook failed: $_gtr_hook" >&2
+          eval "$_gtr_hook" || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
         done <<< "$_gtr_hooks"
         unset WORKTREE_PATH REPO_ROOT BRANCH
       fi
@@ -58,19 +121,37 @@ gtr() {
   fi
 }
 
-# Forward completions to gtr wrapper
-if type _git_gtr &>/dev/null; then
-  complete -F _git_gtr gtr
-fi
+# Completion for __FUNC__ wrapper
+___FUNC___completion() {
+  local cur
+  cur="${COMP_WORDS[COMP_CWORD]}"
+
+  if [ "$COMP_CWORD" -eq 1 ]; then
+    # First argument: cd + all git-gtr subcommands
+    COMPREPLY=($(compgen -W "cd new go run copy editor ai rm mv rename ls list clean doctor adapter config completion init help version" -- "$cur"))
+  elif [ "${COMP_WORDS[1]}" = "cd" ] && [ "$COMP_CWORD" -eq 2 ]; then
+    # Worktree names for cd
+    local worktrees
+    worktrees="1 $(git gtr list --porcelain 2>/dev/null | cut -f2 | tr '\n' ' ')"
+    COMPREPLY=($(compgen -W "$worktrees" -- "$cur"))
+  elif type _git_gtr &>/dev/null; then
+    # Delegate to git-gtr completions (adjust words to match expected format)
+    COMP_WORDS=(git gtr "${COMP_WORDS[@]:1}")
+    (( COMP_CWORD += 1 ))
+    _git_gtr
+  fi
+}
+complete -F ___FUNC___completion __FUNC__
 BASH
-      ;;
-    zsh)
-      cat <<'ZSH'
+}
+
+_init_zsh() {
+  cat <<'ZSH'
 # git-gtr shell integration
 # Add to ~/.zshrc:
 #   eval "$(git gtr init zsh)"
 
-gtr() {
+__FUNC__() {
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
     shift
     local dir
@@ -103,7 +184,7 @@ gtr() {
           [ -z "$_gtr_hook" ] && continue
           case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
           _gtr_seen="$_gtr_seen|$_gtr_hook|"
-          eval "$_gtr_hook" || echo "gtr: postCd hook failed: $_gtr_hook" >&2
+          eval "$_gtr_hook" || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
         done <<< "$_gtr_hooks"
         unset WORKTREE_PATH REPO_ROOT BRANCH
       fi
@@ -113,19 +194,43 @@ gtr() {
   fi
 }
 
-# Forward completions to gtr wrapper
-if (( $+functions[_git-gtr] )); then
-  compdef gtr=git-gtr
-fi
+# Completion for __FUNC__ wrapper
+___FUNC___completion() {
+  local at_subcmd=0
+  (( CURRENT == 2 )) && at_subcmd=1
+
+  if [[ "${words[2]}" == "cd" ]] && (( CURRENT >= 3 )); then
+    # Completing worktree name after "cd"
+    if (( CURRENT == 3 )); then
+      local -a worktrees
+      worktrees=("1" ${(f)"$(git gtr list --porcelain 2>/dev/null | cut -f2)"})
+      _describe 'worktree' worktrees
+    fi
+    return
+  fi
+
+  # Delegate to _git-gtr for standard command completions
+  if (( $+functions[_git-gtr] )); then
+    _git-gtr
+  fi
+
+  # When completing the subcommand position, also offer "cd"
+  if (( at_subcmd )); then
+    local -a extra=('cd:Change directory to worktree')
+    _describe 'extra commands' extra
+  fi
+}
+compdef ___FUNC___completion __FUNC__
 ZSH
-      ;;
-    fish)
-      cat <<'FISH'
+}
+
+_init_fish() {
+  cat <<'FISH'
 # git-gtr shell integration
 # Add to ~/.config/fish/config.fish:
 #   git gtr init fish | source
 
-function gtr
+function __FUNC__
   if test (count $argv) -gt 0; and test "$argv[1]" = "cd"
     set -l dir (command git gtr go $argv[2..])
     and cd $dir
@@ -150,7 +255,7 @@ function gtr
           if test -n "$_gtr_hook"
             if not contains -- "$_gtr_hook" $_gtr_seen
               set -a _gtr_seen "$_gtr_hook"
-              eval "$_gtr_hook"; or echo "gtr: postCd hook failed: $_gtr_hook" >&2
+              eval "$_gtr_hook"; or echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
             end
           end
         end
@@ -161,40 +266,47 @@ function gtr
   end
 end
 
-# Forward completions to gtr wrapper
-complete -c gtr -w git-gtr
+# Completion helpers for __FUNC__ wrapper
+function ___FUNC___needs_subcommand
+  set -l cmd (commandline -opc)
+  test (count $cmd) -eq 1
+end
+
+function ___FUNC___using_subcommand
+  set -l cmd (commandline -opc)
+  if test (count $cmd) -ge 2
+    for i in $argv
+      if test "$cmd[2]" = "$i"
+        return 0
+      end
+    end
+  end
+  return 1
+end
+
+# Subcommands (cd + all git gtr commands)
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a cd -d 'Change directory to worktree'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a new -d 'Create a new worktree'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a go -d 'Navigate to worktree'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a run -d 'Execute command in worktree'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a copy -d 'Copy files between worktrees'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a rm -d 'Remove worktree(s)'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a mv -d 'Rename worktree and branch'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a rename -d 'Rename worktree and branch'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a editor -d 'Open worktree in editor'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a ai -d 'Start AI coding tool'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a ls -d 'List all worktrees'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a list -d 'List all worktrees'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a clean -d 'Remove stale worktrees'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a doctor -d 'Health check'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a adapter -d 'List available adapters'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a config -d 'Manage configuration'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a completion -d 'Generate shell completions'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a init -d 'Generate shell integration'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a version -d 'Show version'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a help -d 'Show help'
+
+# Worktree name completions for cd
+complete -f -c __FUNC__ -n '___FUNC___using_subcommand cd' -a '(echo 1; git gtr list --porcelain 2>/dev/null | cut -f2)'
 FISH
-      ;;
-    ""|--help|-h)
-      echo "Generate shell integration for git gtr"
-      echo ""
-      echo "Usage: git gtr init <shell>"
-      echo ""
-      echo "This outputs a gtr() shell function that enables:"
-      echo "  gtr cd <branch>    Change directory to worktree"
-      echo "  gtr <command>      Passes through to git gtr"
-      echo ""
-      echo "Shells:"
-      echo "  bash    Generate Bash integration"
-      echo "  zsh     Generate Zsh integration"
-      echo "  fish    Generate Fish integration"
-      echo ""
-      echo "Examples:"
-      echo "  # Bash: add to ~/.bashrc"
-      echo "  eval \"\$(git gtr init bash)\""
-      echo ""
-      echo "  # Zsh: add to ~/.zshrc"
-      echo "  eval \"\$(git gtr init zsh)\""
-      echo ""
-      echo "  # Fish: add to ~/.config/fish/config.fish"
-      echo "  git gtr init fish | source"
-      return 0
-      ;;
-    *)
-      log_error "Unknown shell: $shell"
-      log_error "Supported shells: bash, zsh, fish"
-      log_info "Run 'git gtr init --help' for usage"
-      return 1
-      ;;
-  esac
 }

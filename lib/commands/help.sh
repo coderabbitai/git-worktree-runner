@@ -340,12 +340,16 @@ _help_init() {
   cat <<'EOF'
 git gtr init - Generate shell integration
 
-Usage: git gtr init <shell>
+Usage: git gtr init <shell> [--as <name>]
 
 Generates shell functions for enhanced features like 'gtr cd <branch>'
 which changes directory to a worktree. Add to your shell configuration.
 
 Supported shells: bash, zsh, fish
+
+Options:
+  --as <name>   Set custom function name (default: gtr)
+                Useful if 'gtr' conflicts with another command (e.g., GNU tr)
 
 Setup:
   # Bash (add to ~/.bashrc)
@@ -357,9 +361,13 @@ Setup:
   # Fish (add to ~/.config/fish/config.fish)
   git gtr init fish | source
 
+  # Custom function name (avoids conflict with coreutils gtr)
+  eval "$(git gtr init zsh --as gwtr)"
+
 After setup:
   gtr cd my-feature                             # cd to worktree
   gtr cd 1                                      # cd to main repo
+  gtr <command>                                 # same as git gtr <command>
 EOF
 }
 
@@ -537,8 +545,9 @@ SETUP & MAINTENANCE:
          Generate shell completions (bash, zsh, fish)
          Usage: eval "$(git gtr completion zsh)"
 
-  init <shell>
+  init <shell> [--as <name>]
          Generate shell integration for cd support (bash, zsh, fish)
+         --as <name>: custom function name (default: gtr)
          Usage: eval "$(git gtr init bash)"
 
   version

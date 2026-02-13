@@ -1,117 +1,15 @@
 #!/usr/bin/env bash
-# gtr - Git worktree runner
-# Portable, cross-platform git worktree management
+# gtr - Convenience wrapper for git-gtr
+# The main binary is bin/git-gtr; this wrapper allows ./bin/gtr for development.
 
-set -e
-
-# Debug: show file:line:function on set -e failures
-if [ -n "${GTR_DEBUG:-}" ]; then
-  trap 'printf "ERROR at %s:%s in %s()\n" "${BASH_SOURCE[0]}" "$LINENO" "${FUNCNAME[0]:-main}" >&2' ERR
-fi
-
-# Version
-GTR_VERSION="2.3.0"
-
-# Find the script directory (resolve symlinks; allow env override)
-resolve_script_dir() {
-  local src="${BASH_SOURCE[0]}"
-  while [ -h "$src" ]; do
-    local dir
-    dir="$(cd -P "$(dirname "$src")" && pwd)"
-    src="$(readlink "$src")"
-    [[ $src != /* ]] && src="$dir/$src"
-  done
-  cd -P "$(dirname "$src")/.." && pwd
-}
-: "${GTR_DIR:=$(resolve_script_dir)}"
-
-# Source library files
-. "$GTR_DIR/lib/ui.sh"
-. "$GTR_DIR/lib/args.sh"
-. "$GTR_DIR/lib/config.sh"
-_ui_apply_color_config
-. "$GTR_DIR/lib/platform.sh"
-. "$GTR_DIR/lib/core.sh"
-. "$GTR_DIR/lib/copy.sh"
-. "$GTR_DIR/lib/hooks.sh"
-. "$GTR_DIR/lib/provider.sh"
-. "$GTR_DIR/lib/adapters.sh"
-. "$GTR_DIR/lib/launch.sh"
-
-# Source command handlers
-for _cmd_file in "$GTR_DIR"/lib/commands/*.sh; do
-  # shellcheck disable=SC1090
-  . "$_cmd_file"
+# Find this script's real location (resolve symlinks)
+SRC="${BASH_SOURCE[0]}"
+while [ -h "$SRC" ]; do
+  DIR="$(cd -P "$(dirname "$SRC")" && pwd)"
+  SRC="$(readlink "$SRC")"
+  [[ $SRC != /* ]] && SRC="$DIR/$SRC"
 done
-unset _cmd_file
+SCRIPT_DIR="$(cd -P "$(dirname "$SRC")" && pwd)"
 
-# Main dispatcher
-main() {
-  local cmd="${1:-help}"
-  shift 2>/dev/null || true
-
-  # Set for per-command help (used by show_command_help in ui.sh)
-  _GTR_CURRENT_COMMAND="$cmd"
-
-  case "$cmd" in
-    new)
-      cmd_create "$@"
-      ;;
-    rm)
-      cmd_remove "$@"
-      ;;
-    mv|rename)
-      cmd_rename "$@"
-      ;;
-    go)
-      cmd_go "$@"
-      ;;
-    run)
-      cmd_run "$@"
-      ;;
-    editor)
-      cmd_editor "$@"
-      ;;
-    ai)
-      cmd_ai "$@"
-      ;;
-    copy)
-      cmd_copy "$@"
-      ;;
-    ls|list)
-      cmd_list "$@"
-      ;;
-    clean)
-      cmd_clean "$@"
-      ;;
-    doctor)
-      cmd_doctor "$@"
-      ;;
-    adapter|adapters)
-      cmd_adapter "$@"
-      ;;
-    config)
-      cmd_config "$@"
-      ;;
-    completion)
-      cmd_completion "$@"
-      ;;
-    init)
-      cmd_init "$@"
-      ;;
-    version|--version|-v)
-      echo "git gtr version $GTR_VERSION"
-      ;;
-    help|--help|-h)
-      cmd_help "$@"
-      ;;
-    *)
-      log_error "Unknown command: $cmd"
-      echo "Use 'git gtr help' for available commands"
-      exit 1
-      ;;
-  esac
-}
-
-# Run main
-main "$@"
+# Execute the main git-gtr script
+exec "$SCRIPT_DIR/git-gtr" "$@"
