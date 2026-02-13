@@ -112,7 +112,11 @@ _git-gtr() {
         # Complete action or scope flags
         _values 'config action' list get set add unset --local --global --system
         ;;
-      completion|init)
+      completion)
+        # Complete shell names
+        _values 'shell' bash zsh fish
+        ;;
+      init)
         # Complete shell names
         _values 'shell' bash zsh fish
         ;;
@@ -148,6 +152,9 @@ _git-gtr() {
         case "$state" in
           worktrees) _describe 'branch names' all_options ;;
         esac
+        ;;
+      init)
+        _arguments '--as[Custom function name]:name:'
         ;;
       config)
         # Find action by scanning all config args (handles flexible flag positioning)

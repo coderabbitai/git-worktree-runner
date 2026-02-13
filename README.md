@@ -221,6 +221,13 @@ gtr cd my-feature
 gtr cd 1
 ```
 
+> **Note:** If `gtr` conflicts with another command (e.g., GNU `tr` from coreutils), use `--as` to pick a different name:
+>
+> ```bash
+> eval "$(git gtr init zsh --as gwtr)"
+> gwtr cd my-feature
+> ```
+
 ### `git gtr run <branch> <command...>`
 
 Execute command in worktree directory.

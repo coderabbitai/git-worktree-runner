@@ -45,8 +45,8 @@ mkdir -p /tmp/gtr-test && cd /tmp/gtr-test && git init && git commit --allow-emp
 
 ### Binary Structure
 
-- `bin/git-gtr` — Thin wrapper enabling `git gtr` subcommand invocation
-- `bin/gtr` — Entry point: sources libraries and commands, contains `main()` dispatcher
+- `bin/git-gtr` — Main entry point: sources libraries and commands, contains `main()` dispatcher
+- `bin/gtr` — Convenience wrapper for development (`exec bin/git-gtr`)
 
 ### Module Structure
 
@@ -134,7 +134,7 @@ cmd_editor() → resolve_target() → load_editor_adapter() → editor_open()
 
 ### Updating the Version
 
-Update `GTR_VERSION` in `bin/gtr` (line 8).
+Update `GTR_VERSION` in `bin/git-gtr`.
 
 ### Shell Completion Updates
 
@@ -146,7 +146,7 @@ When adding commands or flags, update all three files:
 
 ## Critical Gotcha: `set -e`
 
-`bin/gtr` runs with `set -e`. Any unguarded non-zero return silently exits the entire script. When calling functions that may `return 1`, guard with `|| true`:
+`bin/git-gtr` runs with `set -e`. Any unguarded non-zero return silently exits the entire script. When calling functions that may `return 1`, guard with `|| true`:
 
 ```bash
 result=$(my_func) || true           # Prevents silent exit

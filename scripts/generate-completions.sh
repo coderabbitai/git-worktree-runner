@@ -198,10 +198,17 @@ MIDDLE1
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
       fi
       ;;
-    completion|init)
+    completion)
       # Complete with shell names
       if [ "$cword" -eq 3 ]; then
         COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
+      fi
+      ;;
+    init)
+      if [ "$cword" -eq 3 ]; then
+        COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
+      elif [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--as" -- "$cur"))
       fi
       ;;
     config)
@@ -364,7 +371,11 @@ _git-gtr() {
         # Complete action or scope flags
         _values 'config action' list get set add unset --local --global --system
         ;;
-      completion|init)
+      completion)
+        # Complete shell names
+        _values 'shell' bash zsh fish
+        ;;
+      init)
         # Complete shell names
         _values 'shell' bash zsh fish
         ;;
@@ -404,6 +415,9 @@ MIDDLE1
         case "$state" in
           worktrees) _describe 'branch names' all_options ;;
         esac
+        ;;
+      init)
+        _arguments '--as[Custom function name]:name:'
         ;;
       config)
         # Find action by scanning all config args (handles flexible flag positioning)
@@ -512,6 +526,7 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a completion -d 'Generate 
 complete -f -c git -n '__fish_git_gtr_using_command completion' -a 'bash zsh fish' -d 'Shell type'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a init -d 'Generate shell integration for cd support'
 complete -f -c git -n '__fish_git_gtr_using_command init' -a 'bash zsh fish' -d 'Shell type'
+complete -c git -n '__fish_git_gtr_using_command init' -l as -d 'Custom function name' -r
 complete -f -c git -n '__fish_git_gtr_needs_command' -a version -d 'Show version'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 

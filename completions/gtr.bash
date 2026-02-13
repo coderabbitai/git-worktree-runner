@@ -104,10 +104,17 @@ _git_gtr() {
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
       fi
       ;;
-    completion|init)
+    completion)
       # Complete with shell names
       if [ "$cword" -eq 3 ]; then
         COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
+      fi
+      ;;
+    init)
+      if [ "$cword" -eq 3 ]; then
+        COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
+      elif [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--as" -- "$cur"))
       fi
       ;;
     config)

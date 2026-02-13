@@ -53,6 +53,7 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a completion -d 'Generate 
 complete -f -c git -n '__fish_git_gtr_using_command completion' -a 'bash zsh fish' -d 'Shell type'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a init -d 'Generate shell integration for cd support'
 complete -f -c git -n '__fish_git_gtr_using_command init' -a 'bash zsh fish' -d 'Shell type'
+complete -c git -n '__fish_git_gtr_using_command init' -l as -d 'Custom function name' -r
 complete -f -c git -n '__fish_git_gtr_needs_command' -a version -d 'Show version'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 
@@ -139,7 +140,7 @@ complete -f -c git -n '__fish_git_gtr_using_command config' -a "
   gtr.worktrees.prefix	'Worktree folder prefix'
   gtr.defaultBranch	'Default branch'
   gtr.provider	'Hosting provider (github, gitlab)'
-  gtr.ui.color	'Color output mode (auto, always, never)'
+  gtr.ui.color	'gtr.ui.color'
 "
 
 # Helper function to get branch names and special '1' for main repo
