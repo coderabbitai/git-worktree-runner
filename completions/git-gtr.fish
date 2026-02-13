@@ -140,7 +140,7 @@ complete -f -c git -n '__fish_git_gtr_using_command config' -a "
   gtr.worktrees.prefix	'Worktree folder prefix'
   gtr.defaultBranch	'Default branch'
   gtr.provider	'Hosting provider (github, gitlab)'
-  gtr.ui.color	'gtr.ui.color'
+  gtr.ui.color	'Color output mode (auto, always, never)'
 "
 
 # Helper function to get branch names and special '1' for main repo

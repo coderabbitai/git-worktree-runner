@@ -20,7 +20,7 @@ resolve_script_dir() {
     local dir
     dir="$(cd -P "$(dirname "$src")" && pwd)"
     src="$(readlink "$src")"
-    [[ $src != /* ]] && src="$dir/$src"
+    [[ "$src" != /* ]] && src="$dir/$src"
   done
   cd -P "$(dirname "$src")/.." && pwd
 }
