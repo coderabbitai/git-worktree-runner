@@ -6,6 +6,12 @@ setup() {
   source "$PROJECT_ROOT/lib/copy.sh"
 }
 
+teardown() {
+  if [ -n "${_test_tmpdir:-}" ]; then
+    rm -rf "$_test_tmpdir"
+  fi
+}
+
 # --- _is_unsafe_path tests ---
 
 @test "absolute path is unsafe" {
@@ -87,9 +93,9 @@ setup() {
 # --- _fast_copy_dir tests ---
 
 @test "_fast_copy_dir copies directory contents" {
-  local src dst
-  src=$(mktemp -d)
-  dst=$(mktemp -d)
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src" "$dst"
   mkdir -p "$src/mydir/sub"
   echo "hello" > "$src/mydir/sub/file.txt"
 
@@ -97,13 +103,12 @@ setup() {
 
   [ -f "$dst/mydir/sub/file.txt" ]
   [ "$(cat "$dst/mydir/sub/file.txt")" = "hello" ]
-  rm -rf "$src" "$dst"
 }
 
 @test "_fast_copy_dir preserves symlinks" {
-  local src dst
-  src=$(mktemp -d)
-  dst=$(mktemp -d)
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src" "$dst"
   mkdir -p "$src/mydir"
   echo "target" > "$src/mydir/real.txt"
   ln -s real.txt "$src/mydir/link.txt"
@@ -112,12 +117,9 @@ setup() {
 
   [ -L "$dst/mydir/link.txt" ]
   [ "$(readlink "$dst/mydir/link.txt")" = "real.txt" ]
-  rm -rf "$src" "$dst"
 }
 
 @test "_fast_copy_dir fails on nonexistent source" {
-  local dst
-  dst=$(mktemp -d)
-  ! _fast_copy_dir "/nonexistent/path" "$dst/"
-  rm -rf "$dst"
+  _test_tmpdir=$(mktemp -d)
+  ! _fast_copy_dir "/nonexistent/path" "$_test_tmpdir/"
 }
