@@ -80,3 +80,23 @@ teardown() {
   run resolve_worktree "nope" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
   [ "$status" -eq 1 ]
 }
+
+# ── discover_repo_root from worktree ──────────────────────────────────────────
+
+@test "discover_repo_root returns main repo root when called from a worktree" {
+  create_test_worktree "inside-wt"
+  cd "$TEST_WORKTREES_DIR/inside-wt"
+  local root expected
+  root=$(discover_repo_root)
+  # Resolve symlinks (macOS: /var -> /private/var) for comparison
+  expected=$(cd "$TEST_REPO" && pwd -P)
+  [ "$root" = "$expected" ]
+}
+
+@test "discover_repo_root returns main repo root when called from main repo" {
+  cd "$TEST_REPO"
+  local root expected
+  root=$(discover_repo_root)
+  expected=$(pwd -P)
+  [ "$root" = "$expected" ]
+}

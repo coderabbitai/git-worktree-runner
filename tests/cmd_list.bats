@@ -57,3 +57,22 @@ teardown() {
   [[ "$output" == *"BRANCH"* ]]
   [[ "$output" == *"PATH"* ]]
 }
+
+@test "cmd_list from inside a worktree shows all worktrees" {
+  create_test_worktree "wt-inside"
+  cd "$TEST_WORKTREES_DIR/wt-inside"
+  run cmd_list
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[main repo]"* ]]
+  [[ "$output" == *"wt-inside"* ]]
+  [[ "$output" == *"$TEST_REPO"* ]]
+}
+
+@test "cmd_list --porcelain from inside a worktree includes main repo" {
+  create_test_worktree "wt-porcelain"
+  cd "$TEST_WORKTREES_DIR/wt-porcelain"
+  local output
+  output=$(cmd_list --porcelain)
+  [[ "$output" == *"$TEST_REPO"* ]]
+  [[ "$output" == *"wt-porcelain"* ]]
+}
