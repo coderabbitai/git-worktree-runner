@@ -51,3 +51,10 @@ teardown() {
   # stderr should contain human-readable info
   [[ "$stderr" == *"Worktree"* ]] || [[ "$stderr" == *"Branch"* ]]
 }
+
+@test "cmd_go 1 from inside a worktree resolves to main repo" {
+  cd "$TEST_WORKTREES_DIR/go-test"
+  run cmd_go 1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$TEST_REPO"* ]]
+}

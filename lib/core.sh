@@ -10,12 +10,27 @@
 declare _ctx_repo_root _ctx_base_dir _ctx_prefix
 declare _ctx_is_main _ctx_worktree_path _ctx_branch
 
-# Discover the root of the current git repository
-# Returns: absolute path to repo root
+# Discover the root of the main git repository
+# Works correctly from both the main repo and from inside worktrees.
+# Returns: absolute path to main repo root
 # Exit code: 0 on success, 1 if not in a git repo
 discover_repo_root() {
-  local root
-  root=$(git rev-parse --show-toplevel 2>/dev/null)
+  local root git_common_dir
+  git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+
+  if [ -z "$git_common_dir" ]; then
+    log_error "Not in a git repository"
+    return 1
+  fi
+
+  # --git-common-dir returns:
+  #   ".git" (relative) when in the main repo
+  #   "/absolute/path/to/repo/.git" when in a worktree
+  if [ "$git_common_dir" = ".git" ]; then
+    root=$(git rev-parse --show-toplevel 2>/dev/null)
+  else
+    root="${git_common_dir%/.git}"
+  fi
 
   if [ -z "$root" ]; then
     log_error "Not in a git repository"
