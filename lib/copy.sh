@@ -329,6 +329,13 @@ copy_directories() {
 
     # Find directories matching the pattern
     # Use -path for patterns with slashes (e.g., vendor/bundle), -name for basenames
+    # Note: case inside $() inside heredocs breaks Bash 3.2, so compute first
+    local find_results
+    case "$pattern" in
+      */*) find_results=$(find . -type d -path "./$pattern" 2>/dev/null) ;;
+      *)   find_results=$(find . -type d -name "$pattern" 2>/dev/null) ;;
+    esac
+
     while IFS= read -r dir_path; do
       [ -z "$dir_path" ] && continue
       dir_path="${dir_path#./}"
@@ -350,7 +357,7 @@ copy_directories() {
         log_warn "Failed to copy directory $dir_path"
       fi
     done <<EOF
-$(case "$pattern" in */*) find . -type d -path "./$pattern" 2>/dev/null ;; *) find . -type d -name "$pattern" 2>/dev/null ;; esac)
+$find_results
 EOF
   done <<EOF
 $dir_patterns
