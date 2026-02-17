@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-02-17
+
+### Added
+
+- Google Antigravity adapter ([#121](https://github.com/coderabbitai/git-worktree-runner/pull/121))
+
+### Changed
+
+- Copy-on-write (CoW) cloning for directory copies on supported filesystems ([#122](https://github.com/coderabbitai/git-worktree-runner/pull/122))
+
+### Fixed
+
+- `gtr`/coreutils naming conflict resolved and `cd` completions added ([#125](https://github.com/coderabbitai/git-worktree-runner/pull/125))
+- Main repo root resolved correctly from inside worktrees ([#126](https://github.com/coderabbitai/git-worktree-runner/pull/126))
+- `resolve_target` fallback via `git worktree list` for external worktrees ([#128](https://github.com/coderabbitai/git-worktree-runner/pull/128))
+
+## [2.3.0] - 2026-02-12
+
+### Added
+
+- Color output with `NO_COLOR`/`GTR_COLOR`/`gtr.ui.color` config support ([#120](https://github.com/coderabbitai/git-worktree-runner/pull/120))
+- Per-command help system with `_help_<command>()` functions ([#120](https://github.com/coderabbitai/git-worktree-runner/pull/120))
+- BATS test suite with 174 automated tests ([#119](https://github.com/coderabbitai/git-worktree-runner/pull/119))
+
+### Changed
+
+- Modularized monolithic `bin/gtr` into `lib/*.sh` libraries and `lib/commands/*.sh` ([#119](https://github.com/coderabbitai/git-worktree-runner/pull/119))
+- Unified adapter loading for editors and AI tools ([#116](https://github.com/coderabbitai/git-worktree-runner/pull/116))
+- Unified bidirectional config key mapping ([#115](https://github.com/coderabbitai/git-worktree-runner/pull/115))
+
+### Fixed
+
+- Removed ghost completion flag and added missing completions ([#111](https://github.com/coderabbitai/git-worktree-runner/pull/111))
+
 ## [2.2.0] - 2026-02-10
 
 ### Added
@@ -106,7 +140,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 - Improved base directory resolution logic to distinguish `.` (repo root), `./path` (repo-internal) from other relative values (sibling directories)
 
-[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.3.0...v2.3.1
+[2.3.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v1.0.0...v2.0.0
