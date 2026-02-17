@@ -20,6 +20,15 @@ jobs:
         run: |
           shellcheck bin/gtr bin/git-gtr lib/*.sh lib/commands/*.sh adapters/editor/*.sh adapters/ai/*.sh
 
+  completions:
+    name: Completions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify completion files are up to date
+        run: ./scripts/generate-completions.sh --check
+
   test:
     name: Tests
     runs-on: ubuntu-latest
