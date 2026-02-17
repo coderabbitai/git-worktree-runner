@@ -75,6 +75,41 @@ merge_copy_patterns() {
   fi
 }
 
+# Copy a directory using CoW (copy-on-write) when available, falling back to standard cp.
+# macOS APFS: cp -cRP (clone); Linux Btrfs/XFS: cp --reflink=auto -RP
+# Callers must guard the return value with `if` or `|| true` (set -e safe).
+# Usage: _fast_copy_dir src dest
+# Cached OS value for _fast_copy_dir; set on first call.
+_fast_copy_os=""
+
+_fast_copy_dir() {
+  local src="$1" dest="$2"
+  if [ -z "$_fast_copy_os" ]; then
+    _fast_copy_os=$(detect_os)
+  fi
+  local os="$_fast_copy_os"
+
+  case "$os" in
+    darwin)
+      # Try CoW clone first; if unsupported, fall back to regular copy
+      if cp -cRP "$src" "$dest" 2>/dev/null; then
+        return 0
+      fi
+      # Clean up any partial clone output before fallback
+      local _clone_target
+      _clone_target="${dest%/}/$(basename "$src")"
+      if [ -e "$_clone_target" ]; then rm -rf "$_clone_target"; fi
+      cp -RP "$src" "$dest"
+      ;;
+    linux)
+      cp --reflink=auto -RP "$src" "$dest"
+      ;;
+    *)
+      cp -RP "$src" "$dest"
+      ;;
+  esac
+}
+
 # Copy a single file to destination, handling exclusion, path preservation, and dry-run
 # Usage: _copy_pattern_file file dst_root excludes preserve_paths dry_run
 # Returns: 0 if file was copied (or would be in dry-run), 1 if skipped/failed
@@ -295,6 +330,13 @@ copy_directories() {
 
     # Find directories matching the pattern
     # Use -path for patterns with slashes (e.g., vendor/bundle), -name for basenames
+    # Note: case inside $() inside heredocs breaks Bash 3.2, so compute first
+    local find_results
+    case "$pattern" in
+      */*) find_results=$(find . -type d -path "./$pattern" 2>/dev/null) ;;
+      *)   find_results=$(find . -type d -name "$pattern" 2>/dev/null) ;;
+    esac
+
     while IFS= read -r dir_path; do
       [ -z "$dir_path" ] && continue
       dir_path="${dir_path#./}"
@@ -307,8 +349,8 @@ copy_directories() {
       dest_parent=$(dirname "$dest_dir")
       mkdir -p "$dest_parent"
 
-      # Copy directory (cp -RP preserves symlinks as symlinks)
-      if cp -RP "$dir_path" "$dest_parent/" 2>/dev/null; then
+      # Copy directory using CoW when available (preserves symlinks as symlinks)
+      if _fast_copy_dir "$dir_path" "$dest_parent/"; then
         log_info "Copied directory $dir_path"
         copied_count=$((copied_count + 1))
         _apply_directory_excludes "$dest_parent" "$dir_path" "$excludes"
@@ -316,7 +358,7 @@ copy_directories() {
         log_warn "Failed to copy directory $dir_path"
       fi
     done <<EOF
-$(case "$pattern" in */*) find . -type d -path "./$pattern" 2>/dev/null ;; *) find . -type d -name "$pattern" 2>/dev/null ;; esac)
+$find_results
 EOF
   done <<EOF
 $dir_patterns

@@ -2,7 +2,15 @@
 
 setup() {
   load test_helper
+  _fast_copy_os=""
+  source "$PROJECT_ROOT/lib/platform.sh"
   source "$PROJECT_ROOT/lib/copy.sh"
+}
+
+teardown() {
+  if [ -n "${_test_tmpdir:-}" ]; then
+    rm -rf "$_test_tmpdir"
+  fi
 }
 
 # --- _is_unsafe_path tests ---
@@ -81,4 +89,38 @@ setup() {
   local excludes
   excludes=$(printf '%s\n' "*.log" "dist/*")
   ! is_excluded "src/app.js" "$excludes"
+}
+
+# --- _fast_copy_dir tests ---
+
+@test "_fast_copy_dir copies directory contents" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src" "$dst"
+  mkdir -p "$src/mydir/sub"
+  echo "hello" > "$src/mydir/sub/file.txt"
+
+  _fast_copy_dir "$src/mydir" "$dst/"
+
+  [ -f "$dst/mydir/sub/file.txt" ]
+  [ "$(cat "$dst/mydir/sub/file.txt")" = "hello" ]
+}
+
+@test "_fast_copy_dir preserves symlinks" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src" "$dst"
+  mkdir -p "$src/mydir"
+  echo "target" > "$src/mydir/real.txt"
+  ln -s real.txt "$src/mydir/link.txt"
+
+  _fast_copy_dir "$src/mydir" "$dst/"
+
+  [ -L "$dst/mydir/link.txt" ]
+  [ "$(readlink "$dst/mydir/link.txt")" = "real.txt" ]
+}
+
+@test "_fast_copy_dir fails on nonexistent source" {
+  _test_tmpdir=$(mktemp -d)
+  ! _fast_copy_dir "/nonexistent/path" "$_test_tmpdir/"
 }
