@@ -299,6 +299,24 @@ resolve_target() {
     done
   fi
 
+  # Last resort: ask git for all worktrees (catches non-gtr-managed worktrees)
+  local wt_path wt_branch
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*)  wt_path="${line#worktree }" ;;
+      "branch "*)
+        wt_branch="${line#branch refs/heads/}"
+        if [ "$wt_branch" = "$identifier" ]; then
+          local is_main=0
+          [ "$wt_path" = "$repo_root" ] && is_main=1
+          printf "%s\t%s\t%s\n" "$is_main" "$wt_path" "$wt_branch"
+          return 0
+        fi
+        ;;
+      "")  wt_path="" ; wt_branch="" ;;
+    esac
+  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+
   log_error "Worktree not found for branch: $identifier"
   return 1
 }
