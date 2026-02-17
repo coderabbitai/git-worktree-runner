@@ -2,6 +2,7 @@
 
 setup() {
   load test_helper
+  _fast_copy_os=""
   source "$PROJECT_ROOT/lib/platform.sh"
   source "$PROJECT_ROOT/lib/copy.sh"
 }

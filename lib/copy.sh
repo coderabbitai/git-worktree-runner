@@ -97,7 +97,7 @@ _fast_copy_dir() {
       fi
       # Clean up any partial clone output before fallback
       local _clone_target="${dest%/}/$(basename "$src")"
-      [ -e "$_clone_target" ] && rm -rf "$_clone_target"
+      if [ -e "$_clone_target" ]; then rm -rf "$_clone_target"; fi
       cp -RP "$src" "$dest"
       ;;
     linux)
