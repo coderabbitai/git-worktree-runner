@@ -17,18 +17,18 @@
 #
 # Loading: file override (adapters/editor/<name>.sh) → registry → generic PATH fallback
 _EDITOR_REGISTRY="
-antigravity|agy|standard|Antigravity 'agy' command not found. Install from https://antigravity.google|workspace
-atom|atom|standard|Atom not found. Install from https://atom.io|
+vscode|code|standard|VS Code 'code' command not found. Install from https://code.visualstudio.com|workspace
 cursor|cursor|standard|Cursor not found. Install from https://cursor.com or enable the shell command.|workspace
-emacs|emacs|terminal|Emacs not found. Install from https://www.gnu.org/software/emacs/|background
 idea|idea|standard|IntelliJ IDEA 'idea' command not found. Enable shell launcher in Tools > Create Command-line Launcher|
+vim|vim|terminal|Vim not found. Install via your package manager.|
 nvim|nvim|terminal|Neovim not found. Install from https://neovim.io|
 pycharm|pycharm|standard|PyCharm 'pycharm' command not found. Enable shell launcher in Tools > Create Command-line Launcher|
 sublime|subl|standard|Sublime Text 'subl' command not found. Install from https://www.sublimetext.com|
-vim|vim|terminal|Vim not found. Install via your package manager.|
-vscode|code|standard|VS Code 'code' command not found. Install from https://code.visualstudio.com|workspace
-webstorm|webstorm|standard|WebStorm 'webstorm' command not found. Enable shell launcher in Tools > Create Command-line Launcher|
 zed|zed|standard|Zed not found. Install from https://zed.dev|
+webstorm|webstorm|standard|WebStorm 'webstorm' command not found. Enable shell launcher in Tools > Create Command-line Launcher|
+antigravity|agy|standard|Antigravity 'agy' command not found. Install from https://antigravity.google|workspace
+emacs|emacs|terminal|Emacs not found. Install from https://www.gnu.org/software/emacs/|background
+atom|atom|standard|Atom not found. Install from https://atom.io|
 "
 
 # ── AI Tool Registry ──────────────────────────────────────────────────
@@ -43,13 +43,13 @@ zed|zed|standard|Zed not found. Install from https://zed.dev|
 #
 # Loading: file override (adapters/ai/<name>.sh) → registry → generic PATH fallback
 _AI_REGISTRY="
-aider|aider|Aider not found. Install with: pip install aider-chat|See https://aider.chat for more information
-auggie|auggie|Auggie CLI not found. Install with: npm install -g @augmentcode/auggie|See https://www.augmentcode.com/product/CLI for more information
-codex|codex|Codex CLI not found. Install with: npm install -g @openai/codex|Or: brew install codex;See https://github.com/openai/codex for more info
-continue|cn|Continue CLI not found. Install from https://continue.dev|See https://docs.continue.dev/cli/install for installation
 copilot|copilot|GitHub Copilot CLI not found.|Install with: npm install -g @github/copilot;Or: brew install copilot-cli;See https://github.com/github/copilot-cli for more information
+codex|codex|Codex CLI not found. Install with: npm install -g @openai/codex|Or: brew install codex;See https://github.com/openai/codex for more info
 gemini|gemini|Gemini CLI not found. Install with: npm install -g @google/gemini-cli|Or: brew install gemini-cli;See https://github.com/google-gemini/gemini-cli for more info
 opencode|opencode|OpenCode not found. Install from https://opencode.ai|Make sure the 'opencode' CLI is available in your PATH
+aider|aider|Aider not found. Install with: pip install aider-chat|See https://aider.chat for more information
+continue|cn|Continue CLI not found. Install from https://continue.dev|See https://docs.continue.dev/cli/install for installation
+auggie|auggie|Auggie CLI not found. Install with: npm install -g @augmentcode/auggie|See https://www.augmentcode.com/product/CLI for more information
 "
 
 # Registry lookup — find an adapter entry by name

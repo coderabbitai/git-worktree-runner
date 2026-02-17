@@ -134,7 +134,7 @@ git gtr config set gtr.provider github
 ## Editor Settings
 
 ```bash
-# Default editor: antigravity, cursor, vscode, zed, or none
+# Default editor: vscode, cursor, zed, or none
 gtr.editor.default = cursor
 
 # Workspace file for VS Code/Cursor/Antigravity (relative path from worktree root)
@@ -146,10 +146,10 @@ gtr.editor.workspace = project.code-workspace
 
 **Setup editors:**
 
-- **Antigravity**: Install from [antigravity.google](https://antigravity.google), `agy` command available after installation
-- **Cursor**: Install from [cursor.com](https://cursor.com), enable shell command
 - **VS Code**: Install from [code.visualstudio.com](https://code.visualstudio.com), enable `code` command
+- **Cursor**: Install from [cursor.com](https://cursor.com), enable shell command
 - **Zed**: Install from [zed.dev](https://zed.dev), `zed` command available automatically
+- **Antigravity**: Install from [antigravity.google](https://antigravity.google), `agy` command available after installation
 
 **Workspace files:**
 
@@ -165,7 +165,7 @@ VS Code, Cursor, and Antigravity support `.code-workspace` files for multi-root 
 ## AI Tool Settings
 
 ```bash
-# Default AI tool: none (or aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode)
+# Default AI tool: none (or copilot, cursor, claude, codex, gemini, opencode, aider, continue, auggie)
 gtr.ai.default = none
 ```
 
@@ -173,15 +173,15 @@ gtr.ai.default = none
 
 | Tool                                                                  | Install                                           | Use Case                                                 | Set as Default                               |
 | --------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------- |
-| **[Aider](https://aider.chat)**                                       | `pip install aider-chat`                          | Pair programming, edit files with AI                     | `git gtr config set gtr.ai.default aider`    |
-| **[Auggie CLI](https://www.augmentcode.com/product/CLI)**             | `npm install -g @augmentcode/auggie`              | Context-aware agentic CLI for automation and development | `git gtr config set gtr.ai.default auggie`   |
-| **[Claude Code](https://claude.com/claude-code)**                     | Install from claude.com                           | Terminal-native coding agent                             | `git gtr config set gtr.ai.default claude`   |
-| **[Codex CLI](https://github.com/openai/codex)**                      | `npm install -g @openai/codex`                    | OpenAI coding assistant                                  | `git gtr config set gtr.ai.default codex`    |
-| **[Continue](https://continue.dev)**                                  | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent                                 | `git gtr config set gtr.ai.default continue` |
 | **[GitHub Copilot CLI](https://githubnext.com/projects/copilot-cli)** | `npm install -g @githubnext/copilot-cli`          | AI-powered CLI assistant by GitHub                       | `git gtr config set gtr.ai.default copilot`  |
 | **[Cursor](https://cursor.com)**                                      | Install from cursor.com                           | AI-powered editor with CLI agent                         | `git gtr config set gtr.ai.default cursor`   |
+| **[Claude Code](https://claude.com/claude-code)**                     | Install from claude.com                           | Terminal-native coding agent                             | `git gtr config set gtr.ai.default claude`   |
+| **[Codex CLI](https://github.com/openai/codex)**                      | `npm install -g @openai/codex`                    | OpenAI coding assistant                                  | `git gtr config set gtr.ai.default codex`    |
 | **[Gemini](https://github.com/google-gemini/gemini-cli)**             | `npm install -g @google/gemini-cli`               | Open-source AI coding assistant powered by Google Gemini | `git gtr config set gtr.ai.default gemini`   |
-| **[OpenCode](https://opencode.ai)**                                   | Install from opencode.ai                          | AI coding assistant                                      | `git gtr config set gtr.ai.default opencode` |
+| **[OpenCode](https://opencode.ai)**                                   | Install from opencode.ai                          | Open-source terminal coding agent                        | `git gtr config set gtr.ai.default opencode` |
+| **[Aider](https://aider.chat)**                                       | `pip install aider-chat`                          | Pair programming, edit files with AI                     | `git gtr config set gtr.ai.default aider`    |
+| **[Continue](https://continue.dev)**                                  | See [docs](https://docs.continue.dev/cli/install) | Open-source coding agent                                 | `git gtr config set gtr.ai.default continue` |
+| **[Auggie CLI](https://www.augmentcode.com/product/CLI)**             | `npm install -g @augmentcode/auggie`              | Context-aware agentic CLI for automation and development | `git gtr config set gtr.ai.default auggie`   |
 
 **Examples:**
 

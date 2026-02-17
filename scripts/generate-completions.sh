@@ -37,7 +37,7 @@ discover_repo_root() { :; }; resolve_base_dir() { :; }
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/lib/config.sh" 2>/dev/null || true
 
-# Collect editor names: registry + custom files, sorted, deduplicated
+# Collect editor names: registry + custom files, deduplicated (preserves registry order)
 get_editor_names() {
   local names
   names=$(_names_from_registry "$_EDITOR_REGISTRY")
@@ -50,11 +50,11 @@ get_editor_names() {
     names="$names"$'\n'"$name"
   done
 
-  # Sort, deduplicate, add "none" sentinel
-  printf "%s\nnone\n" "$names" | sort -u | tr '\n' ' ' | sed 's/ *$//'
+  # Deduplicate preserving order, add "none" sentinel
+  printf "%s\nnone\n" "$names" | awk 'NF && !seen[$0]++' | tr '\n' ' ' | sed 's/ *$//'
 }
 
-# Collect AI tool names: registry + custom files, sorted, deduplicated
+# Collect AI tool names: registry + custom files, deduplicated (preserves registry order)
 get_ai_names() {
   local names
   names=$(_names_from_registry "$_AI_REGISTRY")
@@ -66,7 +66,7 @@ get_ai_names() {
     names="$names"$'\n'"$name"
   done
 
-  printf "%s\nnone\n" "$names" | sort -u | tr '\n' ' ' | sed 's/ *$//'
+  printf "%s\nnone\n" "$names" | awk 'NF && !seen[$0]++' | tr '\n' ' ' | sed 's/ *$//'
 }
 
 # Collect config keys from _CFG_KEY_MAP (left side of each pair)

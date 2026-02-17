@@ -56,8 +56,8 @@ Special:
   Use '1' to open the main repo root: git gtr editor 1
 
 Available editors:
-  antigravity, atom, cursor, emacs, idea, nano, nvim, pycharm, sublime, vim,
-  vscode, webstorm, zed, none (or any command in your PATH)
+  vscode, cursor, idea, vim, nvim, pycharm, nano, sublime, zed, webstorm,
+  antigravity, emacs, atom, none (or any command in your PATH)
 
 Examples:
   git gtr editor my-feature                     # Uses default editor
@@ -83,8 +83,8 @@ Special:
   Use '1' to start AI in the main repo root: git gtr ai 1
 
 Available AI tools:
-  aider, auggie, claude, codex, continue, copilot, cursor, gemini,
-  opencode, none (or any command in your PATH)
+  copilot, cursor, claude, codex, gemini, opencode, aider, continue,
+  auggie, none (or any command in your PATH)
 
 Examples:
   git gtr ai my-feature                         # Uses default AI tool
@@ -602,14 +602,14 @@ CONFIGURATION OPTIONS:
   gtr.worktrees.prefix     Worktree folder prefix (default: "")
   gtr.defaultBranch        Default branch (default: auto)
   gtr.editor.default       Default editor
-                           Options: antigravity, atom, cursor, emacs,
-                           idea, nano, nvim, pycharm, sublime, vim,
-                           vscode, webstorm, zed, none
+                           Options: vscode, cursor, idea, vim, nvim,
+                           pycharm, nano, sublime, zed, webstorm,
+                           antigravity, emacs, atom, none
   gtr.editor.workspace     Workspace file for VS Code/Cursor/Antigravity
                            (relative path, auto-detects, or "none")
   gtr.ai.default           Default AI tool
-                           Options: aider, auggie, claude, codex, continue,
-                           copilot, cursor, gemini, opencode, none
+                           Options: copilot, cursor, claude, codex,
+                           gemini, opencode, aider, continue, auggie, none
   gtr.copy.include         Files to copy (multi-valued)
   gtr.copy.exclude         Files to exclude (multi-valued)
   gtr.copy.includeDirs     Directories to copy (multi-valued)

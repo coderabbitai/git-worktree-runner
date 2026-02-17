@@ -70,7 +70,7 @@ Libraries are sourced in the order listed above (ui → args → config → ... 
 
 Most adapters are defined declaratively in the **adapter registry** (`lib/adapters.sh`) using pipe-delimited entries. Custom adapters that need special logic remain as override files in `adapters/editor/` and `adapters/ai/`.
 
-**Registry-defined adapters**: antigravity, atom, cursor, emacs, idea, nvim, pycharm, sublime, vim, vscode, webstorm, zed (editors) and aider, auggie, codex, continue, copilot, gemini, opencode (AI).
+**Registry-defined adapters**: vscode, cursor, idea, vim, nvim, pycharm, sublime, zed, webstorm, antigravity, emacs, atom (editors) and copilot, codex, gemini, opencode, aider, continue, auggie (AI).
 
 **Custom adapter files**: `adapters/editor/nano.sh`, `adapters/ai/claude.sh`, `adapters/ai/cursor.sh` — these implement `editor_can_open()`/`editor_open()` or `ai_can_start()`/`ai_start()` directly.
 

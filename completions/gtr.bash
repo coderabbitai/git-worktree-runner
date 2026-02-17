@@ -55,7 +55,7 @@ _git_gtr() {
       if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "--editor" -- "$cur"))
       elif [ "$prev" = "--editor" ]; then
-        COMPREPLY=($(compgen -W "antigravity atom cursor emacs idea nano none nvim pycharm sublime vim vscode webstorm zed" -- "$cur"))
+        COMPREPLY=($(compgen -W "vscode cursor idea vim nvim pycharm sublime zed webstorm antigravity emacs atom nano none" -- "$cur"))
       else
         local branches all_options
         branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
@@ -67,7 +67,7 @@ _git_gtr() {
       if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "--ai" -- "$cur"))
       elif [ "$prev" = "--ai" ]; then
-        COMPREPLY=($(compgen -W "aider auggie claude codex continue copilot cursor gemini none opencode" -- "$cur"))
+        COMPREPLY=($(compgen -W "copilot codex gemini opencode aider continue auggie claude cursor none" -- "$cur"))
       else
         local branches all_options
         branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
