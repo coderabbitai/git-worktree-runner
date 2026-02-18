@@ -92,6 +92,15 @@ setup() {
   [ "$_EDITOR_BACKGROUND" -eq 1 ]
 }
 
+@test "_load_from_editor_registry parses antigravity with workspace and dot flags" {
+  local entry
+  entry=$(_registry_lookup "$_EDITOR_REGISTRY" "antigravity")
+  _load_from_editor_registry "$entry"
+  [ "$_EDITOR_CMD" = "agy" ]
+  [ "$_EDITOR_WORKSPACE" -eq 1 ]
+  [ "$_EDITOR_DOT" -eq 1 ]
+}
+
 # ── _load_from_ai_registry ──────────────────────────────────────────────────
 
 @test "_load_from_ai_registry parses aider entry correctly" {

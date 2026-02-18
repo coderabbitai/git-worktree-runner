@@ -14,10 +14,11 @@
 #   flags   — comma-separated modifiers (optional):
 #               "workspace" — pass .code-workspace file instead of directory
 #               "background" — launch with & (for terminal editors that fork)
+#               "dot" — cd to directory and pass "." instead of full path
 #
 # Loading: file override (adapters/editor/<name>.sh) → registry → generic PATH fallback
 _EDITOR_REGISTRY="
-antigravity|agy|standard|Antigravity 'agy' command not found. Install from https://antigravity.google|workspace
+antigravity|agy|standard|Antigravity 'agy' command not found. Install from https://antigravity.google|workspace,dot
 atom|atom|standard|Atom not found. Install from https://atom.io|
 cursor|cursor|standard|Cursor not found. Install from https://cursor.com or enable the shell command.|workspace
 emacs|emacs|terminal|Emacs not found. Install from https://www.gnu.org/software/emacs/|background
@@ -86,12 +87,16 @@ _load_from_editor_registry() {
   _EDITOR_ERR_MSG="$err_msg"
   _EDITOR_WORKSPACE=0
   _EDITOR_BACKGROUND=0
+  _EDITOR_DOT=0
 
   case ",$flags," in
     *,workspace,*) _EDITOR_WORKSPACE=1 ;;
   esac
   case ",$flags," in
     *,background,*) _EDITOR_BACKGROUND=1 ;;
+  esac
+  case ",$flags," in
+    *,dot,*) _EDITOR_DOT=1 ;;
   esac
 
   case "$type" in
@@ -207,7 +212,7 @@ _ai_define_standard() {
 }
 
 # Standard editor adapter builder — used by adapter files that follow the common pattern
-# Sets globals then call this: _EDITOR_CMD, _EDITOR_ERR_MSG, _EDITOR_WORKSPACE (optional, 0 or 1)
+# Sets globals then call this: _EDITOR_CMD, _EDITOR_ERR_MSG, _EDITOR_WORKSPACE (optional, 0 or 1), _EDITOR_DOT (optional, 0 or 1)
 _editor_define_standard() {
   # shellcheck disable=SC2317 # Functions are called indirectly via adapter dispatch
   editor_can_open() {
@@ -224,6 +229,8 @@ _editor_define_standard() {
     fi
     if [ "${_EDITOR_WORKSPACE:-0}" = "1" ] && [ -n "$workspace" ] && [ -f "$workspace" ]; then
       "$_EDITOR_CMD" "$workspace"
+    elif [ "${_EDITOR_DOT:-0}" = "1" ]; then
+      (cd "$path" && "$_EDITOR_CMD" .)
     else
       "$_EDITOR_CMD" "$path"
     fi
