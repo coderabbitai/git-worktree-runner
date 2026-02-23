@@ -163,12 +163,32 @@ _expand_and_copy_pattern() {
 
   if [ "$have_globstar" -eq 0 ] && echo "$pattern" | grep -q '\*\*'; then
     # Fallback to find for ** patterns on Bash 3.2
+    # find -path doesn't treat ** as recursive glob; it's just a wildcard that
+    # won't match across the required '/' separator. For **/-prefixed patterns,
+    # also search with the suffix alone so root-level files are found.
+    local _find_results
+    _find_results=$(find . -path "./$pattern" -type f 2>/dev/null || true)
+    case "$pattern" in
+      \*\*/*)
+        local _suffix="${pattern#\*\*/}"
+        local _root_results
+        _root_results=$(find . -maxdepth 1 -path "./$_suffix" -type f 2>/dev/null || true)
+        if [ -n "$_root_results" ]; then
+          if [ -n "$_find_results" ]; then
+            _find_results="$_find_results"$'\n'"$_root_results"
+          else
+            _find_results="$_root_results"
+          fi
+        fi
+        ;;
+    esac
     while IFS= read -r file; do
+      [ -z "$file" ] && continue
       if _copy_pattern_file "$file" "$dst_root" "$excludes" "$preserve_paths" "$dry_run"; then
         count=$((count + 1))
       fi
     done <<EOF
-$(find . -path "./$pattern" -type f 2>/dev/null || true)
+$_find_results
 EOF
   else
     # Use native Bash glob expansion (supports ** if available)

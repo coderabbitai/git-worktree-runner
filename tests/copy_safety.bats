@@ -124,3 +124,60 @@ teardown() {
   _test_tmpdir=$(mktemp -d)
   ! _fast_copy_dir "/nonexistent/path" "$_test_tmpdir/"
 }
+
+# --- _expand_and_copy_pattern find-fallback tests ---
+# These test the Bash 3.2 fallback path (have_globstar=0)
+
+@test "find fallback: empty results don't cause failures" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src" "$dst"
+
+  cd "$src"
+  local count
+  count=$(_expand_and_copy_pattern "**/.nonexistent*" "$dst" "" "true" "false" "0")
+  [ "$count" -eq 0 ]
+}
+
+@test "find fallback: **/ pattern matches root-level files" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src" "$dst"
+  echo "secret" > "$src/.env"
+  echo "local" > "$src/.env.local"
+
+  cd "$src"
+  local count
+  count=$(_expand_and_copy_pattern "**/.env*" "$dst" "" "true" "false" "0")
+  [ "$count" -eq 2 ]
+  [ -f "$dst/.env" ]
+  [ -f "$dst/.env.local" ]
+}
+
+@test "find fallback: **/ pattern matches nested files" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/subdir" "$dst"
+  echo "nested" > "$src/subdir/.env"
+
+  cd "$src"
+  local count
+  count=$(_expand_and_copy_pattern "**/.env" "$dst" "" "true" "false" "0")
+  [ "$count" -eq 1 ]
+  [ -f "$dst/subdir/.env" ]
+}
+
+@test "find fallback: **/ pattern matches both root and nested files" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/config" "$dst"
+  echo "root" > "$src/CLAUDE.md"
+  echo "nested" > "$src/config/CLAUDE.md"
+
+  cd "$src"
+  local count
+  count=$(_expand_and_copy_pattern "**/CLAUDE.md" "$dst" "" "true" "false" "0")
+  [ "$count" -eq 2 ]
+  [ -f "$dst/CLAUDE.md" ]
+  [ -f "$dst/config/CLAUDE.md" ]
+}
