@@ -131,7 +131,13 @@ cmd_doctor() {
   if [ -n "$_rc_file" ] && [ -f "$_rc_file" ] && grep -q 'git gtr init' "$_rc_file" 2>/dev/null; then
     echo "[OK] Shell integration: loaded (gtr cd available)"
   else
-    echo "[i] Shell integration: eval \"\$(git gtr init $_shell_name)\" in ${_rc_file##*/} for gtr cd"
+    local _init_hint
+    if [ "$_shell_name" = "fish" ]; then
+      _init_hint="git gtr init fish | source"
+    else
+      _init_hint="eval \"\$(git gtr init $_shell_name)\""
+    fi
+    echo "[i] Shell integration: $_init_hint in ${_rc_file##*/} for gtr cd"
   fi
 
   echo ""
