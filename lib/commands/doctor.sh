@@ -114,9 +114,24 @@ cmd_doctor() {
 
   # Check fzf (optional, for interactive picker)
   if command -v fzf >/dev/null 2>&1; then
-    echo "[OK] fzf: $(fzf --version 2>/dev/null | awk '{print $1}') (interactive picker available)"
+    echo "[OK] fzf: $(fzf --version 2>/dev/null | awk '{print $1}') (interactive picker: gtr cd)"
   else
     echo "[i] fzf: not found (install for interactive picker: gtr cd)"
+  fi
+
+  # Check shell integration (required for gtr cd)
+  local _shell_name _rc_file
+  _shell_name="$(basename "${SHELL:-bash}")"
+  case "$_shell_name" in
+    zsh)  _rc_file="$HOME/.zshrc" ;;
+    bash) _rc_file="$HOME/.bashrc" ;;
+    fish) _rc_file="$HOME/.config/fish/config.fish" ;;
+    *)    _rc_file="" ;;
+  esac
+  if [ -n "$_rc_file" ] && [ -f "$_rc_file" ] && grep -q 'git gtr init' "$_rc_file" 2>/dev/null; then
+    echo "[OK] Shell integration: loaded (gtr cd available)"
+  else
+    echo "[i] Shell integration: eval \"\$(git gtr init $_shell_name)\" in ${_rc_file##*/} for gtr cd"
   fi
 
   echo ""

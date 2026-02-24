@@ -83,8 +83,14 @@ __FUNC__() {
     shift
     local dir
     if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
+      local _gtr_porcelain
+      _gtr_porcelain="$(command git gtr list --porcelain)"
+      if [ "$(printf '%s\n' "$_gtr_porcelain" | wc -l)" -le 1 ]; then
+        echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
+        return 0
+      fi
       local _gtr_selection
-      _gtr_selection="$(command git gtr list --porcelain | fzf \
+      _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
         --with-nth=2 \
         --ansi \
@@ -183,8 +189,14 @@ __FUNC__() {
     shift
     local dir
     if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
+      local _gtr_porcelain
+      _gtr_porcelain="$(command git gtr list --porcelain)"
+      if [ "$(printf '%s\n' "$_gtr_porcelain" | wc -l)" -le 1 ]; then
+        echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
+        return 0
+      fi
       local _gtr_selection
-      _gtr_selection="$(command git gtr list --porcelain | fzf \
+      _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
         --with-nth=2 \
         --ansi \
@@ -287,7 +299,12 @@ function __FUNC__
   if test (count $argv) -gt 0; and test "$argv[1]" = "cd"
     set -l dir
     if test (count $argv) -eq 1; and type -q fzf
-      set -l _gtr_selection (command git gtr list --porcelain | fzf \
+      set -l _gtr_porcelain (command git gtr list --porcelain)
+      if test (count $_gtr_porcelain) -le 1
+        echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
+        return 0
+      end
+      set -l _gtr_selection (printf '%s\n' $_gtr_porcelain | fzf \
         --delimiter=\t \
         --with-nth=2 \
         --ansi \
