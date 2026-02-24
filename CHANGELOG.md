@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-02-24
+
+### Added
+
+- Interactive fzf worktree picker for `gtr cd` with preview, keybindings, and multi-action support ([#136](https://github.com/coderabbitai/git-worktree-runner/pull/136))
+- Helpful error message when running `git gtr cd` explaining shell integration requirement ([#137](https://github.com/coderabbitai/git-worktree-runner/pull/137))
+
+### Changed
+
+- Limit `find` depth for simple directory copy patterns for better performance ([#130](https://github.com/coderabbitai/git-worktree-runner/pull/130))
+
+### Fixed
+
+- Root-level files now matched correctly for `**` glob patterns on Bash 3.2 ([#133](https://github.com/coderabbitai/git-worktree-runner/pull/133))
+- Antigravity adapter support ([#131](https://github.com/coderabbitai/git-worktree-runner/pull/131))
+
 ## [2.3.1] - 2026-02-17
 
 ### Added
@@ -140,7 +156,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 - Improved base directory resolution logic to distinguish `.` (repo root), `./path` (repo-internal) from other relative values (sibling directories)
 
-[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.3.1...HEAD
+[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.4.0...HEAD
+[2.4.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.1.0...v2.2.0
