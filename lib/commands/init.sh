@@ -101,6 +101,10 @@ __FUNC__() {
         --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
       dir="$(printf '%s' "$_gtr_selection" | cut -f1)"
+    elif [ "$#" -eq 0 ]; then
+      echo "Usage: __FUNC__ cd <branch>" >&2
+      echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
+      return 1
     else
       dir="$(command git gtr go "$@")" || return $?
     fi
@@ -174,6 +178,7 @@ _init_zsh() {
 #   eval "$(git gtr init zsh)"
 
 __FUNC__() {
+  emulate -L zsh
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
     shift
     local dir
@@ -196,6 +201,10 @@ __FUNC__() {
         --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
       dir="$(printf '%s' "$_gtr_selection" | cut -f1)"
+    elif [ "$#" -eq 0 ]; then
+      echo "Usage: __FUNC__ cd <branch>" >&2
+      echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
+      return 1
     else
       dir="$(command git gtr go "$@")" || return $?
     fi
@@ -296,6 +305,10 @@ function __FUNC__
       or return 0
       test -z "$_gtr_selection"; and return 0
       set dir (string split \t -- "$_gtr_selection")[1]
+    else if test (count $argv) -eq 1
+      echo "Usage: __FUNC__ cd <branch>" >&2
+      echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
+      return 1
     else
       set dir (command git gtr go $argv[2..])
       or return $status

@@ -221,7 +221,6 @@ eval "$(git gtr init bash)"
 gtr cd                # Interactive worktree picker (requires fzf)
 gtr cd my-feature
 gtr cd 1
-gtr cd                   # interactive picker (requires fzf)
 ```
 
 With [fzf](https://github.com/junegunn/fzf) installed, `gtr cd` (no arguments) opens a command palette with git log preview and keybindings: `ctrl-e` editor, `ctrl-a` AI, `ctrl-d` delete, `ctrl-y` copy, `ctrl-r` refresh.
