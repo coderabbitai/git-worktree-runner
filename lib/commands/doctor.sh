@@ -88,7 +88,7 @@ cmd_doctor() {
   # Check hosting provider
   if [ -n "$repo_root" ]; then
     local provider
-    provider=$(detect_provider 2>/dev/null)
+    provider=$(detect_provider 2>/dev/null) || true
     if [ -n "$provider" ]; then
       echo "[OK] Provider: $provider"
       case "$provider" in
