@@ -365,6 +365,7 @@ Setup:
   eval "$(git gtr init zsh --as gwtr)"
 
 After setup:
+  gtr cd                                        # interactive worktree picker (requires fzf)
   gtr cd my-feature                             # cd to worktree
   gtr cd 1                                      # cd to main repo
   gtr <command>                                 # same as git gtr <command>
@@ -549,6 +550,7 @@ SETUP & MAINTENANCE:
          Generate shell integration for cd support (bash, zsh, fish)
          --as <name>: custom function name (default: gtr)
          Usage: eval "$(git gtr init bash)"
+         With fzf installed, 'gtr cd' (no args) opens an interactive picker
 
   version
          Show version
@@ -572,6 +574,7 @@ WORKFLOW EXAMPLES:
   git gtr run feature/user-auth npm run dev   # Start dev server
 
   # Navigate to worktree directory
+  gtr cd                                    # Interactive picker (requires fzf)
   gtr cd feature/user-auth                  # With shell integration (git gtr init)
   cd "$(git gtr go feature/user-auth)"      # Without shell integration
 

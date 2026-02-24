@@ -100,6 +100,7 @@ git gtr ai my-feature           # Start claude
 git gtr run my-feature npm test # Run tests
 
 # Navigate to worktree
+gtr cd                          # Interactive picker (requires fzf + shell integration)
 gtr cd my-feature               # Requires: eval "$(git gtr init bash)"
 cd "$(git gtr go my-feature)"   # Alternative without shell integration
 
@@ -217,6 +218,7 @@ cd "$(git gtr go 1)"             # Navigate to main repo
 eval "$(git gtr init bash)"
 
 # Then navigate with:
+gtr cd                # Interactive worktree picker (requires fzf)
 gtr cd my-feature
 gtr cd 1
 ```

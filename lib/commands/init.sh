@@ -81,6 +81,23 @@ _init_bash() {
 __FUNC__() {
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
     shift
+    if [ "$#" -eq 0 ]; then
+      if command -v fzf >/dev/null 2>&1; then
+        local _gtr_sel
+        _gtr_sel="$(command git gtr list --porcelain | fzf \
+          --delimiter=$'\t' \
+          --with-nth=2 \
+          --header='Select worktree (Ctrl-C to cancel)' \
+          --preview='git -C {1} log --oneline --graph -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+          --preview-window=right:50%)" || return 0
+        set -- "$(printf '%s' "$_gtr_sel" | cut -f2)"
+      else
+        echo "Tip: Install fzf for an interactive worktree picker (https://github.com/junegunn/fzf)" >&2
+        echo "" >&2
+        command git gtr list
+        return 0
+      fi
+    fi
     local dir
     dir="$(command git gtr go "$@")" && cd "$dir" && {
       local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
@@ -154,6 +171,23 @@ _init_zsh() {
 __FUNC__() {
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
     shift
+    if [ "$#" -eq 0 ]; then
+      if command -v fzf >/dev/null 2>&1; then
+        local _gtr_sel
+        _gtr_sel="$(command git gtr list --porcelain | fzf \
+          --delimiter=$'\t' \
+          --with-nth=2 \
+          --header='Select worktree (Ctrl-C to cancel)' \
+          --preview='git -C {1} log --oneline --graph -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+          --preview-window=right:50%)" || return 0
+        set -- "$(printf '%s' "$_gtr_sel" | cut -f2)"
+      else
+        echo "Tip: Install fzf for an interactive worktree picker (https://github.com/junegunn/fzf)" >&2
+        echo "" >&2
+        command git gtr list
+        return 0
+      fi
+    fi
     local dir
     dir="$(command git gtr go "$@")" && cd "$dir" && {
       local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
@@ -232,7 +266,25 @@ _init_fish() {
 
 function __FUNC__
   if test (count $argv) -gt 0; and test "$argv[1]" = "cd"
-    set -l dir (command git gtr go $argv[2..])
+    set -l _gtr_cd_args $argv[2..]
+    if test (count $_gtr_cd_args) -eq 0
+      if command -q fzf
+        set -l _gtr_sel (command git gtr list --porcelain | fzf \
+          --delimiter=\t \
+          --with-nth=2 \
+          --header='Select worktree (Ctrl-C to cancel)' \
+          --preview='git -C {1} log --oneline --graph -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+          --preview-window=right:50%)
+        or return 0
+        set _gtr_cd_args (printf '%s' "$_gtr_sel" | cut -f2)
+      else
+        echo "Tip: Install fzf for an interactive worktree picker (https://github.com/junegunn/fzf)" >&2
+        echo "" >&2
+        command git gtr list
+        return 0
+      end
+    end
+    set -l dir (command git gtr go $_gtr_cd_args)
     and cd $dir
     and begin
       set -l _gtr_hooks

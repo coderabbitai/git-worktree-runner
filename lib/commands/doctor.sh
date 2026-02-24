@@ -112,6 +112,13 @@ cmd_doctor() {
     fi
   fi
 
+  # Check fzf (optional, for interactive picker)
+  if command -v fzf >/dev/null 2>&1; then
+    echo "[OK] fzf: $(fzf --version 2>/dev/null | awk '{print $1}') (interactive picker available)"
+  else
+    echo "[i] fzf: not found (install for interactive picker: gtr cd)"
+  fi
+
   echo ""
   if [ "$issues" -eq 0 ]; then
     echo "Everything looks good!"
