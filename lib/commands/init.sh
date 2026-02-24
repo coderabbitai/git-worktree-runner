@@ -81,25 +81,30 @@ _init_bash() {
 __FUNC__() {
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
     shift
-    if [ "$#" -eq 0 ]; then
-      if command -v fzf >/dev/null 2>&1; then
-        local _gtr_sel
-        _gtr_sel="$(command git gtr list --porcelain | fzf \
-          --delimiter=$'\t' \
-          --with-nth=2 \
-          --header='Select worktree (Ctrl-C to cancel)' \
-          --preview='git -C {1} log --oneline --graph -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
-          --preview-window=right:50%)" || return 0
-        set -- "$(printf '%s' "$_gtr_sel" | cut -f2)"
-      else
-        echo "Tip: Install fzf for an interactive worktree picker (https://github.com/junegunn/fzf)" >&2
-        echo "" >&2
-        command git gtr list
-        return 0
-      fi
-    fi
     local dir
-    dir="$(command git gtr go "$@")" && cd "$dir" && {
+    if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
+      local _gtr_selection
+      _gtr_selection="$(command git gtr list --porcelain | fzf \
+        --delimiter=$'\t' \
+        --with-nth=2 \
+        --ansi \
+        --layout=reverse \
+        --border \
+        --prompt='Worktree> ' \
+        --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+        --preview-window=right:50% \
+        --bind='ctrl-e:execute(git gtr editor {2})' \
+        --bind='ctrl-a:execute(git gtr ai {2})' \
+        --bind='ctrl-d:execute(git gtr rm {2})+reload(git gtr list --porcelain)' \
+        --bind='ctrl-y:execute(git gtr copy {2})' \
+        --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
+      [ -z "$_gtr_selection" ] && return 0
+      dir="$(printf '%s' "$_gtr_selection" | cut -f1)"
+    else
+      dir="$(command git gtr go "$@")" || return $?
+    fi
+    cd "$dir" && {
       local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
       _gtr_hooks=""
       _gtr_seen=""
@@ -171,25 +176,30 @@ _init_zsh() {
 __FUNC__() {
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
     shift
-    if [ "$#" -eq 0 ]; then
-      if command -v fzf >/dev/null 2>&1; then
-        local _gtr_sel
-        _gtr_sel="$(command git gtr list --porcelain | fzf \
-          --delimiter=$'\t' \
-          --with-nth=2 \
-          --header='Select worktree (Ctrl-C to cancel)' \
-          --preview='git -C {1} log --oneline --graph -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
-          --preview-window=right:50%)" || return 0
-        set -- "$(printf '%s' "$_gtr_sel" | cut -f2)"
-      else
-        echo "Tip: Install fzf for an interactive worktree picker (https://github.com/junegunn/fzf)" >&2
-        echo "" >&2
-        command git gtr list
-        return 0
-      fi
-    fi
     local dir
-    dir="$(command git gtr go "$@")" && cd "$dir" && {
+    if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
+      local _gtr_selection
+      _gtr_selection="$(command git gtr list --porcelain | fzf \
+        --delimiter=$'\t' \
+        --with-nth=2 \
+        --ansi \
+        --layout=reverse \
+        --border \
+        --prompt='Worktree> ' \
+        --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+        --preview-window=right:50% \
+        --bind='ctrl-e:execute(git gtr editor {2})' \
+        --bind='ctrl-a:execute(git gtr ai {2})' \
+        --bind='ctrl-d:execute(git gtr rm {2})+reload(git gtr list --porcelain)' \
+        --bind='ctrl-y:execute(git gtr copy {2})' \
+        --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
+      [ -z "$_gtr_selection" ] && return 0
+      dir="$(printf '%s' "$_gtr_selection" | cut -f1)"
+    else
+      dir="$(command git gtr go "$@")" || return $?
+    fi
+    cd "$dir" && {
       local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
       _gtr_hooks=""
       _gtr_seen=""
@@ -266,26 +276,31 @@ _init_fish() {
 
 function __FUNC__
   if test (count $argv) -gt 0; and test "$argv[1]" = "cd"
-    set -l _gtr_cd_args $argv[2..]
-    if test (count $_gtr_cd_args) -eq 0
-      if command -q fzf
-        set -l _gtr_sel (command git gtr list --porcelain | fzf \
-          --delimiter=\t \
-          --with-nth=2 \
-          --header='Select worktree (Ctrl-C to cancel)' \
-          --preview='git -C {1} log --oneline --graph -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
-          --preview-window=right:50%)
-        or return 0
-        set _gtr_cd_args (printf '%s' "$_gtr_sel" | cut -f2)
-      else
-        echo "Tip: Install fzf for an interactive worktree picker (https://github.com/junegunn/fzf)" >&2
-        echo "" >&2
-        command git gtr list
-        return 0
-      end
+    set -l dir
+    if test (count $argv) -eq 1; and type -q fzf
+      set -l _gtr_selection (command git gtr list --porcelain | fzf \
+        --delimiter=\t \
+        --with-nth=2 \
+        --ansi \
+        --layout=reverse \
+        --border \
+        --prompt='Worktree> ' \
+        --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+        --preview-window=right:50% \
+        --bind='ctrl-e:execute(git gtr editor {2})' \
+        --bind='ctrl-a:execute(git gtr ai {2})' \
+        --bind='ctrl-d:execute(git gtr rm {2})+reload(git gtr list --porcelain)' \
+        --bind='ctrl-y:execute(git gtr copy {2})' \
+        --bind='ctrl-r:reload(git gtr list --porcelain)')
+      or return 0
+      test -z "$_gtr_selection"; and return 0
+      set dir (string split \t -- "$_gtr_selection")[1]
+    else
+      set dir (command git gtr go $argv[2..])
+      or return $status
     end
-    set -l dir (command git gtr go $_gtr_cd_args)
-    and cd $dir
+    cd $dir
     and begin
       set -l _gtr_hooks
       set -l _gtr_seen
