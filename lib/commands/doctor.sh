@@ -88,7 +88,7 @@ cmd_doctor() {
   # Check hosting provider
   if [ -n "$repo_root" ]; then
     local provider
-    provider=$(detect_provider 2>/dev/null)
+    provider=$(detect_provider 2>/dev/null) || true
     if [ -n "$provider" ]; then
       echo "[OK] Provider: $provider"
       case "$provider" in
@@ -110,6 +110,13 @@ cmd_doctor() {
     else
       echo "[i] Provider: unknown (set gtr.provider for clean --merged)"
     fi
+  fi
+
+  # Check fzf (optional, for interactive picker)
+  if command -v fzf >/dev/null 2>&1; then
+    echo "[OK] fzf: $(fzf --version 2>/dev/null | awk '{print $1}') (interactive picker available)"
+  else
+    echo "[i] fzf: not found (install for interactive picker: gtr cd)"
   fi
 
   echo ""

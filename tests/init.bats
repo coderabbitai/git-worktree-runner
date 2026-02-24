@@ -158,6 +158,53 @@ setup() {
   [ "$status" -eq 1 ]
 }
 
+# ── fzf interactive picker ───────────────────────────────────────────────────
+
+@test "bash output includes fzf picker for cd with no args" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"command -v fzf"* ]]
+  [[ "$output" == *"--prompt='Worktree> '"* ]]
+  [[ "$output" == *"--with-nth=2"* ]]
+  [[ "$output" == *"ctrl-e:execute"* ]]
+}
+
+@test "zsh output includes fzf picker for cd with no args" {
+  run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"command -v fzf"* ]]
+  [[ "$output" == *"--prompt='Worktree> '"* ]]
+  [[ "$output" == *"--with-nth=2"* ]]
+  [[ "$output" == *"ctrl-e:execute"* ]]
+}
+
+@test "fish output includes fzf picker for cd with no args" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"type -q fzf"* ]]
+  [[ "$output" == *"--prompt='Worktree> '"* ]]
+  [[ "$output" == *"--with-nth=2"* ]]
+  [[ "$output" == *"ctrl-e:execute"* ]]
+}
+
+@test "bash output shows fzf install hint when no args and no fzf" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Install fzf for an interactive picker'* ]]
+}
+
+@test "fish output shows fzf install hint when no args and no fzf" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Install fzf for an interactive picker'* ]]
+}
+
+@test "--as replaces function name in fzf fallback message" {
+  run cmd_init bash --as gwtr
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Usage: gwtr cd <branch>'* ]]
+}
+
 # ── git gtr passthrough preserved ────────────────────────────────────────────
 
 @test "bash output passes non-cd commands to git gtr" {

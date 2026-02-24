@@ -367,7 +367,17 @@ Setup:
 After setup:
   gtr cd my-feature                             # cd to worktree
   gtr cd 1                                      # cd to main repo
+  gtr cd                                        # interactive picker (requires fzf)
   gtr <command>                                 # same as git gtr <command>
+
+Command palette (gtr cd with no arguments, requires fzf):
+  enter       cd into selected worktree
+  ctrl-e      open in editor
+  ctrl-a      start AI tool
+  ctrl-d      delete worktree (with confirmation)
+  ctrl-y      copy files to worktree
+  ctrl-r      refresh list
+  esc         cancel
 EOF
 }
 
@@ -549,6 +559,7 @@ SETUP & MAINTENANCE:
          Generate shell integration for cd support (bash, zsh, fish)
          --as <name>: custom function name (default: gtr)
          Usage: eval "$(git gtr init bash)"
+         With fzf: 'gtr cd' opens a command palette (preview, editor, AI, delete)
 
   version
          Show version
@@ -572,6 +583,7 @@ WORKFLOW EXAMPLES:
   git gtr run feature/user-auth npm run dev   # Start dev server
 
   # Navigate to worktree directory
+  gtr cd                                    # Interactive picker (requires fzf)
   gtr cd feature/user-auth                  # With shell integration (git gtr init)
   cd "$(git gtr go feature/user-auth)"      # Without shell integration
 
