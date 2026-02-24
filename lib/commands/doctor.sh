@@ -130,7 +130,7 @@ cmd_doctor() {
   esac
   if [ -n "$_rc_file" ] && [ -f "$_rc_file" ] && grep -q 'git gtr init' "$_rc_file" 2>/dev/null; then
     echo "[OK] Shell integration: loaded (gtr cd available)"
-  else
+  elif [ -n "$_rc_file" ]; then
     local _init_hint
     if [ "$_shell_name" = "fish" ]; then
       _init_hint="git gtr init fish | source"
