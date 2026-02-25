@@ -83,7 +83,7 @@ __FUNC__() {
     shift
     local dir
     if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
-      local _gtr_selection
+      local _gtr_selection _gtr_key _gtr_line
       _gtr_selection="$(command git gtr list --porcelain | fzf \
         --delimiter=$'\t' \
         --with-nth=2 \
@@ -94,13 +94,23 @@ __FUNC__() {
         --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
         --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-e:execute(git gtr editor {2})' \
-        --bind='ctrl-a:execute(git gtr ai {2})' \
-        --bind='ctrl-d:execute(git gtr rm {2})+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2})' \
+        --expect=ctrl-a,ctrl-e \
+        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
+        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
         --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
-      dir="$(printf '%s' "$_gtr_selection" | cut -f1)"
+      _gtr_key="$(head -1 <<< "$_gtr_selection")"
+      _gtr_line="$(sed -n '2p' <<< "$_gtr_selection")"
+      [ -z "$_gtr_line" ] && return 0
+      # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
+      if [ "$_gtr_key" = "ctrl-a" ]; then
+        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f2)"
+        return $?
+      elif [ "$_gtr_key" = "ctrl-e" ]; then
+        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f2)"
+        return $?
+      fi
+      dir="$(printf '%s' "$_gtr_line" | cut -f1)"
     elif [ "$#" -eq 0 ]; then
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
@@ -183,7 +193,7 @@ __FUNC__() {
     shift
     local dir
     if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
-      local _gtr_selection
+      local _gtr_selection _gtr_key _gtr_line
       _gtr_selection="$(command git gtr list --porcelain | fzf \
         --delimiter=$'\t' \
         --with-nth=2 \
@@ -194,13 +204,23 @@ __FUNC__() {
         --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
         --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-e:execute(git gtr editor {2})' \
-        --bind='ctrl-a:execute(git gtr ai {2})' \
-        --bind='ctrl-d:execute(git gtr rm {2})+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2})' \
+        --expect=ctrl-a,ctrl-e \
+        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
+        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
         --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
-      dir="$(printf '%s' "$_gtr_selection" | cut -f1)"
+      _gtr_key="$(head -1 <<< "$_gtr_selection")"
+      _gtr_line="$(sed -n '2p' <<< "$_gtr_selection")"
+      [ -z "$_gtr_line" ] && return 0
+      # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
+      if [ "$_gtr_key" = "ctrl-a" ]; then
+        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f2)"
+        return $?
+      elif [ "$_gtr_key" = "ctrl-e" ]; then
+        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f2)"
+        return $?
+      fi
+      dir="$(printf '%s' "$_gtr_line" | cut -f1)"
     elif [ "$#" -eq 0 ]; then
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
@@ -297,14 +317,25 @@ function __FUNC__
         --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
         --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-e:execute(git gtr editor {2})' \
-        --bind='ctrl-a:execute(git gtr ai {2})' \
-        --bind='ctrl-d:execute(git gtr rm {2})+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2})' \
+        --expect=ctrl-a,ctrl-e \
+        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
+        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
         --bind='ctrl-r:reload(git gtr list --porcelain)')
       or return 0
       test -z "$_gtr_selection"; and return 0
-      set dir (string split \t -- "$_gtr_selection")[1]
+      # --expect gives two lines: key (index 1) and selection (index 2)
+      set -l _gtr_key "$_gtr_selection[1]"
+      set -l _gtr_line "$_gtr_selection[2]"
+      test -z "$_gtr_line"; and return 0
+      # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
+      if test "$_gtr_key" = "ctrl-a"
+        command git gtr ai (string split \t -- "$_gtr_line")[2]
+        return $status
+      else if test "$_gtr_key" = "ctrl-e"
+        command git gtr editor (string split \t -- "$_gtr_line")[2]
+        return $status
+      end
+      set dir (string split \t -- "$_gtr_line")[1]
     else if test (count $argv) -eq 1
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
