@@ -110,8 +110,8 @@ main() {
       local _shell_name
       _shell_name="$(basename "${SHELL:-bash}")"
       log_error "'cd' requires shell integration (subprocesses cannot change your shell's directory)"
-      log_info "Set up with: eval \"\$(git gtr init $_shell_name)\"  (output is cached for fast startup)"
-      log_info "Then use:    gtr cd [<branch>]"
+      log_info "Run 'git gtr help init' for setup instructions"
+      log_info "Then use: gtr cd [<branch>]"
       exit 1
       ;;
     *)

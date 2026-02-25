@@ -90,10 +90,8 @@ cmd_init() {
 
 _init_bash() {
   cat <<'BASH'
-# git-gtr shell integration (output is cached to ~/.cache/gtr/)
-# Add to ~/.bashrc:
-#   eval "$(git gtr init bash)"
-# Faster: source the cache file directly (see git gtr help init)
+# git-gtr shell integration (cached to ~/.cache/gtr/)
+# Setup: see git gtr help init
 
 __FUNC__() {
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
@@ -196,10 +194,8 @@ BASH
 
 _init_zsh() {
   cat <<'ZSH'
-# git-gtr shell integration (output is cached to ~/.cache/gtr/)
-# Add to ~/.zshrc:
-#   eval "$(git gtr init zsh)"
-# Faster: source the cache file directly (see git gtr help init)
+# git-gtr shell integration (cached to ~/.cache/gtr/)
+# Setup: see git gtr help init
 
 __FUNC__() {
   emulate -L zsh

@@ -102,8 +102,8 @@ Usage: git gtr go <branch>
 
 Prints the absolute path to the specified worktree. Useful for navigation
 with cd or for scripting. For direct cd support, use shell integration:
-  eval "$(git gtr init bash)"    # then: gtr cd <branch>
-  (output is cached automatically for fast startup)
+  git gtr help init              # see setup instructions
+  gtr cd <branch>                # then navigate directly
 
 Special:
   Use '1' for the main repo root: git gtr go 1
