@@ -101,7 +101,7 @@ git gtr run my-feature npm test # Run tests
 
 # Navigate to worktree
 gtr cd                          # Interactive picker (requires fzf + shell integration)
-gtr cd my-feature               # Requires: eval "$(git gtr init bash)"
+gtr cd my-feature               # Requires shell integration (see below)
 cd "$(git gtr go my-feature)"   # Alternative without shell integration
 
 # List all worktrees
@@ -214,14 +214,26 @@ cd "$(git gtr go 1)"             # Navigate to main repo
 **Tip:** For easier navigation, use `git gtr init` to enable `gtr cd`:
 
 ```bash
-# Add to ~/.bashrc or ~/.zshrc (one-time setup)
-eval "$(git gtr init bash)"
+# Bash (add to ~/.bashrc)
+_gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.bash"
+[[ -f "$_gtr_init" ]] || eval "$(git gtr init bash)"
+source "$_gtr_init" 2>/dev/null; unset _gtr_init
+
+# Zsh (add to ~/.zshrc)
+_gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.zsh"
+[[ -f "$_gtr_init" ]] || eval "$(git gtr init zsh)"
+source "$_gtr_init" 2>/dev/null; unset _gtr_init
+
+# Fish (add to ~/.config/fish/config.fish)
+git gtr init fish | source
 
 # Then navigate with:
 gtr cd                # Interactive worktree picker (requires fzf)
 gtr cd my-feature
 gtr cd 1
 ```
+
+The cache auto-regenerates on first run and auto-invalidates when git-gtr is updated. To force-regenerate: `rm -rf ~/.cache/gtr`
 
 With [fzf](https://github.com/junegunn/fzf) installed, `gtr cd` (no arguments) opens a command palette with git log preview and keybindings: `ctrl-e` editor, `ctrl-a` AI, `ctrl-d` delete, `ctrl-y` copy, `ctrl-r` refresh.
 

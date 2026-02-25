@@ -5,6 +5,13 @@ load test_helper
 
 setup() {
   source "$PROJECT_ROOT/lib/commands/init.sh"
+  # Isolate cache to temp dir so tests don't pollute ~/.cache or each other
+  export XDG_CACHE_HOME="$BATS_TMPDIR/gtr-init-cache-$$"
+  export GTR_VERSION="test"
+}
+
+teardown() {
+  rm -rf "$BATS_TMPDIR/gtr-init-cache-$$"
 }
 
 # ── Default function name ────────────────────────────────────────────────────
@@ -218,4 +225,64 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"command git gtr"* ]]
   [[ "$output" == *"git gtr list --porcelain"* ]]
+}
+
+# ── caching (default behavior) ──────────────────────────────────────────────
+
+@test "init creates cache file and returns output" {
+  local cache_dir="$BATS_TMPDIR/gtr-cache-test-$$"
+  XDG_CACHE_HOME="$cache_dir" GTR_VERSION="9.9.9" run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gtr()"* ]]
+  [ -f "$cache_dir/gtr/init-gtr.zsh" ]
+  rm -rf "$cache_dir"
+}
+
+@test "init returns cached output on second call" {
+  local cache_dir="$BATS_TMPDIR/gtr-cache-test-$$"
+  # First call: generates and caches
+  XDG_CACHE_HOME="$cache_dir" GTR_VERSION="9.9.9" run cmd_init bash
+  [ "$status" -eq 0 ]
+  local first_output="$output"
+  # Second call: reads from cache
+  XDG_CACHE_HOME="$cache_dir" GTR_VERSION="9.9.9" run cmd_init bash
+  [ "$status" -eq 0 ]
+  [ "$output" = "$first_output" ]
+  rm -rf "$cache_dir"
+}
+
+@test "cache invalidates when version changes" {
+  local cache_dir="$BATS_TMPDIR/gtr-cache-test-$$"
+  # Generate with version 1.0.0
+  XDG_CACHE_HOME="$cache_dir" GTR_VERSION="1.0.0" run cmd_init zsh
+  [ "$status" -eq 0 ]
+  # Check cache stamp
+  local stamp
+  stamp="$(head -1 "$cache_dir/gtr/init-gtr.zsh")"
+  [[ "$stamp" == *"version=1.0.0"* ]]
+  # Regenerate with version 2.0.0
+  XDG_CACHE_HOME="$cache_dir" GTR_VERSION="2.0.0" run cmd_init zsh
+  [ "$status" -eq 0 ]
+  stamp="$(head -1 "$cache_dir/gtr/init-gtr.zsh")"
+  [[ "$stamp" == *"version=2.0.0"* ]]
+  rm -rf "$cache_dir"
+}
+
+@test "cache uses --as func name in cache key" {
+  local cache_dir="$BATS_TMPDIR/gtr-cache-test-$$"
+  XDG_CACHE_HOME="$cache_dir" GTR_VERSION="9.9.9" run cmd_init bash --as myfn
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"myfn()"* ]]
+  [ -f "$cache_dir/gtr/init-myfn.bash" ]
+  rm -rf "$cache_dir"
+}
+
+@test "cache works for all shells" {
+  local cache_dir="$BATS_TMPDIR/gtr-cache-test-$$"
+  for sh in bash zsh fish; do
+    XDG_CACHE_HOME="$cache_dir" GTR_VERSION="9.9.9" run cmd_init "$sh"
+    [ "$status" -eq 0 ]
+    [ -f "$cache_dir/gtr/init-gtr.${sh}" ]
+  done
+  rm -rf "$cache_dir"
 }

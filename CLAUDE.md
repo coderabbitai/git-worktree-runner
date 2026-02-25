@@ -112,7 +112,7 @@ cmd_editor() → resolve_target() → load_editor_adapter() → editor_open()
 
 **`.gtrconfig`**: Team-shared config using gitconfig syntax, parsed via `git config -f`. Keys map differently from git config (e.g., `gtr.copy.include` → `copy.include`, `gtr.hook.postCreate` → `hooks.postCreate`). See the .gtrconfig Key Mapping table in README or `docs/configuration.md`.
 
-**`init` command**: Outputs shell functions for `gtr cd <branch>` navigation. Users add `eval "$(git gtr init bash)"` to their shell rc file.
+**`init` command**: Outputs shell functions for `gtr cd <branch>` navigation. Output is cached to `~/.cache/gtr/` and auto-invalidates on version change. Users add `eval "$(git gtr init bash)"` to their shell rc file, or source the cache file directly for faster startup.
 
 **`clean --merged`**: Removes worktrees whose PRs/MRs are merged. Auto-detects GitHub (`gh`) or GitLab (`glab`) from the `origin` remote URL. Override with `gtr.provider` config for self-hosted instances.
 
