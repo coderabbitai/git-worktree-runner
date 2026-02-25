@@ -89,7 +89,7 @@ __FUNC__() {
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
       fi
-      local _gtr_selection _gtr_key _gtr_line
+      local _gtr_selection _gtr_key _gtr_line _gtr_branch
       _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
         --with-nth=2 \
@@ -97,16 +97,23 @@ __FUNC__() {
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
-        --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --expect=ctrl-n,ctrl-a,ctrl-e \
         --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --expect=ctrl-a,ctrl-e \
         --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
         --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
         --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
       _gtr_key="$(head -1 <<< "$_gtr_selection")"
       _gtr_line="$(sed -n '2p' <<< "$_gtr_selection")"
+      if [ "$_gtr_key" = "ctrl-n" ]; then
+        printf "Branch name: " >&2
+        read -r _gtr_branch
+        [ -z "$_gtr_branch" ] && return 0
+        command git gtr new "$_gtr_branch"
+        return $?
+      fi
       [ -z "$_gtr_line" ] && return 0
       # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
       if [ "$_gtr_key" = "ctrl-a" ]; then
@@ -205,7 +212,7 @@ __FUNC__() {
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
       fi
-      local _gtr_selection _gtr_key _gtr_line
+      local _gtr_selection _gtr_key _gtr_line _gtr_branch
       _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
         --with-nth=2 \
@@ -213,16 +220,23 @@ __FUNC__() {
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
-        --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --expect=ctrl-n,ctrl-a,ctrl-e \
         --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --expect=ctrl-a,ctrl-e \
         --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
         --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
         --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
       _gtr_key="$(head -1 <<< "$_gtr_selection")"
       _gtr_line="$(sed -n '2p' <<< "$_gtr_selection")"
+      if [ "$_gtr_key" = "ctrl-n" ]; then
+        printf "Branch name: " >&2
+        read -r _gtr_branch
+        [ -z "$_gtr_branch" ] && return 0
+        command git gtr new "$_gtr_branch"
+        return $?
+      fi
       [ -z "$_gtr_line" ] && return 0
       # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
       if [ "$_gtr_key" = "ctrl-a" ]; then
@@ -331,10 +345,10 @@ function __FUNC__
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
-        --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --expect=ctrl-n,ctrl-a,ctrl-e \
         --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --expect=ctrl-a,ctrl-e \
         --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
         --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
         --bind='ctrl-r:reload(git gtr list --porcelain)')
@@ -349,6 +363,12 @@ function __FUNC__
       else
         set -l _gtr_key "$_gtr_selection[1]"
         set -l _gtr_line "$_gtr_selection[2]"
+      end
+      if test "$_gtr_key" = "ctrl-n"
+        read -P "Branch name: " _gtr_branch
+        test -z "$_gtr_branch"; and return 0
+        command git gtr new "$_gtr_branch"
+        return $status
       end
       test -z "$_gtr_line"; and return 0
       # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
