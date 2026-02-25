@@ -11,7 +11,7 @@ if [ -n "${GTR_DEBUG:-}" ]; then
 fi
 
 # Version
-GTR_VERSION="2.3.1"
+GTR_VERSION="2.4.0"
 
 # Find the script directory (resolve symlinks; allow env override)
 resolve_script_dir() {
@@ -105,6 +105,14 @@ main() {
       ;;
     help|--help|-h)
       cmd_help "$@"
+      ;;
+    cd)
+      local _shell_name
+      _shell_name="$(basename "${SHELL:-bash}")"
+      log_error "'cd' requires shell integration (subprocesses cannot change your shell's directory)"
+      log_info "Set up with: eval \"\$(git gtr init $_shell_name)\""
+      log_info "Then use:    gtr cd [<branch>]"
+      exit 1
       ;;
     *)
       log_error "Unknown command: $cmd"
