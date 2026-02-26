@@ -225,7 +225,9 @@ _gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.zsh"
 source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
 
 # Fish (add to ~/.config/fish/config.fish)
-git gtr init fish | source
+set -l _gtr_init (test -n "$XDG_CACHE_HOME" && echo $XDG_CACHE_HOME || echo $HOME/.cache)/gtr/init-gtr.fish
+test -f "$_gtr_init"; or git gtr init fish >/dev/null 2>&1
+source "$_gtr_init" 2>/dev/null
 
 # Then navigate with:
 gtr cd                # Interactive worktree picker (requires fzf)
