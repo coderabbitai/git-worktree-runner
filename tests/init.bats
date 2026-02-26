@@ -252,21 +252,21 @@ setup() {
 @test "bash fzf ctrl-e handled via --expect for full terminal access" {
   run cmd_init bash
   [ "$status" -eq 0 ]
-  [[ "$output" == *"--expect=ctrl-a,ctrl-e"* ]]
+  [[ "$output" == *"--expect=ctrl-n,ctrl-a,ctrl-e"* ]]
   [[ "$output" == *'git gtr editor'* ]]
 }
 
 @test "zsh fzf ctrl-e handled via --expect for full terminal access" {
   run cmd_init zsh
   [ "$status" -eq 0 ]
-  [[ "$output" == *"--expect=ctrl-a,ctrl-e"* ]]
+  [[ "$output" == *"--expect=ctrl-n,ctrl-a,ctrl-e"* ]]
   [[ "$output" == *'git gtr editor'* ]]
 }
 
 @test "fish fzf ctrl-e handled via --expect for full terminal access" {
   run cmd_init fish
   [ "$status" -eq 0 ]
-  [[ "$output" == *"--expect=ctrl-a,ctrl-e"* ]]
+  [[ "$output" == *"--expect=ctrl-n,ctrl-a,ctrl-e"* ]]
   [[ "$output" == *'git gtr editor'* ]]
 }
 
@@ -275,21 +275,21 @@ setup() {
 @test "bash fzf ctrl-a runs git gtr ai after fzf exits" {
   run cmd_init bash
   [ "$status" -eq 0 ]
-  [[ "$output" == *"--expect=ctrl-a,ctrl-e"* ]]
+  [[ "$output" == *"--expect=ctrl-n,ctrl-a,ctrl-e"* ]]
   [[ "$output" == *'git gtr ai'* ]]
 }
 
 @test "zsh fzf ctrl-a runs git gtr ai after fzf exits" {
   run cmd_init zsh
   [ "$status" -eq 0 ]
-  [[ "$output" == *"--expect=ctrl-a,ctrl-e"* ]]
+  [[ "$output" == *"--expect=ctrl-n,ctrl-a,ctrl-e"* ]]
   [[ "$output" == *'git gtr ai'* ]]
 }
 
 @test "fish fzf ctrl-a runs git gtr ai after fzf exits" {
   run cmd_init fish
   [ "$status" -eq 0 ]
-  [[ "$output" == *"--expect=ctrl-a,ctrl-e"* ]]
+  [[ "$output" == *"--expect=ctrl-n,ctrl-a,ctrl-e"* ]]
   [[ "$output" == *'git gtr ai'* ]]
 }
 
@@ -406,6 +406,80 @@ setup() {
   run cmd_init bash --as gwtr
   [ "$status" -eq 0 ]
   [[ "$output" == *'Usage: gwtr cd <branch>'* ]]
+}
+
+# ── ctrl-n (new worktree) in fzf picker ────────────────────────────────────
+
+@test "bash output includes --expect=ctrl-n in fzf args" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--expect=ctrl-n"* ]]
+}
+
+@test "zsh output includes --expect=ctrl-n in fzf args" {
+  run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--expect=ctrl-n"* ]]
+}
+
+@test "fish output includes --expect=ctrl-n in fzf args" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--expect=ctrl-n"* ]]
+}
+
+@test "bash output includes ctrl-n:new in fzf header" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ctrl-n:new"* ]]
+}
+
+@test "zsh output includes ctrl-n:new in fzf header" {
+  run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ctrl-n:new"* ]]
+}
+
+@test "fish output includes ctrl-n:new in fzf header" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ctrl-n:new"* ]]
+}
+
+@test "bash output includes git gtr new in ctrl-n handler" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'git gtr new "$_gtr_branch"'* ]]
+}
+
+@test "zsh output includes git gtr new in ctrl-n handler" {
+  run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'git gtr new "$_gtr_branch"'* ]]
+}
+
+@test "fish output includes git gtr new in ctrl-n handler" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'git gtr new "$_gtr_branch"'* ]]
+}
+
+@test "bash output prompts for branch name on ctrl-n" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Branch name: '* ]]
+}
+
+@test "zsh output prompts for branch name on ctrl-n" {
+  run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Branch name: '* ]]
+}
+
+@test "fish output prompts for branch name on ctrl-n" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Branch name: '* ]]
 }
 
 # ── git gtr passthrough preserved ────────────────────────────────────────────
