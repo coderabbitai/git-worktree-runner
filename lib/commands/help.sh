@@ -570,7 +570,7 @@ SETUP & MAINTENANCE:
   init <shell> [--as <name>]
          Generate shell integration for cd support (bash, zsh, fish)
          --as <name>: custom function name (default: gtr)
-         Output is cached for fast startup (auto-invalidates on update)
+         Output is cached for fast startup (refreshes when 'git gtr init' runs)
          See git gtr help init for recommended setup
          With fzf: 'gtr cd' opens a command palette (preview, editor, AI, delete)
 
