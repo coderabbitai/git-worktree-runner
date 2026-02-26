@@ -104,7 +104,7 @@ __FUNC__() {
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
       fi
-      local _gtr_selection
+      local _gtr_selection _gtr_key _gtr_line _gtr_branch
       _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
         --with-nth=2 \
@@ -112,16 +112,33 @@ __FUNC__() {
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
-        --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --expect=ctrl-n,ctrl-a,ctrl-e \
         --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-e:execute(git gtr editor {2})' \
-        --bind='ctrl-a:execute(git gtr ai {2})' \
-        --bind='ctrl-d:execute(git gtr rm {2})+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2})' \
+        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
+        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
         --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
-      dir="$(printf '%s' "$_gtr_selection" | cut -f1)"
+      _gtr_key="$(head -1 <<< "$_gtr_selection")"
+      _gtr_line="$(sed -n '2p' <<< "$_gtr_selection")"
+      if [ "$_gtr_key" = "ctrl-n" ]; then
+        printf "Branch name: " >&2
+        read -r _gtr_branch
+        [ -z "$_gtr_branch" ] && return 0
+        command git gtr new "$_gtr_branch"
+        return $?
+      fi
+      [ -z "$_gtr_line" ] && return 0
+      # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
+      if [ "$_gtr_key" = "ctrl-a" ]; then
+        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f2)"
+        return $?
+      elif [ "$_gtr_key" = "ctrl-e" ]; then
+        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f2)"
+        return $?
+      fi
+      dir="$(printf '%s' "$_gtr_line" | cut -f1)"
     elif [ "$#" -eq 0 ]; then
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
@@ -209,7 +226,7 @@ __FUNC__() {
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
       fi
-      local _gtr_selection
+      local _gtr_selection _gtr_key _gtr_line _gtr_branch
       _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
         --with-nth=2 \
@@ -217,16 +234,33 @@ __FUNC__() {
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
-        --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --expect=ctrl-n,ctrl-a,ctrl-e \
         --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-e:execute(git gtr editor {2})' \
-        --bind='ctrl-a:execute(git gtr ai {2})' \
-        --bind='ctrl-d:execute(git gtr rm {2})+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2})' \
+        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
+        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
         --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
-      dir="$(printf '%s' "$_gtr_selection" | cut -f1)"
+      _gtr_key="$(head -1 <<< "$_gtr_selection")"
+      _gtr_line="$(sed -n '2p' <<< "$_gtr_selection")"
+      if [ "$_gtr_key" = "ctrl-n" ]; then
+        printf "Branch name: " >&2
+        read -r _gtr_branch
+        [ -z "$_gtr_branch" ] && return 0
+        command git gtr new "$_gtr_branch"
+        return $?
+      fi
+      [ -z "$_gtr_line" ] && return 0
+      # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
+      if [ "$_gtr_key" = "ctrl-a" ]; then
+        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f2)"
+        return $?
+      elif [ "$_gtr_key" = "ctrl-e" ]; then
+        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f2)"
+        return $?
+      fi
+      dir="$(printf '%s' "$_gtr_line" | cut -f1)"
     elif [ "$#" -eq 0 ]; then
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
@@ -325,17 +359,41 @@ function __FUNC__
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
-        --header='enter:cd │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
+        --expect=ctrl-n,ctrl-a,ctrl-e \
         --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-e:execute(git gtr editor {2})' \
-        --bind='ctrl-a:execute(git gtr ai {2})' \
-        --bind='ctrl-d:execute(git gtr rm {2})+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2})' \
+        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
+        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
         --bind='ctrl-r:reload(git gtr list --porcelain)')
       or return 0
       test -z "$_gtr_selection"; and return 0
-      set dir (string split \t -- "$_gtr_selection")[1]
+      # --expect gives two lines: key (index 1) and selection (index 2)
+      # Fish collapses empty lines in command substitution, so when Enter
+      # is pressed the empty key line disappears and count drops to 1.
+      if test (count $_gtr_selection) -eq 1
+        set -l _gtr_key ""
+        set -l _gtr_line "$_gtr_selection[1]"
+      else
+        set -l _gtr_key "$_gtr_selection[1]"
+        set -l _gtr_line "$_gtr_selection[2]"
+      end
+      if test "$_gtr_key" = "ctrl-n"
+        read -P "Branch name: " _gtr_branch
+        test -z "$_gtr_branch"; and return 0
+        command git gtr new "$_gtr_branch"
+        return $status
+      end
+      test -z "$_gtr_line"; and return 0
+      # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
+      if test "$_gtr_key" = "ctrl-a"
+        command git gtr ai (string split \t -- "$_gtr_line")[2]
+        return $status
+      else if test "$_gtr_key" = "ctrl-e"
+        command git gtr editor (string split \t -- "$_gtr_line")[2]
+        return $status
+      end
+      set dir (string split \t -- "$_gtr_line")[1]
     else if test (count $argv) -eq 1
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
