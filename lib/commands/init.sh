@@ -341,8 +341,15 @@ function __FUNC__
       or return 0
       test -z "$_gtr_selection"; and return 0
       # --expect gives two lines: key (index 1) and selection (index 2)
-      set -l _gtr_key "$_gtr_selection[1]"
-      set -l _gtr_line "$_gtr_selection[2]"
+      # Fish collapses empty lines in command substitution, so when Enter
+      # is pressed the empty key line disappears and count drops to 1.
+      if test (count $_gtr_selection) -eq 1
+        set -l _gtr_key ""
+        set -l _gtr_line "$_gtr_selection[1]"
+      else
+        set -l _gtr_key "$_gtr_selection[1]"
+        set -l _gtr_line "$_gtr_selection[2]"
+      end
       test -z "$_gtr_line"; and return 0
       # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
       if test "$_gtr_key" = "ctrl-a"

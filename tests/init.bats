@@ -241,8 +241,10 @@ setup() {
 @test "fish fzf enter extracts path from selection and cd" {
   run cmd_init fish
   [ "$status" -eq 0 ]
-  # Fish uses string split or cut to extract path
-  [[ "$output" == *'cd '* ]]
+  # Fish uses string split to extract path, then cd
+  [[ "$output" == *'string split'* ]]
+  [[ "$output" == *'set dir'* ]]
+  [[ "$output" == *'cd $dir'* ]]
 }
 
 # ── fzf: ctrl-e (editor) — via --expect ──────────────────────────────────────
