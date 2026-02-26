@@ -347,8 +347,9 @@ Generates shell functions for enhanced features like 'gtr cd <branch>'
 which changes directory to a worktree. Add to your shell configuration.
 
 Output is cached to ~/.cache/gtr/ for fast shell startup (~1ms vs ~60ms).
-The cache auto-invalidates when git-gtr is updated. To force-regenerate:
-  rm -rf ~/.cache/gtr
+The cache refreshes the next time 'git gtr init <shell>' runs (checks version).
+With the recommended setup below, it regenerates when the cache file is missing.
+To force-regenerate: rm -rf ~/.cache/gtr
 
 Supported shells: bash, zsh, fish
 
@@ -359,13 +360,13 @@ Options:
 Setup (sources cached output directly for fast startup):
   # Bash (add to ~/.bashrc)
   _gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.bash"
-  [[ -f "$_gtr_init" ]] || eval "$(git gtr init bash)"
-  source "$_gtr_init" 2>/dev/null; unset _gtr_init
+  [[ -f "$_gtr_init" ]] || eval "$(git gtr init bash)" || true
+  source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
 
   # Zsh (add to ~/.zshrc)
   _gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.zsh"
-  [[ -f "$_gtr_init" ]] || eval "$(git gtr init zsh)"
-  source "$_gtr_init" 2>/dev/null; unset _gtr_init
+  [[ -f "$_gtr_init" ]] || eval "$(git gtr init zsh)" || true
+  source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
 
   # Fish (add to ~/.config/fish/config.fish)
   git gtr init fish | source

@@ -216,13 +216,13 @@ cd "$(git gtr go 1)"             # Navigate to main repo
 ```bash
 # Bash (add to ~/.bashrc)
 _gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.bash"
-[[ -f "$_gtr_init" ]] || eval "$(git gtr init bash)"
-source "$_gtr_init" 2>/dev/null; unset _gtr_init
+[[ -f "$_gtr_init" ]] || eval "$(git gtr init bash)" || true
+source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
 
 # Zsh (add to ~/.zshrc)
 _gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.zsh"
-[[ -f "$_gtr_init" ]] || eval "$(git gtr init zsh)"
-source "$_gtr_init" 2>/dev/null; unset _gtr_init
+[[ -f "$_gtr_init" ]] || eval "$(git gtr init zsh)" || true
+source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
 
 # Fish (add to ~/.config/fish/config.fish)
 git gtr init fish | source
@@ -233,7 +233,7 @@ gtr cd my-feature
 gtr cd 1
 ```
 
-The cache auto-regenerates on first run and auto-invalidates when git-gtr is updated. To force-regenerate: `rm -rf ~/.cache/gtr`
+The cache generates on first run and refreshes the next time `git gtr init <shell>` runs. To force-regenerate: `rm -rf ~/.cache/gtr`
 
 With [fzf](https://github.com/junegunn/fzf) installed, `gtr cd` (no arguments) opens a command palette with git log preview and keybindings: `ctrl-e` editor, `ctrl-a` AI, `ctrl-d` delete, `ctrl-y` copy, `ctrl-r` refresh.
 

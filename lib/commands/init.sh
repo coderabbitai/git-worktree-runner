@@ -80,12 +80,13 @@ cmd_init() {
     fi
   fi
 
-  # Generate, cache, and output
+  # Generate, output, and cache (output first so set -e cache failures don't swallow it)
   local output
   output="$("$generator" | sed "s/__FUNC__/$func_name/g")"
-  mkdir -p "$cache_dir"
-  printf '%s\n%s\n' "$cache_stamp" "$output" > "$cache_file"
   printf '%s\n' "$output"
+  if mkdir -p "$cache_dir" 2>/dev/null; then
+    printf '%s\n%s\n' "$cache_stamp" "$output" > "$cache_file" 2>/dev/null || true
+  fi
 }
 
 _init_bash() {
