@@ -192,7 +192,7 @@ cmd_create() {
 
   # Auto-launch editor/AI or show next steps
   [ "$open_editor" -eq 1 ] && { _auto_launch_editor "$worktree_path" || true; }
-  [ "$start_ai" -eq 1 ] && { _auto_launch_ai "$worktree_path" || true; }
+  [ "$start_ai" -eq 1 ] && { _auto_launch_ai "$worktree_path" "$repo_root" "$branch_name" || true; }
   if [ "$open_editor" -eq 0 ] && [ "$start_ai" -eq 0 ]; then
     _post_create_next_steps "$branch_name" "$folder_name" "$folder_override" "$repo_root" "$base_dir" "$prefix"
   fi

@@ -41,8 +41,11 @@ _auto_launch_editor() {
 }
 
 # Auto-launch AI tool for a worktree
+# Usage: _auto_launch_ai <worktree_path> [repo_root] [branch]
+# When repo_root and branch are provided, runs postCd hooks before launch.
 _auto_launch_ai() {
   local worktree_path="$1"
+  local repo_root="${2:-}" branch="${3:-}"
   local ai_tool
   ai_tool=$(_cfg_ai_default)
   if [ "$ai_tool" = "none" ]; then
@@ -50,6 +53,17 @@ _auto_launch_ai() {
   else
     load_ai_adapter "$ai_tool" || return 1
     log_step "Starting $ai_tool..."
-    ai_start "$worktree_path" || log_warn "Failed to start AI tool"
+    if [ -n "$repo_root" ] && [ -n "$branch" ]; then
+      (
+        cd "$worktree_path" || exit 1
+        run_hooks_export "postCd" \
+          REPO_ROOT="$repo_root" \
+          WORKTREE_PATH="$worktree_path" \
+          BRANCH="$branch"
+        ai_start "$worktree_path"
+      ) || log_warn "Failed to start AI tool"
+    else
+      ai_start "$worktree_path" || log_warn "Failed to start AI tool"
+    fi
   fi
 }

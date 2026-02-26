@@ -84,3 +84,42 @@ run_hooks_in() {
 
   return $result
 }
+
+# Run hooks in current shell without subshell isolation
+# Env vars set by hooks (e.g., source ./vars.sh) persist in the calling shell.
+# IMPORTANT: Call from within a subshell to avoid polluting the main script.
+# Usage: run_hooks_export phase [env_vars...]
+# Example: ( cd "$dir" && run_hooks_export postCd REPO_ROOT="$root" )
+run_hooks_export() {
+  local phase="$1"
+  shift
+
+  local hooks
+  hooks=$(cfg_get_all "gtr.hook.$phase" "hooks.$phase")
+
+  if [ -z "$hooks" ]; then
+    return 0
+  fi
+
+  log_step "Running $phase hooks..."
+
+  # Export env vars so hooks and child processes can see them
+  local kv
+  for kv in "$@"; do
+    # shellcheck disable=SC2163
+    export "$kv"
+  done
+
+  local hook_count=0
+  while IFS= read -r hook; do
+    [ -z "$hook" ] && continue
+
+    hook_count=$((hook_count + 1))
+    log_info "Hook $hook_count: $hook"
+
+    # eval directly (no subshell) so exports persist
+    eval "$hook" || log_warn "Hook $hook_count failed (continuing)"
+  done <<EOF
+$hooks
+EOF
+}
