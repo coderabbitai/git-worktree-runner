@@ -128,16 +128,10 @@ cmd_doctor() {
     fish) _rc_file="$HOME/.config/fish/config.fish" ;;
     *)    _rc_file="" ;;
   esac
-  if [ -n "$_rc_file" ] && [ -f "$_rc_file" ] && grep -q 'git gtr init' "$_rc_file" 2>/dev/null; then
+  if [ -n "$_rc_file" ] && [ -f "$_rc_file" ] && grep -qE 'git gtr init|gtr/init-' "$_rc_file" 2>/dev/null; then
     echo "[OK] Shell integration: loaded (gtr cd available)"
   elif [ -n "$_rc_file" ]; then
-    local _init_hint
-    if [ "$_shell_name" = "fish" ]; then
-      _init_hint="git gtr init fish | source"
-    else
-      _init_hint="eval \"\$(git gtr init $_shell_name)\""
-    fi
-    echo "[i] Shell integration: $_init_hint in ${_rc_file##*/} for gtr cd"
+    echo "[i] Shell integration: run 'git gtr help init' for setup instructions"
   fi
 
   echo ""

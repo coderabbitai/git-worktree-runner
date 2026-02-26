@@ -102,7 +102,8 @@ Usage: git gtr go <branch>
 
 Prints the absolute path to the specified worktree. Useful for navigation
 with cd or for scripting. For direct cd support, use shell integration:
-  eval "$(git gtr init bash)"    # then: gtr cd <branch>
+  git gtr help init              # see setup instructions
+  gtr cd <branch>                # then navigate directly
 
 Special:
   Use '1' for the main repo root: git gtr go 1
@@ -345,21 +346,32 @@ Usage: git gtr init <shell> [--as <name>]
 Generates shell functions for enhanced features like 'gtr cd <branch>'
 which changes directory to a worktree. Add to your shell configuration.
 
+Output is cached to ~/.cache/gtr/ for fast shell startup (~1ms vs ~60ms).
+The cache refreshes the next time 'git gtr init <shell>' runs (checks version).
+With the recommended setup below, it regenerates when the cache file is missing.
+To force-regenerate: rm -rf ~/.cache/gtr
+
 Supported shells: bash, zsh, fish
 
 Options:
   --as <name>   Set custom function name (default: gtr)
                 Useful if 'gtr' conflicts with another command (e.g., GNU tr)
 
-Setup:
+Setup (sources cached output directly for fast startup):
   # Bash (add to ~/.bashrc)
-  eval "$(git gtr init bash)"
+  _gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.bash"
+  [[ -f "$_gtr_init" ]] || eval "$(git gtr init bash)" || true
+  source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
 
   # Zsh (add to ~/.zshrc)
-  eval "$(git gtr init zsh)"
+  _gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.zsh"
+  [[ -f "$_gtr_init" ]] || eval "$(git gtr init zsh)" || true
+  source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
 
   # Fish (add to ~/.config/fish/config.fish)
-  git gtr init fish | source
+  set -l _gtr_init (test -n "$XDG_CACHE_HOME" && echo $XDG_CACHE_HOME || echo $HOME/.cache)/gtr/init-gtr.fish
+  test -f "$_gtr_init"; or git gtr init fish >/dev/null 2>&1
+  source "$_gtr_init" 2>/dev/null
 
   # Custom function name (avoids conflict with coreutils gtr)
   eval "$(git gtr init zsh --as gwtr)"
@@ -558,7 +570,8 @@ SETUP & MAINTENANCE:
   init <shell> [--as <name>]
          Generate shell integration for cd support (bash, zsh, fish)
          --as <name>: custom function name (default: gtr)
-         Usage: eval "$(git gtr init bash)"
+         Output is cached for fast startup (refreshes when 'git gtr init' runs)
+         See git gtr help init for recommended setup
          With fzf: 'gtr cd' opens a command palette (preview, editor, AI, delete)
 
   version

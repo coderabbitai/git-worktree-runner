@@ -50,19 +50,13 @@ cmd_init() {
     return 1
   fi
 
+  # Resolve generator function
+  local generator
   case "$shell" in
-    bash)
-      _init_bash | sed "s/__FUNC__/$func_name/g"
-      ;;
-    zsh)
-      _init_zsh | sed "s/__FUNC__/$func_name/g"
-      ;;
-    fish)
-      _init_fish | sed "s/__FUNC__/$func_name/g"
-      ;;
-    "")
-      show_command_help
-      ;;
+    bash) generator="_init_bash" ;;
+    zsh)  generator="_init_zsh" ;;
+    fish) generator="_init_fish" ;;
+    "")   show_command_help; return 0 ;;
     *)
       log_error "Unknown shell: $shell"
       log_error "Supported shells: bash, zsh, fish"
@@ -70,13 +64,35 @@ cmd_init() {
       return 1
       ;;
   esac
+
+  # Generate output (cached to ~/.cache/gtr/, auto-invalidates on version change)
+  local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gtr"
+  local cache_file="$cache_dir/init-${func_name}.${shell}"
+  local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} func=$func_name shell=$shell"
+
+  # Return cached output if version matches
+  if [ -f "$cache_file" ]; then
+    local first_line
+    first_line="$(head -1 "$cache_file")"
+    if [ "$first_line" = "$cache_stamp" ]; then
+      tail -n +2 "$cache_file"
+      return 0
+    fi
+  fi
+
+  # Generate, output, and cache (output first so set -e cache failures don't swallow it)
+  local output
+  output="$("$generator" | sed "s/__FUNC__/$func_name/g")"
+  printf '%s\n' "$output"
+  if mkdir -p "$cache_dir" 2>/dev/null; then
+    printf '%s\n%s\n' "$cache_stamp" "$output" > "$cache_file" 2>/dev/null || true
+  fi
 }
 
 _init_bash() {
   cat <<'BASH'
-# git-gtr shell integration
-# Add to ~/.bashrc:
-#   eval "$(git gtr init bash)"
+# git-gtr shell integration (cached to ~/.cache/gtr/)
+# Setup: see git gtr help init
 
 __FUNC__() {
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
@@ -196,9 +212,8 @@ BASH
 
 _init_zsh() {
   cat <<'ZSH'
-# git-gtr shell integration
-# Add to ~/.zshrc:
-#   eval "$(git gtr init zsh)"
+# git-gtr shell integration (cached to ~/.cache/gtr/)
+# Setup: see git gtr help init
 
 __FUNC__() {
   emulate -L zsh

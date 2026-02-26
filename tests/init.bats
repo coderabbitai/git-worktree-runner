@@ -5,6 +5,13 @@ load test_helper
 
 setup() {
   source "$PROJECT_ROOT/lib/commands/init.sh"
+  # Isolate cache to temp dir so tests don't pollute ~/.cache or each other
+  export XDG_CACHE_HOME="$BATS_TMPDIR/gtr-init-cache-$$"
+  export GTR_VERSION="test"
+}
+
+teardown() {
+  rm -rf "$BATS_TMPDIR/gtr-init-cache-$$"
 }
 
 # ── Default function name ────────────────────────────────────────────────────
@@ -495,4 +502,54 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"command git gtr"* ]]
   [[ "$output" == *"git gtr list --porcelain"* ]]
+}
+
+# ── caching (default behavior) ──────────────────────────────────────────────
+
+@test "init creates cache file and returns output" {
+  GTR_VERSION="9.9.9" run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gtr()"* ]]
+  [ -f "$XDG_CACHE_HOME/gtr/init-gtr.zsh" ]
+}
+
+@test "init returns cached output on second call" {
+  # First call: generates and caches
+  GTR_VERSION="9.9.9" run cmd_init bash
+  [ "$status" -eq 0 ]
+  local first_output="$output"
+  # Second call: reads from cache
+  GTR_VERSION="9.9.9" run cmd_init bash
+  [ "$status" -eq 0 ]
+  [ "$output" = "$first_output" ]
+}
+
+@test "cache invalidates when version changes" {
+  # Generate with version 1.0.0
+  GTR_VERSION="1.0.0" run cmd_init zsh
+  [ "$status" -eq 0 ]
+  # Check cache stamp
+  local stamp
+  stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.zsh")"
+  [[ "$stamp" == *"version=1.0.0"* ]]
+  # Regenerate with version 2.0.0
+  GTR_VERSION="2.0.0" run cmd_init zsh
+  [ "$status" -eq 0 ]
+  stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.zsh")"
+  [[ "$stamp" == *"version=2.0.0"* ]]
+}
+
+@test "cache uses --as func name in cache key" {
+  GTR_VERSION="9.9.9" run cmd_init bash --as myfn
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"myfn()"* ]]
+  [ -f "$XDG_CACHE_HOME/gtr/init-myfn.bash" ]
+}
+
+@test "cache works for all shells" {
+  for sh in bash zsh fish; do
+    GTR_VERSION="9.9.9" run cmd_init "$sh"
+    [ "$status" -eq 0 ]
+    [ -f "$XDG_CACHE_HOME/gtr/init-gtr.${sh}" ]
+  done
 }
