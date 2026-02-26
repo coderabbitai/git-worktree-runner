@@ -88,3 +88,49 @@ teardown() {
   run_hooks postCreate REPO_ROOT="$TEST_REPO" BRANCH="test-branch"
   [ "$(cat "$TEST_REPO/vars")" = "$TEST_REPO|test-branch" ]
 }
+
+# ── run_hooks_export tests ───────────────────────────────────────────────────
+
+@test "run_hooks_export returns 0 when no hooks configured" {
+  run run_hooks_export postCd REPO_ROOT="$TEST_REPO"
+  [ "$status" -eq 0 ]
+}
+
+@test "run_hooks_export executes hook" {
+  git config --add gtr.hook.postCd 'touch "$REPO_ROOT/hook-ran"'
+  (cd "$TEST_REPO" && run_hooks_export postCd REPO_ROOT="$TEST_REPO")
+  [ -f "$TEST_REPO/hook-ran" ]
+}
+
+@test "run_hooks_export env vars propagate to child processes" {
+  git config --add gtr.hook.postCd 'export MY_CUSTOM_VAR="from-hook"'
+  # Run hook then check env in same subshell — simulates ai_start inheriting env
+  result=$(
+    cd "$TEST_REPO"
+    run_hooks_export postCd REPO_ROOT="$TEST_REPO"
+    echo "$MY_CUSTOM_VAR"
+  )
+  [ "$result" = "from-hook" ]
+}
+
+@test "run_hooks_export continues after hook failure" {
+  git config --add gtr.hook.postCd "false"
+  git config --add gtr.hook.postCd 'touch "$REPO_ROOT/second-ran"'
+  (cd "$TEST_REPO" && run_hooks_export postCd REPO_ROOT="$TEST_REPO") || true
+  [ -f "$TEST_REPO/second-ran" ]
+}
+
+@test "run_hooks_export passes REPO_ROOT WORKTREE_PATH BRANCH" {
+  git config --add gtr.hook.postCd 'echo "$REPO_ROOT|$WORKTREE_PATH|$BRANCH" > "$REPO_ROOT/env-check"'
+  (cd "$TEST_REPO" && run_hooks_export postCd \
+    REPO_ROOT="$TEST_REPO" \
+    WORKTREE_PATH="/tmp/wt" \
+    BRANCH="my-branch")
+  [ "$(cat "$TEST_REPO/env-check")" = "$TEST_REPO|/tmp/wt|my-branch" ]
+}
+
+@test "run_hooks_export does not leak env to parent shell" {
+  git config --add gtr.hook.postCd 'export LEAK_TEST="leaked"'
+  (cd "$TEST_REPO" && run_hooks_export postCd REPO_ROOT="$TEST_REPO")
+  [ -z "${LEAK_TEST:-}" ]
+}

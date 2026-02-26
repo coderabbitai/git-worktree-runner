@@ -39,5 +39,13 @@ cmd_ai() {
   log_info "Directory: $worktree_path"
   log_info "Branch: $branch"
 
-  ai_start "$worktree_path" "${ai_args[@]}"
+  # Run postCd hooks + AI in a subshell so hook env vars propagate to AI
+  (
+    cd "$worktree_path" || exit 1
+    run_hooks_export "postCd" \
+      REPO_ROOT="$repo_root" \
+      WORKTREE_PATH="$worktree_path" \
+      BRANCH="$branch"
+    ai_start "$worktree_path" "${ai_args[@]}"
+  )
 }
