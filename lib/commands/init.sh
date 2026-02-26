@@ -83,15 +83,13 @@ __FUNC__() {
     shift
     local dir
     if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
-      local _gtr_selection _gtr_key _gtr_line
-      _gtr_selection="$(command git gtr list --porcelain | fzf \
       local _gtr_porcelain
       _gtr_porcelain="$(command git gtr list --porcelain)"
       if [ "$(printf '%s\n' "$_gtr_porcelain" | wc -l)" -le 1 ]; then
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
       fi
-      local _gtr_selection
+      local _gtr_selection _gtr_key _gtr_line
       _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
         --with-nth=2 \
@@ -201,15 +199,13 @@ __FUNC__() {
     shift
     local dir
     if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
-      local _gtr_selection _gtr_key _gtr_line
-      _gtr_selection="$(command git gtr list --porcelain | fzf \
       local _gtr_porcelain
       _gtr_porcelain="$(command git gtr list --porcelain)"
       if [ "$(printf '%s\n' "$_gtr_porcelain" | wc -l)" -le 1 ]; then
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
       fi
-      local _gtr_selection
+      local _gtr_selection _gtr_key _gtr_line
       _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
         --with-nth=2 \
