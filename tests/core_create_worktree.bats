@@ -139,3 +139,130 @@ teardown() {
   wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "feature/deep/path" "HEAD" "none" "1")
   [ "$wt_path" = "$TEST_WORKTREES_DIR/feature-deep-path" ]
 }
+
+# ── from_ref handling ──────────────────────────────────────────────────────
+
+@test "create_worktree from local branch starts at that branch's commit" {
+  git commit --allow-empty -m "second" --quiet
+  local expected_sha
+  expected_sha=$(git rev-parse HEAD)
+
+  git branch from-source HEAD
+  git reset --hard HEAD~1 --quiet
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "from-local" "from-source" "none" "1")
+  [ -d "$wt_path" ]
+
+  local actual_sha
+  actual_sha=$(git -C "$wt_path" rev-parse HEAD)
+  [ "$actual_sha" = "$expected_sha" ]
+}
+
+@test "create_worktree from lightweight tag starts at the tagged commit" {
+  git commit --allow-empty -m "tagged commit" --quiet
+  local expected_sha
+  expected_sha=$(git rev-parse HEAD)
+  git tag v1.0.0
+
+  git commit --allow-empty -m "after tag" --quiet
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "from-light-tag" "v1.0.0" "none" "1")
+  [ -d "$wt_path" ]
+
+  local actual_sha
+  actual_sha=$(git -C "$wt_path" rev-parse HEAD)
+  [ "$actual_sha" = "$expected_sha" ]
+}
+
+@test "create_worktree from annotated tag starts at the tagged commit" {
+  git commit --allow-empty -m "tagged commit" --quiet
+  local expected_sha
+  expected_sha=$(git rev-parse HEAD)
+  git tag -a v2.0.0 -m "v2.0.0"
+
+  git commit --allow-empty -m "after tag" --quiet
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "from-ann-tag" "v2.0.0" "none" "1")
+  [ -d "$wt_path" ]
+
+  local actual_sha
+  actual_sha=$(git -C "$wt_path" rev-parse HEAD)
+  [ "$actual_sha" = "$expected_sha" ]
+}
+
+@test "create_worktree from commit SHA starts at that commit" {
+  git commit --allow-empty -m "target commit" --quiet
+  local expected_sha
+  expected_sha=$(git rev-parse HEAD)
+
+  git commit --allow-empty -m "later commit" --quiet
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "from-sha" "$expected_sha" "none" "1")
+  [ -d "$wt_path" ]
+
+  local actual_sha
+  actual_sha=$(git -C "$wt_path" rev-parse HEAD)
+  [ "$actual_sha" = "$expected_sha" ]
+}
+
+@test "create_worktree from remote branch uses the requested branch name not the remote name" {
+  # Set up a "remote" by using the test repo as its own remote
+  git remote add origin "$TEST_REPO" 2>/dev/null || true
+  git branch remote-feature HEAD
+  git fetch origin --quiet
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "my-branch" "remote-feature" "none" "1")
+  [ -d "$wt_path" ]
+
+  # The worktree branch must be our requested name, not the remote branch name
+  local actual_branch
+  actual_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD)
+  [ "$actual_branch" = "my-branch" ]
+}
+
+@test "create_worktree from remote branch starts at the correct commit" {
+  git commit --allow-empty -m "remote target" --quiet
+  local expected_sha
+  expected_sha=$(git rev-parse HEAD)
+
+  git remote add origin "$TEST_REPO" 2>/dev/null || true
+  git branch remote-source HEAD
+  git fetch origin --quiet
+
+  git commit --allow-empty -m "moved on" --quiet
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "from-remote-ref" "remote-source" "none" "1")
+  [ -d "$wt_path" ]
+
+  local actual_sha
+  actual_sha=$(git -C "$wt_path" rev-parse HEAD)
+  [ "$actual_sha" = "$expected_sha" ]
+}
+
+@test "create_worktree auto mode from local branch starts at that commit" {
+  git commit --allow-empty -m "auto target" --quiet
+  local expected_sha
+  expected_sha=$(git rev-parse HEAD)
+
+  git branch auto-source HEAD
+  git reset --hard HEAD~1 --quiet
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "auto-from-local" "auto-source" "auto" "1")
+  [ -d "$wt_path" ]
+
+  local actual_sha
+  actual_sha=$(git -C "$wt_path" rev-parse HEAD)
+  [ "$actual_sha" = "$expected_sha" ]
+}
+
+@test "create_worktree fails with invalid from_ref" {
+  run create_worktree "$TEST_WORKTREES_DIR" "" "bad-ref" "nonexistent-ref-xyz" "none" "1"
+  [ "$status" -eq 1 ]
+}
