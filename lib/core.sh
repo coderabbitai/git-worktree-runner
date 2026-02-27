@@ -445,6 +445,14 @@ create_worktree() {
 
   _check_branch_refs "$branch_name"
 
+  # Resolve from_ref to a commit SHA to prevent git's guess-remote logic
+  # from overriding the -b flag when from_ref matches a remote branch name.
+  # Try the ref as-is first, then with origin/ prefix for remote-only refs.
+  local resolved_ref
+  resolved_ref=$(git rev-parse --verify "$from_ref" 2>/dev/null) \
+    || resolved_ref=$(git rev-parse --verify "origin/$from_ref" 2>/dev/null) \
+    || resolved_ref="$from_ref"
+
   case "$track_mode" in
     remote)
       if [ "$_wt_remote_exists" -eq 1 ]; then
@@ -475,7 +483,7 @@ create_worktree() {
       _try_worktree_add "$worktree_path" \
         "Creating new branch $branch_name from $from_ref" \
         "Worktree created with new branch $branch_name" \
-        "${force_args[@]}" -b "$branch_name" "$from_ref" && return 0
+        "${force_args[@]}" -b "$branch_name" "$resolved_ref" && return 0
       log_error "Failed to create worktree with new branch"
       return 1
       ;;
@@ -492,7 +500,7 @@ create_worktree() {
         _try_worktree_add "$worktree_path" \
           "Creating new branch $branch_name from $from_ref" \
           "Worktree created with new branch $branch_name" \
-          "${force_args[@]}" -b "$branch_name" "$from_ref" && return 0
+          "${force_args[@]}" -b "$branch_name" "$resolved_ref" && return 0
       fi
       ;;
   esac
