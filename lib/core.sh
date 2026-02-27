@@ -449,8 +449,8 @@ create_worktree() {
   # from overriding the -b flag when from_ref matches a remote branch name.
   # Try the ref as-is first, then with origin/ prefix for remote-only refs.
   local resolved_ref
-  resolved_ref=$(git rev-parse --verify "$from_ref" 2>/dev/null) \
-    || resolved_ref=$(git rev-parse --verify "origin/$from_ref" 2>/dev/null) \
+  resolved_ref=$(git rev-parse --verify "${from_ref}^{commit}" 2>/dev/null) \
+    || resolved_ref=$(git rev-parse --verify "origin/${from_ref}^{commit}" 2>/dev/null) \
     || resolved_ref="$from_ref"
 
   case "$track_mode" in

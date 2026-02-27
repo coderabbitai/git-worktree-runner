@@ -159,7 +159,7 @@ teardown() {
   [ "$actual_sha" = "$expected_sha" ]
 }
 
-@test "create_worktree from tag starts at the tagged commit" {
+@test "create_worktree from lightweight tag starts at the tagged commit" {
   git commit --allow-empty -m "tagged commit" --quiet
   local expected_sha
   expected_sha=$(git rev-parse HEAD)
@@ -168,7 +168,24 @@ teardown() {
   git commit --allow-empty -m "after tag" --quiet
 
   local wt_path
-  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "from-tag" "v1.0.0" "none" "1")
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "from-light-tag" "v1.0.0" "none" "1")
+  [ -d "$wt_path" ]
+
+  local actual_sha
+  actual_sha=$(git -C "$wt_path" rev-parse HEAD)
+  [ "$actual_sha" = "$expected_sha" ]
+}
+
+@test "create_worktree from annotated tag starts at the tagged commit" {
+  git commit --allow-empty -m "tagged commit" --quiet
+  local expected_sha
+  expected_sha=$(git rev-parse HEAD)
+  git tag -a v2.0.0 -m "v2.0.0"
+
+  git commit --allow-empty -m "after tag" --quiet
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "from-ann-tag" "v2.0.0" "none" "1")
   [ -d "$wt_path" ]
 
   local actual_sha
