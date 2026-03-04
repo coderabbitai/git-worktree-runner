@@ -73,12 +73,12 @@ _create_resolve_from_ref() {
       from_ref=$(get_current_branch)
       if [ -z "$from_ref" ] || [ "$from_ref" = "HEAD" ]; then
         log_warn "Currently in detached HEAD state - falling back to default branch"
-        from_ref=$(resolve_default_branch "$repo_root")
+        from_ref="origin/$(resolve_default_branch "$repo_root")"
       else
         log_info "Creating from current branch: $from_ref"
       fi
     else
-      from_ref=$(resolve_default_branch "$repo_root")
+      from_ref="origin/$(resolve_default_branch "$repo_root")"
     fi
   fi
 
