@@ -94,6 +94,45 @@ _init_bash() {
 # git-gtr shell integration (cached to ~/.cache/gtr/)
 # Setup: see git gtr help init
 
+__FUNC___run_post_cd_hooks() {
+  local dir="$1"
+
+  cd "$dir" && {
+    local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
+    _gtr_hooks=""
+    _gtr_seen=""
+    # Read from git config (local > global > system)
+    _gtr_hooks="$(git config --get-all gtr.hook.postCd 2>/dev/null)" || true
+    # Read from .gtrconfig if it exists
+    _gtr_config_file="$(git rev-parse --show-toplevel 2>/dev/null)/.gtrconfig"
+    if [ -f "$_gtr_config_file" ]; then
+      local _gtr_file_hooks
+      _gtr_file_hooks="$(git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)" || true
+      if [ -n "$_gtr_file_hooks" ]; then
+        if [ -n "$_gtr_hooks" ]; then
+          _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
+        else
+          _gtr_hooks="$_gtr_file_hooks"
+        fi
+      fi
+    fi
+    if [ -n "$_gtr_hooks" ]; then
+      # Deduplicate while preserving order
+      _gtr_seen=""
+      export WORKTREE_PATH="$dir"
+      export REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+      export BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+      while IFS= read -r _gtr_hook; do
+        [ -z "$_gtr_hook" ] && continue
+        case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
+        _gtr_seen="$_gtr_seen|$_gtr_hook|"
+        eval "$_gtr_hook" || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
+      done <<< "$_gtr_hooks"
+      unset WORKTREE_PATH REPO_ROOT BRANCH
+    fi
+  }
+}
+
 __FUNC__() {
   if [ "$#" -gt 0 ] && [ "$1" = "cd" ]; then
     shift
@@ -147,40 +186,43 @@ __FUNC__() {
     else
       dir="$(command git gtr go "$@")" || return $?
     fi
-    cd "$dir" && {
-      local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
-      _gtr_hooks=""
-      _gtr_seen=""
-      # Read from git config (local > global > system)
-      _gtr_hooks="$(git config --get-all gtr.hook.postCd 2>/dev/null)" || true
-      # Read from .gtrconfig if it exists
-      _gtr_config_file="$(git rev-parse --show-toplevel 2>/dev/null)/.gtrconfig"
-      if [ -f "$_gtr_config_file" ]; then
-        local _gtr_file_hooks
-        _gtr_file_hooks="$(git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)" || true
-        if [ -n "$_gtr_file_hooks" ]; then
-          if [ -n "$_gtr_hooks" ]; then
-            _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
-          else
-            _gtr_hooks="$_gtr_file_hooks"
-          fi
-        fi
+    __FUNC___run_post_cd_hooks "$dir"
+  elif [ "$#" -gt 0 ] && [ "$1" = "new" ]; then
+    local -a _gtr_original_args=("$@") _gtr_new_args=()
+    local _gtr_arg _gtr_new_cd=0 _gtr_before_paths _gtr_after_paths
+    local _gtr_path _gtr_new_dir="" _gtr_new_count=0 _gtr_status
+    shift
+    for _gtr_arg in "$@"; do
+      if [ "$_gtr_arg" = "--cd" ]; then
+        _gtr_new_cd=1
+      else
+        _gtr_new_args+=("$_gtr_arg")
       fi
-      if [ -n "$_gtr_hooks" ]; then
-        # Deduplicate while preserving order
-        _gtr_seen=""
-        export WORKTREE_PATH="$dir"
-        export REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
-        export BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
-        while IFS= read -r _gtr_hook; do
-          [ -z "$_gtr_hook" ] && continue
-          case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
-          _gtr_seen="$_gtr_seen|$_gtr_hook|"
-          eval "$_gtr_hook" || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
-        done <<< "$_gtr_hooks"
-        unset WORKTREE_PATH REPO_ROOT BRANCH
+    done
+    if [ "$_gtr_new_cd" -eq 1 ]; then
+      _gtr_before_paths="$(command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')"
+      command git gtr new "${_gtr_new_args[@]}"
+      _gtr_status=$?
+      [ "$_gtr_status" -ne 0 ] && return "$_gtr_status"
+      _gtr_after_paths="$(command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')"
+      while IFS= read -r _gtr_path; do
+        [ -z "$_gtr_path" ] && continue
+        case $'\n'"$_gtr_before_paths"$'\n' in
+          *$'\n'"$_gtr_path"$'\n'*) ;;
+          *)
+            _gtr_new_dir="$_gtr_path"
+            _gtr_new_count=$((_gtr_new_count + 1))
+            ;;
+        esac
+      done <<< "$_gtr_after_paths"
+      if [ "$_gtr_new_count" -eq 1 ]; then
+        __FUNC___run_post_cd_hooks "$_gtr_new_dir"
+        return $?
       fi
-    }
+      echo "__FUNC__: created worktree, but could not determine new directory for --cd" >&2
+      return 0
+    fi
+    command git gtr "${_gtr_original_args[@]}"
   else
     command git gtr "$@"
   fi
@@ -199,6 +241,13 @@ ___FUNC___completion() {
     local worktrees
     worktrees="1 $(git gtr list --porcelain 2>/dev/null | cut -f2 | tr '\n' ' ')"
     COMPREPLY=($(compgen -W "$worktrees" -- "$cur"))
+  elif [ "${COMP_WORDS[1]}" = "new" ] && [[ "$cur" == -* ]]; then
+    if type _git_gtr &>/dev/null; then
+      COMP_WORDS=(git gtr "${COMP_WORDS[@]:1}")
+      (( COMP_CWORD += 1 ))
+      _git_gtr
+    fi
+    COMPREPLY+=($(compgen -W "--cd" -- "$cur"))
   elif type _git_gtr &>/dev/null; then
     # Delegate to git-gtr completions (adjust words to match expected format)
     COMP_WORDS=(git gtr "${COMP_WORDS[@]:1}")
@@ -214,6 +263,46 @@ _init_zsh() {
   cat <<'ZSH'
 # git-gtr shell integration (cached to ~/.cache/gtr/)
 # Setup: see git gtr help init
+
+__FUNC___run_post_cd_hooks() {
+  emulate -L zsh
+  local dir="$1"
+
+  cd "$dir" && {
+    local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
+    _gtr_hooks=""
+    _gtr_seen=""
+    # Read from git config (local > global > system)
+    _gtr_hooks="$(git config --get-all gtr.hook.postCd 2>/dev/null)" || true
+    # Read from .gtrconfig if it exists
+    _gtr_config_file="$(git rev-parse --show-toplevel 2>/dev/null)/.gtrconfig"
+    if [ -f "$_gtr_config_file" ]; then
+      local _gtr_file_hooks
+      _gtr_file_hooks="$(git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)" || true
+      if [ -n "$_gtr_file_hooks" ]; then
+        if [ -n "$_gtr_hooks" ]; then
+          _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
+        else
+          _gtr_hooks="$_gtr_file_hooks"
+        fi
+      fi
+    fi
+    if [ -n "$_gtr_hooks" ]; then
+      # Deduplicate while preserving order
+      _gtr_seen=""
+      export WORKTREE_PATH="$dir"
+      export REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+      export BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+      while IFS= read -r _gtr_hook; do
+        [ -z "$_gtr_hook" ] && continue
+        case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
+        _gtr_seen="$_gtr_seen|$_gtr_hook|"
+        eval "$_gtr_hook" || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
+      done <<< "$_gtr_hooks"
+      unset WORKTREE_PATH REPO_ROOT BRANCH
+    fi
+  }
+}
 
 __FUNC__() {
   emulate -L zsh
@@ -269,40 +358,45 @@ __FUNC__() {
     else
       dir="$(command git gtr go "$@")" || return $?
     fi
-    cd "$dir" && {
-      local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
-      _gtr_hooks=""
-      _gtr_seen=""
-      # Read from git config (local > global > system)
-      _gtr_hooks="$(git config --get-all gtr.hook.postCd 2>/dev/null)" || true
-      # Read from .gtrconfig if it exists
-      _gtr_config_file="$(git rev-parse --show-toplevel 2>/dev/null)/.gtrconfig"
-      if [ -f "$_gtr_config_file" ]; then
-        local _gtr_file_hooks
-        _gtr_file_hooks="$(git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)" || true
-        if [ -n "$_gtr_file_hooks" ]; then
-          if [ -n "$_gtr_hooks" ]; then
-            _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
-          else
-            _gtr_hooks="$_gtr_file_hooks"
-          fi
-        fi
+    __FUNC___run_post_cd_hooks "$dir"
+  elif [ "$#" -gt 0 ] && [ "$1" = "new" ]; then
+    local -a _gtr_original_args _gtr_new_args
+    local _gtr_arg _gtr_new_cd=0 _gtr_before_paths _gtr_after_paths
+    local _gtr_path _gtr_new_dir="" _gtr_new_count=0 _gtr_status
+    _gtr_original_args=("$@")
+    _gtr_new_args=()
+    shift
+    for _gtr_arg in "$@"; do
+      if [ "$_gtr_arg" = "--cd" ]; then
+        _gtr_new_cd=1
+      else
+        _gtr_new_args+=("$_gtr_arg")
       fi
-      if [ -n "$_gtr_hooks" ]; then
-        # Deduplicate while preserving order
-        _gtr_seen=""
-        export WORKTREE_PATH="$dir"
-        export REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
-        export BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
-        while IFS= read -r _gtr_hook; do
-          [ -z "$_gtr_hook" ] && continue
-          case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
-          _gtr_seen="$_gtr_seen|$_gtr_hook|"
-          eval "$_gtr_hook" || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
-        done <<< "$_gtr_hooks"
-        unset WORKTREE_PATH REPO_ROOT BRANCH
+    done
+    if [ "$_gtr_new_cd" -eq 1 ]; then
+      _gtr_before_paths="$(command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')"
+      command git gtr new "${_gtr_new_args[@]}"
+      _gtr_status=$?
+      [ "$_gtr_status" -ne 0 ] && return "$_gtr_status"
+      _gtr_after_paths="$(command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')"
+      while IFS= read -r _gtr_path; do
+        [ -z "$_gtr_path" ] && continue
+        case $'\n'"$_gtr_before_paths"$'\n' in
+          *$'\n'"$_gtr_path"$'\n'*) ;;
+          *)
+            _gtr_new_dir="$_gtr_path"
+            _gtr_new_count=$((_gtr_new_count + 1))
+            ;;
+        esac
+      done <<< "$_gtr_after_paths"
+      if [ "$_gtr_new_count" -eq 1 ]; then
+        __FUNC___run_post_cd_hooks "$_gtr_new_dir"
+        return $?
       fi
-    }
+      echo "__FUNC__: created worktree, but could not determine new directory for --cd" >&2
+      return 0
+    fi
+    command git gtr "${_gtr_original_args[@]}"
   else
     command git gtr "$@"
   fi
@@ -311,6 +405,7 @@ __FUNC__() {
 # Completion for __FUNC__ wrapper
 ___FUNC___completion() {
   local at_subcmd=0
+  local current_word="${words[CURRENT]:-}"
   (( CURRENT == 2 )) && at_subcmd=1
 
   if [[ "${words[2]}" == "cd" ]] && (( CURRENT >= 3 )); then
@@ -328,6 +423,10 @@ ___FUNC___completion() {
     _git-gtr
   fi
 
+  if [[ "${words[2]}" == "new" && "$current_word" == -* ]]; then
+    compadd -- --cd
+  fi
+
   # When completing the subcommand position, also offer "cd"
   if (( at_subcmd )); then
     local -a extra=('cd:Change directory to worktree')
@@ -343,6 +442,38 @@ _init_fish() {
 # git-gtr shell integration
 # Add to ~/.config/fish/config.fish:
 #   git gtr init fish | source
+
+function __FUNC___run_post_cd_hooks
+  set -l dir "$argv[1]"
+  cd $dir
+  and begin
+    set -l _gtr_hooks
+    set -l _gtr_seen
+    # Read from git config (local > global > system)
+    set -l _gtr_git_hooks (git config --get-all gtr.hook.postCd 2>/dev/null)
+    # Read from .gtrconfig if it exists
+    set -l _gtr_config_file (git rev-parse --show-toplevel 2>/dev/null)"/.gtrconfig"
+    set -l _gtr_file_hooks
+    if test -f "$_gtr_config_file"
+      set _gtr_file_hooks (git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)
+    end
+    # Merge and deduplicate
+    set _gtr_hooks $_gtr_git_hooks $_gtr_file_hooks
+    if test (count $_gtr_hooks) -gt 0
+      set -lx WORKTREE_PATH "$dir"
+      set -lx REPO_ROOT (git rev-parse --show-toplevel 2>/dev/null)
+      set -lx BRANCH (git rev-parse --abbrev-ref HEAD 2>/dev/null)
+      for _gtr_hook in $_gtr_hooks
+        if test -n "$_gtr_hook"
+          if not contains -- "$_gtr_hook" $_gtr_seen
+            set -a _gtr_seen "$_gtr_hook"
+            eval "$_gtr_hook"; or echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
+          end
+        end
+      end
+    end
+  end
+end
 
 function __FUNC__
   if test (count $argv) -gt 0; and test "$argv[1]" = "cd"
@@ -403,34 +534,37 @@ function __FUNC__
       set dir (command git gtr go $argv[2..])
       or return $status
     end
-    cd $dir
-    and begin
-      set -l _gtr_hooks
-      set -l _gtr_seen
-      # Read from git config (local > global > system)
-      set -l _gtr_git_hooks (git config --get-all gtr.hook.postCd 2>/dev/null)
-      # Read from .gtrconfig if it exists
-      set -l _gtr_config_file (git rev-parse --show-toplevel 2>/dev/null)"/.gtrconfig"
-      set -l _gtr_file_hooks
-      if test -f "$_gtr_config_file"
-        set _gtr_file_hooks (git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)
-      end
-      # Merge and deduplicate
-      set _gtr_hooks $_gtr_git_hooks $_gtr_file_hooks
-      if test (count $_gtr_hooks) -gt 0
-        set -lx WORKTREE_PATH "$dir"
-        set -lx REPO_ROOT (git rev-parse --show-toplevel 2>/dev/null)
-        set -lx BRANCH (git rev-parse --abbrev-ref HEAD 2>/dev/null)
-        for _gtr_hook in $_gtr_hooks
-          if test -n "$_gtr_hook"
-            if not contains -- "$_gtr_hook" $_gtr_seen
-              set -a _gtr_seen "$_gtr_hook"
-              eval "$_gtr_hook"; or echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
-            end
-          end
-        end
+    __FUNC___run_post_cd_hooks "$dir"
+  else if test (count $argv) -gt 0; and test "$argv[1]" = "new"
+    set -l _gtr_new_cd 0
+    set -l _gtr_new_args
+    for _gtr_arg in $argv[2..-1]
+      if test "$_gtr_arg" = "--cd"
+        set _gtr_new_cd 1
+      else
+        set -a _gtr_new_args "$_gtr_arg"
       end
     end
+    if test "$_gtr_new_cd" = "1"
+      set -l _gtr_before_paths (command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
+      command git gtr new $_gtr_new_args
+      set -l _gtr_status $status
+      test $_gtr_status -ne 0; and return $_gtr_status
+      set -l _gtr_after_paths (command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
+      set -l _gtr_new_paths
+      for _gtr_path in $_gtr_after_paths
+        if not contains -- "$_gtr_path" $_gtr_before_paths
+          set -a _gtr_new_paths "$_gtr_path"
+        end
+      end
+      if test (count $_gtr_new_paths) -eq 1
+        __FUNC___run_post_cd_hooks "$_gtr_new_paths[1]"
+        return $status
+      end
+      echo "__FUNC__: created worktree, but could not determine new directory for --cd" >&2
+      return 0
+    end
+    command git gtr $argv
   else
     command git gtr $argv
   end
@@ -478,5 +612,6 @@ complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a help -d 'Show help'
 
 # Worktree name completions for cd
 complete -f -c __FUNC__ -n '___FUNC___using_subcommand cd' -a '(echo 1; git gtr list --porcelain 2>/dev/null | cut -f2)'
+complete -f -c __FUNC__ -n '___FUNC___using_subcommand new' -l cd -d 'Create and cd into the new worktree'
 FISH
 }

@@ -344,7 +344,8 @@ git gtr init - Generate shell integration
 Usage: git gtr init <shell> [--as <name>]
 
 Generates shell functions for enhanced features like 'gtr cd <branch>'
-which changes directory to a worktree. Add to your shell configuration.
+and 'gtr new <branch> --cd', which can change the current shell directory.
+Add to your shell configuration.
 
 Output is cached to ~/.cache/gtr/ for fast shell startup (~1ms vs ~60ms).
 The cache refreshes the next time 'git gtr init <shell>' runs (checks version).
@@ -377,6 +378,7 @@ Setup (sources cached output directly for fast startup):
   eval "$(git gtr init zsh --as gwtr)"
 
 After setup:
+  gtr new my-feature --cd                        # create and cd into worktree
   gtr cd my-feature                             # cd to worktree
   gtr cd 1                                      # cd to main repo
   gtr cd                                        # interactive picker (requires fzf)
@@ -568,7 +570,7 @@ SETUP & MAINTENANCE:
          Usage: eval "$(git gtr completion zsh)"
 
   init <shell> [--as <name>]
-         Generate shell integration for cd support (bash, zsh, fish)
+         Generate shell integration for gtr cd and gtr new --cd (bash, zsh, fish)
          --as <name>: custom function name (default: gtr)
          Output is cached for fast startup (refreshes when 'git gtr init' runs)
          See git gtr help init for recommended setup
@@ -596,6 +598,7 @@ WORKFLOW EXAMPLES:
   git gtr run feature/user-auth npm run dev   # Start dev server
 
   # Navigate to worktree directory
+  gtr new hotfix --cd                          # Create and cd into worktree (with shell integration)
   gtr cd                                    # Interactive picker (requires fzf)
   gtr cd feature/user-auth                  # With shell integration (git gtr init)
   cd "$(git gtr go feature/user-auth)"      # Without shell integration
@@ -646,7 +649,7 @@ CONFIGURATION OPTIONS:
   gtr.hook.postCreate      Post-create hooks (multi-valued)
   gtr.hook.preRemove       Pre-remove hooks (multi-valued, abort on failure)
   gtr.hook.postRemove      Post-remove hooks (multi-valued)
-  gtr.hook.postCd          Post-cd hooks (multi-valued, shell integration only)
+  gtr.hook.postCd          Post-cd hooks (multi-valued, gtr cd / gtr new --cd only)
   gtr.ui.color             Color output mode (auto, always, never; default: auto)
 
 ────────────────────────────────────────────────────────────────────────────────

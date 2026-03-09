@@ -153,6 +153,77 @@ teardown() {
   [[ "$output" == *"git gtr list --porcelain"* ]]
 }
 
+# ── new --cd wrapper support ────────────────────────────────────────────────
+
+@test "bash output intercepts new --cd and strips flag before delegating" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'[ "$1" = "new" ]'* ]]
+  [[ "$output" == *'if [ "$_gtr_arg" = "--cd" ]'* ]]
+  [[ "$output" == *'command git gtr new "${_gtr_new_args[@]}"'* ]]
+  [[ "$output" == *'command git gtr "${_gtr_original_args[@]}"'* ]]
+}
+
+@test "zsh output intercepts new --cd and strips flag before delegating" {
+  run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'[ "$1" = "new" ]'* ]]
+  [[ "$output" == *'if [ "$_gtr_arg" = "--cd" ]'* ]]
+  [[ "$output" == *'command git gtr new "${_gtr_new_args[@]}"'* ]]
+  [[ "$output" == *'command git gtr "${_gtr_original_args[@]}"'* ]]
+}
+
+@test "fish output intercepts new --cd and strips flag before delegating" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'test "$argv[1]" = "new"'* ]]
+  [[ "$output" == *'test "$_gtr_arg" = "--cd"'* ]]
+  [[ "$output" == *'command git gtr new $_gtr_new_args'* ]]
+}
+
+@test "bash output uses worktree diff to locate the new directory for --cd" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"git worktree list --porcelain"* ]]
+  [[ "$output" == *'run_post_cd_hooks "$_gtr_new_dir"'* ]]
+  [[ "$output" == *'could not determine new directory for --cd'* ]]
+}
+
+@test "zsh output uses worktree diff to locate the new directory for --cd" {
+  run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"git worktree list --porcelain"* ]]
+  [[ "$output" == *'run_post_cd_hooks "$_gtr_new_dir"'* ]]
+  [[ "$output" == *'could not determine new directory for --cd'* ]]
+}
+
+@test "fish output uses worktree diff to locate the new directory for --cd" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"git worktree list --porcelain"* ]]
+  [[ "$output" == *'run_post_cd_hooks "$_gtr_new_paths[1]"'* ]]
+  [[ "$output" == *'could not determine new directory for --cd'* ]]
+}
+
+@test "bash wrapper completions include --cd for new" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'compgen -W "--cd"'* ]]
+}
+
+@test "zsh wrapper completions include --cd for new" {
+  run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'compadd -- --cd'* ]]
+}
+
+@test "fish wrapper completions include --cd for new" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"using_subcommand new"* ]]
+  [[ "$output" == *"-l cd -d 'Create and cd into the new worktree'"* ]]
+}
+
 # ── Error cases ──────────────────────────────────────────────────────────────
 
 @test "unknown shell fails" {

@@ -100,6 +100,7 @@ git gtr ai my-feature           # Start claude
 git gtr run my-feature npm test # Run tests
 
 # Navigate to worktree
+gtr new my-feature --cd         # Create and cd (requires shell integration)
 gtr cd                          # Interactive picker (requires fzf + shell integration)
 gtr cd my-feature               # Requires shell integration (see below)
 cd "$(git gtr go my-feature)"   # Alternative without shell integration
@@ -230,6 +231,7 @@ test -f "$_gtr_init"; or git gtr init fish >/dev/null 2>&1
 source "$_gtr_init" 2>/dev/null
 
 # Then navigate with:
+gtr new my-feature --cd  # Create and land in the new worktree
 gtr cd                # Interactive worktree picker (requires fzf)
 gtr cd my-feature
 gtr cd 1
@@ -360,7 +362,7 @@ git gtr config add gtr.copy.include "**/.env.example"
 # Run setup after creating worktrees
 git gtr config add gtr.hook.postCreate "npm install"
 
-# Re-source environment after gtr cd (runs in current shell)
+# Re-source environment after gtr cd or gtr new --cd (runs in current shell)
 git gtr config add gtr.hook.postCd "source ./vars.sh"
 
 # Disable color output (or use "always" to force it)

@@ -90,6 +90,12 @@ teardown() {
   [[ "$output" == *"--dry-run"* ]]
 }
 
+@test "cmd_help init mentions gtr new --cd" {
+  run cmd_help init
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gtr new my-feature --cd"* ]]
+}
+
 # ── Alias mapping ────────────────────────────────────────────────────────────
 
 @test "cmd_help ls maps to list help" {
