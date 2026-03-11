@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-03-11
+
+### Added
+
+- `gtr new --cd` shell integration so newly created worktrees can open in the current shell ([#151](https://github.com/coderabbitai/git-worktree-runner/pull/151))
+- Cached `git gtr init` output for faster shell startup ([#142](https://github.com/coderabbitai/git-worktree-runner/pull/142))
+- `ctrl-n` keybinding in the interactive `gtr cd` picker to create a new worktree inline ([#141](https://github.com/coderabbitai/git-worktree-runner/pull/141))
+
+### Changed
+
+- `git gtr ai` now runs `postCd` hooks before launching AI tools ([#145](https://github.com/coderabbitai/git-worktree-runner/pull/145))
+- Improved interactive picker discoverability and empty-state guidance ([#139](https://github.com/coderabbitai/git-worktree-runner/pull/139))
+
+### Fixed
+
+- AI/editor launches from the fzf picker now run after fzf exits so terminal apps get a full terminal session ([#140](https://github.com/coderabbitai/git-worktree-runner/pull/140))
+- `--from` refs now resolve to SHAs to prevent Git DWIM from choosing the wrong branch ([#147](https://github.com/coderabbitai/git-worktree-runner/pull/147))
+- Default-branch tracking now uses `origin/<branch>` when branching from the remote default branch ([#149](https://github.com/coderabbitai/git-worktree-runner/pull/149))
+- Homebrew-installed completion assets now work with `git gtr completion <shell>` ([#155](https://github.com/coderabbitai/git-worktree-runner/pull/155))
+
 ## [2.4.0] - 2026-02-24
 
 ### Added
@@ -156,7 +176,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 - Improved base directory resolution logic to distinguish `.` (repo root), `./path` (repo-internal) from other relative values (sibling directories)
 
-[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.4.0...HEAD
+[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.2.0...v2.3.0
