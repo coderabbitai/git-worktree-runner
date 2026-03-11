@@ -364,6 +364,8 @@ The `NO_COLOR` environment variable ([no-color.org](https://no-color.org)) alway
 ## Shell Completions
 
 Enable tab completion using the built-in `completion` command.
+Homebrew installs native Bash, Zsh, and Fish completion files automatically, so
+manual setup is mainly for source installs or explicit shell configuration.
 
 ### Bash
 

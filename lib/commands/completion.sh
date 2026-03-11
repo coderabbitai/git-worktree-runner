@@ -1,5 +1,45 @@
 #!/usr/bin/env bash
 
+# Resolve a completion asset from supported install layouts.
+_completion_asset_path() {
+  local shell="$1"
+  shift
+
+  local candidate
+  for candidate in "$@"; do
+    if [ -f "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  log_error "Could not find $shell completion asset under: $GTR_DIR"
+  log_error "Expected either a source checkout (completions/) or a Homebrew install layout."
+  return 1
+}
+
+_completion_bash_path() {
+  _completion_asset_path "bash" \
+    "$GTR_DIR/completions/gtr.bash" \
+    "$GTR_DIR/etc/bash_completion.d/git-gtr"
+}
+
+_completion_zsh_path() {
+  _completion_asset_path "zsh" \
+    "$GTR_DIR/completions/_git-gtr" \
+    "$GTR_DIR/share/zsh/site-functions/_git-gtr"
+}
+
+_completion_fish_path() {
+  _completion_asset_path "fish" \
+    "$GTR_DIR/completions/git-gtr.fish" \
+    "$GTR_DIR/share/fish/vendor_completions.d/git-gtr.fish"
+}
+
+_completion_single_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
 # Completion command (generate shell completions)
 cmd_completion() {
   if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
@@ -10,9 +50,15 @@ cmd_completion() {
 
   case "$shell" in
     bash)
-      cat "$GTR_DIR/completions/gtr.bash"
+      local bash_path
+      bash_path="$(_completion_bash_path)" || return 1
+      cat "$bash_path"
       ;;
     zsh)
+      local zsh_path zsh_dir zsh_dir_quoted
+      zsh_path="$(_completion_zsh_path)" || return 1
+      zsh_dir="$(dirname "$zsh_path")"
+      zsh_dir_quoted="$(_completion_single_quote "$zsh_dir")"
       # Output zstyle registration + completion loading
       # The zstyle MUST run before compinit to register gtr as a git subcommand
       cat <<EOF
@@ -25,7 +71,7 @@ cmd_completion() {
 zstyle ':completion:*:*:git:*' user-commands gtr:'Git worktree management'
 
 # Add completions to fpath and initialize
-fpath=($GTR_DIR/completions \$fpath)
+fpath=($zsh_dir_quoted \$fpath)
 
 # Note: If you already have compinit in your .zshrc, you may want to
 # source this file before your existing compinit call and remove the
@@ -34,7 +80,9 @@ autoload -Uz compinit && compinit -C
 EOF
       ;;
     fish)
-      cat "$GTR_DIR/completions/git-gtr.fish"
+      local fish_path
+      fish_path="$(_completion_fish_path)" || return 1
+      cat "$fish_path"
       ;;
     ""|--help|-h)
       echo "Generate shell completions for git gtr"
@@ -46,14 +94,17 @@ EOF
       echo "  zsh     Generate Zsh completions"
       echo "  fish    Generate Fish completions"
       echo ""
+      echo "Homebrew installs native shell completions automatically."
+      echo ""
       echo "Examples:"
-      echo "  # Bash: add to ~/.bashrc"
+      echo "  # Bash: manual setup (~/.bashrc)"
       echo "  source <(git gtr completion bash)"
       echo ""
-      echo "  # Zsh: add to ~/.zshrc (BEFORE any existing compinit call)"
+      echo "  # Zsh: manual setup (~/.zshrc, BEFORE any existing compinit call)"
       echo "  eval \"\$(git gtr completion zsh)\""
       echo ""
-      echo "  # Fish: save to completions directory"
+      echo "  # Fish: manual setup"
+      echo "  mkdir -p ~/.config/fish/completions"
       echo "  git gtr completion fish > ~/.config/fish/completions/git-gtr.fish"
       return 0
       ;;
