@@ -397,6 +397,10 @@ git gtr config set gtr.ui.color never
 
 ## Shell Completions (Optional)
 
+Homebrew installs native Bash, Zsh, and Fish completion files automatically.
+Use the commands below for manual setup when installing from source or when you
+want to load completions explicitly.
+
 ```bash
 # Bash (~/.bashrc)
 source <(git gtr completion bash)

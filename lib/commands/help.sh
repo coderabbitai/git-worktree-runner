@@ -326,14 +326,17 @@ shell configuration for tab completion of git gtr commands and options.
 Supported shells: bash, zsh, fish
 
 Setup:
-  # Bash (add to ~/.bashrc)
-  eval "$(git gtr completion bash)"
+  Homebrew installs native shell completions automatically.
 
-  # Zsh (add to ~/.zshrc BEFORE compinit)
+  # Bash (manual setup, add to ~/.bashrc)
+  source <(git gtr completion bash)
+
+  # Zsh (manual setup, add to ~/.zshrc BEFORE compinit)
   eval "$(git gtr completion zsh)"
 
-  # Fish (symlink to completions dir)
-  ln -s /path/to/completions/git-gtr.fish ~/.config/fish/completions/
+  # Fish (manual setup)
+  mkdir -p ~/.config/fish/completions
+  git gtr completion fish > ~/.config/fish/completions/git-gtr.fish
 EOF
 }
 
