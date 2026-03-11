@@ -14,7 +14,7 @@ _completion_asset_path() {
   done
 
   log_error "Could not find $shell completion asset under: $GTR_DIR"
-  log_info "Expected either a source checkout (completions/) or a Homebrew install layout."
+  log_error "Expected either a source checkout (completions/) or a Homebrew install layout."
   return 1
 }
 

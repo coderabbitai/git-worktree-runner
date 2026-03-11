@@ -7,14 +7,16 @@ log_error() { printf '%s\n' "$*" >&2; }
 log_info() { printf '%s\n' "$*" >&2; }
 
 setup() {
-  TEST_GTR_DIR="$(mktemp -d)"
+  TEST_ROOT="$(mktemp -d)"
+  TEST_GTR_DIR="$TEST_ROOT/prefix with spaces"
+  mkdir -p "$TEST_GTR_DIR"
   export GTR_DIR="$TEST_GTR_DIR"
   # shellcheck disable=SC1091
   . "$PROJECT_ROOT/lib/commands/completion.sh"
 }
 
 teardown() {
-  rm -rf "$TEST_GTR_DIR"
+  rm -rf "$TEST_ROOT"
 }
 
 write_test_file() {
