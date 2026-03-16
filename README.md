@@ -327,6 +327,8 @@ git gtr clean                                  # Remove empty worktree directori
 git gtr clean --merged                         # Remove worktrees for merged PRs/MRs
 git gtr clean --merged --dry-run               # Preview which worktrees would be removed
 git gtr clean --merged --yes                   # Remove without confirmation prompts
+git gtr clean --merged --force                 # Force-clean merged, ignoring local changes
+git gtr clean --merged --force --yes           # Force-clean and auto-confirm
 ```
 
 **Options:**
@@ -334,6 +336,7 @@ git gtr clean --merged --yes                   # Remove without confirmation pro
 - `--merged`: Remove worktrees whose branches have merged PRs/MRs (also deletes the branch)
 - `--dry-run`, `-n`: Preview changes without removing
 - `--yes`, `-y`: Non-interactive mode (skip confirmation prompts)
+- `--force`, `-f`: Force removal even if worktree has uncommitted changes or untracked files
 
 **Note:** The `--merged` mode auto-detects your hosting provider (GitHub or GitLab) from the `origin` remote URL and requires the corresponding CLI tool (`gh` or `glab`) to be installed and authenticated. For self-hosted instances, set the provider explicitly: `git gtr config set gtr.provider gitlab`.
 

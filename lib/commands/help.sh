@@ -305,12 +305,15 @@ Options:
   --merged            Also remove worktrees with merged PRs/MRs
   --yes, -y           Skip confirmation prompts
   --dry-run, -n       Show what would be removed without removing
+  --force, -f         Force removal even if worktree has uncommitted changes or untracked files
 
 Examples:
   git gtr clean                                 # Clean empty directories
   git gtr clean --merged                        # Also clean merged PRs
   git gtr clean --merged --dry-run              # Preview merged cleanup
   git gtr clean --merged --yes                  # Auto-confirm everything
+  git gtr clean --merged --force                # Force-clean merged, ignoring local changes
+  git gtr clean --merged --force --yes          # Force-clean and auto-confirm
 EOF
 }
 
@@ -567,6 +570,7 @@ SETUP & MAINTENANCE:
                    Override: git gtr config set gtr.provider gitlab
          --yes, -y: skip confirmation prompts
          --dry-run, -n: show what would be removed without removing
+         --force, -f: force removal even if worktree has uncommitted changes
 
   completion <shell>
          Generate shell completions (bash, zsh, fish)
