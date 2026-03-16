@@ -73,7 +73,7 @@ complete -c git -n '__fish_git_gtr_using_command new' -s a -l ai -d 'Start AI to
 
 # Remove command options
 complete -c git -n '__fish_git_gtr_using_command rm' -l delete-branch -d 'Delete branch'
-complete -c git -n '__fish_git_gtr_using_command rm' -l force -d 'Force removal even if dirty'
+complete -c git -n '__fish_git_gtr_using_command rm' -l force -d 'Force removal even if worktree has uncommitted changes or untracked files'
 complete -c git -n '__fish_git_gtr_using_command rm' -l yes -d 'Non-interactive mode'
 
 # Rename command options

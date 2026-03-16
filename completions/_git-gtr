@@ -134,7 +134,7 @@ _git-gtr() {
       rm)
         _arguments \
           '--delete-branch[Delete branch]' \
-          '--force[Force removal even if dirty]' \
+          '--force[Force removal even if worktree has uncommitted changes or untracked files]' \
           '--yes[Non-interactive mode]'
         ;;
       mv|rename)
