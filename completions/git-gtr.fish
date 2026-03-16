@@ -104,7 +104,6 @@ complete -c git -n '__fish_git_gtr_using_command clean' -s y -d 'Skip confirmati
 complete -c git -n '__fish_git_gtr_using_command clean' -l dry-run -d 'Show what would be removed'
 complete -c git -n '__fish_git_gtr_using_command clean' -s n -d 'Show what would be removed'
 complete -c git -n '__fish_git_gtr_using_command clean' -l force -d 'Force removal even if worktree has uncommitted changes'
-complete -c git -n '__fish_git_gtr_using_command clean' -s f -d 'Force removal even if worktree has uncommitted changes'
 
 # Config command
 complete -f -c git -n '__fish_git_gtr_using_command config' -a 'list get set add unset'

@@ -136,7 +136,7 @@ cmd_clean() {
   _spec="--merged
 --yes|-y
 --dry-run|-n
---force|-f"
+--force"
   parse_args "$_spec" "$@"
 
   local merged_mode="${_arg_merged:-0}"
