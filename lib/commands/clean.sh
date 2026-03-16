@@ -30,33 +30,35 @@ _clean_detect_provider() {
 
 # Check if a worktree should be skipped during merged cleanup.
 # Returns 0 if should skip, 1 if should process.
-# Usage: _clean_should_skip <dir> <branch>
+# Usage: _clean_should_skip <dir> <branch> [force]
 _clean_should_skip() {
-  local dir="$1" branch="$2"
+  local dir="$1" branch="$2" force="${3:-0}"
 
   if [ -z "$branch" ] || [ "$branch" = "(detached)" ]; then
     log_warn "Skipping $dir (detached HEAD)"
     return 0
   fi
 
-  if ! git -C "$dir" diff --quiet 2>/dev/null || \
-     ! git -C "$dir" diff --cached --quiet 2>/dev/null; then
-    log_warn "Skipping $branch (has uncommitted changes)"
-    return 0
-  fi
+  if [ "$force" -eq 0 ]; then
+    if ! git -C "$dir" diff --quiet 2>/dev/null || \
+       ! git -C "$dir" diff --cached --quiet 2>/dev/null; then
+      log_warn "Skipping $branch (has uncommitted changes)"
+      return 0
+    fi
 
-  if [ -n "$(git -C "$dir" ls-files --others --exclude-standard 2>/dev/null)" ]; then
-    log_warn "Skipping $branch (has untracked files)"
-    return 0
+    if [ -n "$(git -C "$dir" ls-files --others --exclude-standard 2>/dev/null)" ]; then
+      log_warn "Skipping $branch (has untracked files)"
+      return 0
+    fi
   fi
 
   return 1
 }
 
 # Remove worktrees whose PRs/MRs are merged (handles squash merges)
-# Usage: _clean_merged repo_root base_dir prefix yes_mode dry_run
+# Usage: _clean_merged repo_root base_dir prefix yes_mode dry_run [force]
 _clean_merged() {
-  local repo_root="$1" base_dir="$2" prefix="$3" yes_mode="$4" dry_run="$5"
+  local repo_root="$1" base_dir="$2" prefix="$3" yes_mode="$4" dry_run="$5" force="${6:-0}"
 
   log_step "Checking for worktrees with merged PRs/MRs..."
 
@@ -80,7 +82,7 @@ _clean_merged() {
     # Skip main repo branch silently (not counted)
     [ "$branch" = "$main_branch" ] && continue
 
-    if _clean_should_skip "$dir" "$branch"; then
+    if _clean_should_skip "$dir" "$branch" "$force"; then
       skipped=$((skipped + 1))
       continue
     fi
@@ -133,12 +135,14 @@ cmd_clean() {
   local _spec
   _spec="--merged
 --yes|-y
---dry-run|-n"
+--dry-run|-n
+--force|-f"
   parse_args "$_spec" "$@"
 
   local merged_mode="${_arg_merged:-0}"
   local yes_mode="${_arg_yes:-0}"
   local dry_run="${_arg_dry_run:-0}"
+  local force="${_arg_force:-0}"
 
   log_step "Cleaning up stale worktrees..."
 
@@ -182,6 +186,6 @@ EOF
 
   # --merged mode: remove worktrees with merged PRs/MRs (handles squash merges)
   if [ "$merged_mode" -eq 1 ]; then
-    _clean_merged "$repo_root" "$base_dir" "$prefix" "$yes_mode" "$dry_run"
+    _clean_merged "$repo_root" "$base_dir" "$prefix" "$yes_mode" "$dry_run" "$force"
   fi
 }
