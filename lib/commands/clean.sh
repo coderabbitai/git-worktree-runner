@@ -33,8 +33,15 @@ _clean_detect_provider() {
 # Usage: _clean_should_skip <dir> <branch> [force] [active_worktree_path]
 _clean_should_skip() {
   local dir="$1" branch="$2" force="${3:-0}" active_worktree_path="${4:-}"
+  local dir_canonical="$dir"
+  local active_worktree_canonical="$active_worktree_path"
 
-  if [ -n "$active_worktree_path" ] && [ "$dir" = "$active_worktree_path" ]; then
+  if [ -n "$active_worktree_path" ]; then
+    dir_canonical=$(canonicalize_path "$dir" || printf "%s" "$dir")
+    active_worktree_canonical=$(canonicalize_path "$active_worktree_path" || printf "%s" "$active_worktree_path")
+  fi
+
+  if [ -n "$active_worktree_path" ] && [ "$dir_canonical" = "$active_worktree_canonical" ]; then
     log_warn "Skipping $branch (current active worktree)"
     return 0
   fi

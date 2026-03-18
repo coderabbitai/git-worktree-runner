@@ -108,6 +108,13 @@ teardown() {
   [ "$status" -eq 0 ]  # 0 = skip (protection maintained)
 }
 
+@test "_clean_should_skip with force=1 skips current active worktree via symlink path" {
+  create_test_worktree "active-force-symlink"
+  ln -s "$TEST_WORKTREES_DIR/active-force-symlink" "$TEST_REPO/active-force-link"
+  run _clean_should_skip "$TEST_REPO/active-force-link" "active-force-symlink" 1 "$TEST_WORKTREES_DIR/active-force-symlink"
+  [ "$status" -eq 0 ]  # 0 = skip (protection maintained)
+}
+
 @test "cmd_clean accepts --force and -f flags without error" {
   run cmd_clean --force
   [ "$status" -eq 0 ]
