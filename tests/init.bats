@@ -14,6 +14,62 @@ teardown() {
   rm -rf "$BATS_TMPDIR/gtr-init-cache-$$"
 }
 
+run_generated_bash_wrapper_completion() {
+  local wrapper_name="$1"
+  local comp_line="$2"
+  local comp_cword="$3"
+  local comp_point="$4"
+  shift 4
+
+  bash -s -- "$PROJECT_ROOT" "$XDG_CACHE_HOME" "$wrapper_name" "$comp_line" "$comp_cword" "$comp_point" "$@" <<'BASH'
+set -euo pipefail
+
+PROJECT_ROOT="$1"
+XDG_CACHE_HOME="$2"
+wrapper_name="$3"
+comp_line="$4"
+comp_cword="$5"
+comp_point="$6"
+shift 6
+words=("$@")
+
+export XDG_CACHE_HOME
+export GTR_VERSION="test"
+
+log_info() { :; }
+log_warn() { :; }
+log_error() { :; }
+show_command_help() { :; }
+
+# shellcheck disable=SC1090
+. "$PROJECT_ROOT/lib/commands/init.sh"
+
+if [ "$wrapper_name" = "gtr" ]; then
+  eval "$(cmd_init bash)"
+else
+  eval "$(cmd_init bash --as "$wrapper_name")"
+fi
+
+_git_gtr() {
+  printf 'WORDS=%s\n' "${COMP_WORDS[*]}"
+  printf 'CWORD=%s\n' "$COMP_CWORD"
+  printf 'LINE=%s\n' "$COMP_LINE"
+  printf 'POINT=%s\n' "$COMP_POINT"
+  COMPREPLY=(--from)
+}
+
+completion_fn="_${wrapper_name}_completion"
+COMP_WORDS=("${words[@]}")
+COMP_CWORD="$comp_cword"
+COMP_LINE="$comp_line"
+COMP_POINT="$comp_point"
+COMPREPLY=()
+"$completion_fn"
+
+printf 'REPLY=%s\n' "${COMPREPLY[*]}"
+BASH
+}
+
 # ── Default function name ────────────────────────────────────────────────────
 
 @test "bash output defines gtr() function by default" {
@@ -209,6 +265,39 @@ teardown() {
   run cmd_init bash
   [ "$status" -eq 0 ]
   [[ "$output" == *'compgen -W "--cd"'* ]]
+}
+
+@test "bash wrapper completion rewrites delegated context for ai targets" {
+  run run_generated_bash_wrapper_completion gtr "gtr ai fe" 2 9 gtr ai fe
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WORDS=git gtr ai fe"* ]]
+  [[ "$output" == *"CWORD=3"* ]]
+  [[ "$output" == *"LINE=git gtr ai fe"* ]]
+  [[ "$output" == *"POINT=13"* ]]
+  [[ "$output" == *"REPLY=--from"* ]]
+}
+
+@test "bash wrapper completion rewrites delegated context for custom wrapper names" {
+  run run_generated_bash_wrapper_completion gwtr "gwtr ai fe" 2 10 gwtr ai fe
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WORDS=git gtr ai fe"* ]]
+  [[ "$output" == *"CWORD=3"* ]]
+  [[ "$output" == *"LINE=git gtr ai fe"* ]]
+  [[ "$output" == *"POINT=13"* ]]
+  [[ "$output" == *"REPLY=--from"* ]]
+}
+
+@test "bash wrapper completion preserves delegated replies and appends --cd for new flags" {
+  run run_generated_bash_wrapper_completion gtr "gtr new --c" 2 11 gtr new --c
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WORDS=git gtr new --c"* ]]
+  [[ "$output" == *"CWORD=3"* ]]
+  [[ "$output" == *"LINE=git gtr new --c"* ]]
+  [[ "$output" == *"POINT=15"* ]]
+  [[ "$output" == *"REPLY=--from --cd"* ]]
 }
 
 @test "zsh wrapper completions include --cd for new" {

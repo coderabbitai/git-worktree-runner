@@ -229,6 +229,16 @@ __FUNC__() {
 }
 
 # Completion for __FUNC__ wrapper
+___FUNC___delegate_completion() {
+  local _gtr_wrapper_prefix="__FUNC__ "
+  local _gtr_delegate_prefix="git gtr "
+  COMP_WORDS=(git gtr "${COMP_WORDS[@]:1}")
+  (( COMP_CWORD += 1 ))
+  COMP_LINE="$_gtr_delegate_prefix${COMP_LINE#$_gtr_wrapper_prefix}"
+  (( COMP_POINT += ${#_gtr_delegate_prefix} - ${#_gtr_wrapper_prefix} ))
+  _git_gtr
+}
+
 ___FUNC___completion() {
   local cur
   cur="${COMP_WORDS[COMP_CWORD]}"
@@ -243,16 +253,12 @@ ___FUNC___completion() {
     COMPREPLY=($(compgen -W "$worktrees" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "new" ] && [[ "$cur" == -* ]]; then
     if type _git_gtr &>/dev/null; then
-      COMP_WORDS=(git gtr "${COMP_WORDS[@]:1}")
-      (( COMP_CWORD += 1 ))
-      _git_gtr
+      ___FUNC___delegate_completion
     fi
     COMPREPLY+=($(compgen -W "--cd" -- "$cur"))
   elif type _git_gtr &>/dev/null; then
     # Delegate to git-gtr completions (adjust words to match expected format)
-    COMP_WORDS=(git gtr "${COMP_WORDS[@]:1}")
-    (( COMP_CWORD += 1 ))
-    _git_gtr
+    ___FUNC___delegate_completion
   fi
 }
 complete -F ___FUNC___completion __FUNC__
