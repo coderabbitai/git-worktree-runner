@@ -176,7 +176,7 @@ MIDDLE1
       ;;
     clean)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--merged --yes -y --dry-run -n" -- "$cur"))
+        COMPREPLY=($(compgen -W "--merged --yes -y --dry-run -n --force -f" -- "$cur"))
       fi
       ;;
     copy)
@@ -342,7 +342,9 @@ _git-gtr() {
       '--yes[Skip confirmation prompts]' \
       '-y[Skip confirmation prompts]' \
       '--dry-run[Show what would be removed]' \
-      '-n[Show what would be removed]'
+      '-n[Show what would be removed]' \
+      '--force[Force removal even if worktree has uncommitted changes or untracked files]' \
+      '-f[Force removal even if worktree has uncommitted changes or untracked files]'
     return
   fi
 
@@ -396,7 +398,7 @@ MIDDLE1
       rm)
         _arguments \
           '--delete-branch[Delete branch]' \
-          '--force[Force removal even if dirty]' \
+          '--force[Force removal even if worktree has uncommitted changes or untracked files]' \
           '--yes[Non-interactive mode]'
         ;;
       mv|rename)
@@ -546,7 +548,7 @@ complete -c git -n '__fish_git_gtr_using_command new' -s a -l ai -d 'Start AI to
 
 # Remove command options
 complete -c git -n '__fish_git_gtr_using_command rm' -l delete-branch -d 'Delete branch'
-complete -c git -n '__fish_git_gtr_using_command rm' -l force -d 'Force removal even if dirty'
+complete -c git -n '__fish_git_gtr_using_command rm' -l force -d 'Force removal even if worktree has uncommitted changes or untracked files'
 complete -c git -n '__fish_git_gtr_using_command rm' -l yes -d 'Non-interactive mode'
 
 # Rename command options
@@ -580,6 +582,7 @@ complete -c git -n '__fish_git_gtr_using_command clean' -l yes -d 'Skip confirma
 complete -c git -n '__fish_git_gtr_using_command clean' -s y -d 'Skip confirmation prompts'
 complete -c git -n '__fish_git_gtr_using_command clean' -l dry-run -d 'Show what would be removed'
 complete -c git -n '__fish_git_gtr_using_command clean' -s n -d 'Show what would be removed'
+complete -c git -n '__fish_git_gtr_using_command clean' -s f -l force -d 'Force removal even if worktree has uncommitted changes or untracked files'
 
 # Config command
 complete -f -c git -n '__fish_git_gtr_using_command config' -a 'list get set add unset'
