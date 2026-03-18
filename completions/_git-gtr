@@ -84,7 +84,8 @@ _git-gtr() {
       '-y[Skip confirmation prompts]' \
       '--dry-run[Show what would be removed]' \
       '-n[Show what would be removed]' \
-      '--force[Force removal even if worktree has uncommitted changes]'
+      '--force[Force removal even if worktree has uncommitted changes or untracked files]' \
+      '-f[Force removal even if worktree has uncommitted changes or untracked files]'
     return
   fi
 
