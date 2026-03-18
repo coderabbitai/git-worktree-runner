@@ -170,7 +170,7 @@ cmd_clean() {
 
   active_worktree_path=$(git rev-parse --show-toplevel 2>/dev/null || true)
   if [ -n "$active_worktree_path" ]; then
-    active_worktree_path=$(canonicalize_path "$active_worktree_path" || true)
+    active_worktree_path=$(canonicalize_path "$active_worktree_path" || printf "%s" "$active_worktree_path")
   fi
 
   if [ ! -d "$base_dir" ]; then
