@@ -41,6 +41,27 @@ EOF
   _hooks_are_trusted "$TEST_REPO/.gtrconfig"
 }
 
+@test "repo-specific trust markers differ for the same hook content" {
+  local second_repo="$BATS_TMPDIR/second-repo"
+  mkdir -p "$second_repo"
+
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = ./scripts/bootstrap
+EOF
+
+  cat > "$second_repo/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = ./scripts/bootstrap
+EOF
+
+  local first_path second_path
+  first_path="$(_hooks_trust_path "$TEST_REPO/.gtrconfig")"
+  second_path="$(_hooks_trust_path "$second_repo/.gtrconfig")"
+
+  [ "$first_path" != "$second_path" ]
+}
+
 @test "run_hooks executes single hook" {
   git config --add gtr.hook.postCreate 'touch "$REPO_ROOT/hook-ran"'
   run_hooks postCreate REPO_ROOT="$TEST_REPO"

@@ -141,6 +141,11 @@ EOF
   [ "$GTR_AI_CMD_NAME" = "bunx" ]
 }
 
+@test "_load_adapter rejects filesystem path commands in generic fallback" {
+  run _load_adapter "editor" "./bin/gtr" "Editor" "$(_list_registry_names "$_EDITOR_REGISTRY")" "code, vim"
+  [ "$status" -eq 1 ]
+}
+
 @test "_run_configured_command preserves quoted arguments" {
   run _run_configured_command "printf '%s\n' 'hello world'"
   [ "$status" -eq 0 ]

@@ -26,6 +26,12 @@ cmd_trust() {
     return 0
   fi
 
+  local trust_path
+  trust_path=$(_hooks_trust_path_for_content "$config_file" "$hook_content") || {
+    log_error "Failed to compute trust marker for $config_file"
+    return 1
+  }
+
   log_warn "The following hooks are defined in $config_file:"
   echo "" >&2
   printf '%s\n' "$hook_content" >&2
@@ -33,7 +39,13 @@ cmd_trust() {
   log_warn "These commands will execute on your machine during gtr operations."
 
   if prompt_yes_no "Trust these hooks?"; then
-    if _hooks_mark_trusted "$config_file"; then
+    if _hooks_write_trust_marker "$trust_path" "$config_file"; then
+      local current_trust_path
+      current_trust_path=$(_hooks_trust_path "$config_file") || true
+      if [ -n "$current_trust_path" ] && [ "$current_trust_path" != "$trust_path" ]; then
+        log_warn "Hooks changed during review; current hooks remain untrusted"
+        return 1
+      fi
       log_info "Hooks marked as trusted"
     else
       log_error "Failed to mark hooks as trusted"

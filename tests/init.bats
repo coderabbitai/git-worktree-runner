@@ -198,6 +198,13 @@ BASH
   [[ "$output" == *'printf '\''%s/.gtrconfig\n'\'''* ]]
 }
 
+@test "generated wrappers scope trust markers by repo root" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_trust_key"* ]]
+  [[ "$output" == *'dirname "$_gtr_config_file"'* ]]
+}
+
 @test "zsh output includes cd completion" {
   run cmd_init zsh
   [ "$status" -eq 0 ]
@@ -214,6 +221,12 @@ BASH
   run cmd_init fish
   [ "$status" -eq 0 ]
   [[ "$output" == *"-a cd -d"* ]]
+}
+
+@test "fish output includes trust subcommand completion" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"-a trust -d"* ]]
 }
 
 @test "fish output uses git gtr list --porcelain for cd completion" {

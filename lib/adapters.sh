@@ -341,6 +341,14 @@ _load_adapter() {
   # Extract first word (command name) from potentially multi-word string
   local cmd_name="${name%% *}"
 
+  case "$cmd_name" in
+    */* | *\\*)
+      log_error "$label '$name' must use a PATH command name, not a filesystem path"
+      log_info "Use a simple command name, optionally with flags (e.g., 'code --wait')"
+      return 1
+      ;;
+  esac
+
   if ! command -v "$cmd_name" >/dev/null 2>&1; then
     log_error "$label '$name' not found"
     log_info "Built-in adapters: $builtin_list"

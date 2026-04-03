@@ -6,10 +6,18 @@
 # user approval before execution. This prevents malicious contributors from
 # injecting arbitrary commands via shared config files.
 #
-# Trust state is stored per-repo in ~/.config/gtr/trusted/<hash>
-# where <hash> is the SHA-256 of the .gtrconfig hooks content.
+# Trust state is stored in ~/.config/gtr/trusted/<key>
+# where <key> is a SHA-256 of the canonical repo root plus the hook content hash.
 
 _GTR_TRUST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"
+
+# Compute a content hash for hook definitions
+# Usage: _hooks_content_hash <hook_content>
+_hooks_content_hash() {
+  local hook_content="$1"
+  [ -n "$hook_content" ] || return 1
+  printf '%s\n' "$hook_content" | shasum -a 256 | cut -d' ' -f1
+}
 
 # Compute a content hash of all hook entries in a .gtrconfig file
 # Usage: _hooks_file_hash <config_file>
@@ -17,19 +25,57 @@ _hooks_file_hash() {
   local config_file="$1"
   local hook_content
   hook_content=$(git config -f "$config_file" --get-regexp '^hooks\.' 2>/dev/null) || true
-  if [ -z "$hook_content" ]; then
-    return 1
-  fi
-  printf '%s\n' "$hook_content" | shasum -a 256 | cut -d' ' -f1
+  _hooks_content_hash "$hook_content"
+}
+
+# Resolve the canonical repository root for a .gtrconfig file
+# Usage: _hooks_repo_root <config_file>
+_hooks_repo_root() {
+  local config_file="$1"
+  (
+    cd "$(dirname "$config_file")" 2>/dev/null &&
+    pwd -P
+  )
+}
+
+# Compute the repo-scoped trust key for a .gtrconfig file
+# Usage: _hooks_trust_key <config_file>
+_hooks_trust_key() {
+  local config_file="$1"
+  local hash repo_root
+  hash=$(_hooks_file_hash "$config_file") || return 1
+  repo_root=$(_hooks_repo_root "$config_file") || return 1
+  printf '%s\n%s\n' "$repo_root" "$hash" | shasum -a 256 | cut -d' ' -f1
+}
+
+# Compute the repo-scoped trust key for reviewed hook content
+# Usage: _hooks_trust_key_for_content <config_file> <hook_content>
+_hooks_trust_key_for_content() {
+  local config_file="$1"
+  local hook_content="$2"
+  local hash repo_root
+  hash=$(_hooks_content_hash "$hook_content") || return 1
+  repo_root=$(_hooks_repo_root "$config_file") || return 1
+  printf '%s\n%s\n' "$repo_root" "$hash" | shasum -a 256 | cut -d' ' -f1
 }
 
 # Resolve the trust marker path for a .gtrconfig file
 # Usage: _hooks_trust_path <config_file>
 _hooks_trust_path() {
   local config_file="$1"
-  local hash
-  hash=$(_hooks_file_hash "$config_file") || return 1
-  printf '%s/%s\n' "$_GTR_TRUST_DIR" "$hash"
+  local trust_key
+  trust_key=$(_hooks_trust_key "$config_file") || return 1
+  printf '%s/%s\n' "$_GTR_TRUST_DIR" "$trust_key"
+}
+
+# Resolve the trust marker path for reviewed hook content
+# Usage: _hooks_trust_path_for_content <config_file> <hook_content>
+_hooks_trust_path_for_content() {
+  local config_file="$1"
+  local hook_content="$2"
+  local trust_key
+  trust_key=$(_hooks_trust_key_for_content "$config_file" "$hook_content") || return 1
+  printf '%s/%s\n' "$_GTR_TRUST_DIR" "$trust_key"
 }
 
 # Check if .gtrconfig hooks are trusted for the current repository
@@ -45,6 +91,16 @@ _hooks_are_trusted() {
   [ -f "$trust_path" ]
 }
 
+# Write a trust marker that matches the reviewed hooks
+# Usage: _hooks_write_trust_marker <trust_path> [config_file]
+_hooks_write_trust_marker() {
+  local trust_path="$1"
+  local config_file="${2:-}"
+
+  mkdir -p "$_GTR_TRUST_DIR" || return 1
+  printf '%s\n' "$config_file" > "$trust_path"
+}
+
 # Mark .gtrconfig hooks as trusted
 # Usage: _hooks_mark_trusted <config_file>
 _hooks_mark_trusted() {
@@ -52,8 +108,7 @@ _hooks_mark_trusted() {
   local trust_path
   trust_path=$(_hooks_trust_path "$config_file") || return 0
 
-  mkdir -p "$_GTR_TRUST_DIR"
-  printf '%s\n' "$config_file" > "$trust_path"
+  _hooks_write_trust_marker "$trust_path" "$config_file"
 }
 
 # Get hooks, filtering out untrusted .gtrconfig hooks with a warning
