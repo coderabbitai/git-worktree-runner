@@ -179,10 +179,23 @@ BASH
   [[ "$output" == *'"cd new go run'* ]]
 }
 
+@test "bash output includes trust in subcommand completions" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'init trust help version'* ]]
+}
+
 @test "bash output uses git gtr list --porcelain for cd completion" {
   run cmd_init bash
   [ "$status" -eq 0 ]
   [[ "$output" == *"git gtr list --porcelain"* ]]
+}
+
+@test "generated wrappers resolve .gtrconfig from the git common dir" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"git rev-parse --git-common-dir"* ]]
+  [[ "$output" == *'printf '\''%s/.gtrconfig\n'\'''* ]]
 }
 
 @test "zsh output includes cd completion" {
@@ -697,6 +710,19 @@ BASH
   [ "$status" -eq 0 ]
   stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.zsh")"
   [[ "$stamp" == *"version=2.0.0"* ]]
+}
+
+@test "cache invalidates when shell integration schema changes" {
+  GTR_INIT_CACHE_VERSION="1" run cmd_init bash
+  [ "$status" -eq 0 ]
+  local stamp
+  stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.bash")"
+  [[ "$stamp" == *"init=1"* ]]
+
+  GTR_INIT_CACHE_VERSION="2" run cmd_init bash
+  [ "$status" -eq 0 ]
+  stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.bash")"
+  [[ "$stamp" == *"init=2"* ]]
 }
 
 @test "cache uses --as func name in cache key" {

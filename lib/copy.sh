@@ -282,10 +282,17 @@ _apply_directory_excludes() {
         local pattern_prefix="${exclude_pattern%%/*}"
         local pattern_suffix="${exclude_pattern#*/}"
 
-        # Reject bare glob-only suffixes that would match everything
+        # Reject empty suffixes and protect Git metadata from removal
         case "$pattern_suffix" in
-          ""|"*"|"**"|".*")
+          "")
             log_warn "Skipping overly broad exclude suffix: $exclude_pattern"
+            continue
+            ;;
+        esac
+
+        case "$exclude_pattern" in
+          .git|*/.git|.git/*|*/.git/*)
+            log_warn "Skipping exclude pattern targeting .git metadata: $exclude_pattern"
             continue
             ;;
         esac

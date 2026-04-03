@@ -33,8 +33,12 @@ cmd_trust() {
   log_warn "These commands will execute on your machine during gtr operations."
 
   if prompt_yes_no "Trust these hooks?"; then
-    _hooks_mark_trusted "$config_file"
-    log_info "Hooks marked as trusted"
+    if _hooks_mark_trusted "$config_file"; then
+      log_info "Hooks marked as trusted"
+    else
+      log_error "Failed to mark hooks as trusted"
+      return 1
+    fi
   else
     log_info "Hooks remain untrusted and will not execute"
   fi

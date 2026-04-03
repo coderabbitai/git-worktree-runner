@@ -6,7 +6,14 @@ setup() {
   # Adapters source needs stubs for additional functions it may reference
   resolve_workspace_file() { :; }
   export -f resolve_workspace_file
+  GTR_DIR="$PROJECT_ROOT"
   source "$PROJECT_ROOT/lib/adapters.sh"
+}
+
+teardown() {
+  if [ -n "${mock_bin_dir:-}" ]; then
+    rm -rf "$mock_bin_dir"
+  fi
 }
 
 # ── _registry_lookup ─────────────────────────────────────────────────────────
@@ -118,4 +125,24 @@ setup() {
   [ "$_AI_CMD" = "codex" ]
   # codex has semicolon-separated info lines (e.g., "Or: brew install codex;See https://...")
   [ "${#_AI_INFO_LINES[@]}" -ge 2 ]
+}
+
+@test "_load_adapter allows generic commands with slash-bearing arguments" {
+  mock_bin_dir="$(mktemp -d)"
+  cat > "$mock_bin_dir/bunx" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$mock_bin_dir/bunx"
+  PATH="$mock_bin_dir:$PATH"
+
+  _load_adapter "ai" "bunx @github/copilot@latest" "AI tool" "$(_list_registry_names "$_AI_REGISTRY")" "bunx, gpt"
+  [ "$GTR_AI_CMD" = "bunx @github/copilot@latest" ]
+  [ "$GTR_AI_CMD_NAME" = "bunx" ]
+}
+
+@test "_run_configured_command preserves quoted arguments" {
+  run _run_configured_command "printf '%s\n' 'hello world'"
+  [ "$status" -eq 0 ]
+  [ "$output" = "hello world" ]
 }

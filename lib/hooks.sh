@@ -20,7 +20,16 @@ _hooks_file_hash() {
   if [ -z "$hook_content" ]; then
     return 1
   fi
-  printf '%s' "$hook_content" | shasum -a 256 | cut -d' ' -f1
+  printf '%s\n' "$hook_content" | shasum -a 256 | cut -d' ' -f1
+}
+
+# Resolve the trust marker path for a .gtrconfig file
+# Usage: _hooks_trust_path <config_file>
+_hooks_trust_path() {
+  local config_file="$1"
+  local hash
+  hash=$(_hooks_file_hash "$config_file") || return 1
+  printf '%s/%s\n' "$_GTR_TRUST_DIR" "$hash"
 }
 
 # Check if .gtrconfig hooks are trusted for the current repository
@@ -30,21 +39,21 @@ _hooks_are_trusted() {
   local config_file="$1"
   [ ! -f "$config_file" ] && return 0
 
-  local hash
-  hash=$(_hooks_file_hash "$config_file") || return 0  # no hooks = trusted
+  local trust_path
+  trust_path=$(_hooks_trust_path "$config_file") || return 0  # no hooks = trusted
 
-  [ -f "$_GTR_TRUST_DIR/$hash" ]
+  [ -f "$trust_path" ]
 }
 
 # Mark .gtrconfig hooks as trusted
 # Usage: _hooks_mark_trusted <config_file>
 _hooks_mark_trusted() {
   local config_file="$1"
-  local hash
-  hash=$(_hooks_file_hash "$config_file") || return 0
+  local trust_path
+  trust_path=$(_hooks_trust_path "$config_file") || return 0
 
   mkdir -p "$_GTR_TRUST_DIR"
-  printf '%s\n' "$config_file" > "$_GTR_TRUST_DIR/$hash"
+  printf '%s\n' "$config_file" > "$trust_path"
 }
 
 # Get hooks, filtering out untrusted .gtrconfig hooks with a warning

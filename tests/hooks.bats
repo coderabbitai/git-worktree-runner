@@ -5,16 +5,40 @@ load test_helper
 
 setup() {
   setup_integration_repo
+  export XDG_CONFIG_HOME="$BATS_TMPDIR/gtr-hooks-config-$$"
   source_gtr_libs
 }
 
 teardown() {
+  rm -rf "$XDG_CONFIG_HOME"
   teardown_integration_repo
 }
 
 @test "run_hooks returns 0 when no hooks configured" {
   run run_hooks postCreate REPO_ROOT="$TEST_REPO"
   [ "$status" -eq 0 ]
+}
+
+@test "_hooks_file_hash matches the init wrapper trust hash" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  local expected
+  expected="$(git config -f "$TEST_REPO/.gtrconfig" --get-regexp '^hooks\.' 2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
+
+  [ "$(_hooks_file_hash "$TEST_REPO/.gtrconfig")" = "$expected" ]
+}
+
+@test "_hooks_mark_trusted creates a marker recognized by _hooks_are_trusted" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  _hooks_are_trusted "$TEST_REPO/.gtrconfig"
 }
 
 @test "run_hooks executes single hook" {

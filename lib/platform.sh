@@ -126,32 +126,52 @@ spawn_terminal_in() {
       fi
       ;;
     linux)
-      # Escape cmd and path for safe embedding in sh -c strings
-      local safe_sh_cmd safe_sh_path
-      safe_sh_cmd=$(printf '%q' "$cmd")
-      safe_sh_path=$(printf '%q' "$path")
+      local shell_after="${SHELL:-/bin/sh}"
+      # shellcheck disable=SC2016 # The script is intentionally evaluated by sh in the new terminal.
+      local terminal_script='cd "$1" || exit 1
+shift
+if [ "$#" -gt 0 ]; then
+  "$@"
+fi
+exec "$SHELL_AFTER"'
       # Try common terminal emulators
       if command -v gnome-terminal >/dev/null 2>&1; then
-        gnome-terminal --working-directory="$path" --title="$title" -- sh -c "$safe_sh_cmd; exec \$SHELL" 2>/dev/null || true
+        if [ -n "$cmd" ]; then
+          gnome-terminal --working-directory="$path" --title="$title" -- env SHELL_AFTER="$shell_after" sh -c "$terminal_script" sh "$path" bash -lc "$cmd" 2>/dev/null || true
+        else
+          gnome-terminal --working-directory="$path" --title="$title" -- env SHELL_AFTER="$shell_after" sh -c "$terminal_script" sh "$path" 2>/dev/null || true
+        fi
       elif command -v konsole >/dev/null 2>&1; then
-        konsole --workdir "$path" -p "tabtitle=$title" -e sh -c "$safe_sh_cmd; exec \$SHELL" 2>/dev/null || true
+        if [ -n "$cmd" ]; then
+          konsole --workdir "$path" -p "tabtitle=$title" -e env SHELL_AFTER="$shell_after" sh -c "$terminal_script" sh "$path" bash -lc "$cmd" 2>/dev/null || true
+        else
+          konsole --workdir "$path" -p "tabtitle=$title" -e env SHELL_AFTER="$shell_after" sh -c "$terminal_script" sh "$path" 2>/dev/null || true
+        fi
       elif command -v xterm >/dev/null 2>&1; then
-        xterm -T "$title" -e "cd $safe_sh_path && $safe_sh_cmd && exec \$SHELL" 2>/dev/null || true
+        if [ -n "$cmd" ]; then
+          xterm -T "$title" -e env SHELL_AFTER="$shell_after" sh -c "$terminal_script" sh "$path" bash -lc "$cmd" 2>/dev/null || true
+        else
+          xterm -T "$title" -e env SHELL_AFTER="$shell_after" sh -c "$terminal_script" sh "$path" 2>/dev/null || true
+        fi
       else
         log_warn "No supported terminal emulator found"
         return 1
       fi
       ;;
     windows)
-      # Escape for safe embedding in cmd.exe strings
-      local safe_win_cmd safe_win_path
-      safe_win_cmd=$(printf '%q' "$cmd")
-      safe_win_path=$(printf '%q' "$path")
       # Try Windows Terminal, then fallback to cmd
       if command -v wt >/dev/null 2>&1; then
-        wt -d "$path" "$cmd" 2>/dev/null || true
+        if [ -n "$cmd" ]; then
+          wt -d "$path" cmd.exe /k "$cmd" 2>/dev/null || true
+        else
+          wt -d "$path" 2>/dev/null || true
+        fi
       else
-        cmd.exe /c start "$title" cmd.exe /k "cd /d $safe_win_path && $safe_win_cmd" 2>/dev/null || true
+        if [ -n "$cmd" ]; then
+          cmd.exe /c start "$title" cmd.exe /k "cd /d \"$path\" && $cmd" 2>/dev/null || true
+        else
+          cmd.exe /c start "$title" cmd.exe /k "cd /d \"$path\"" 2>/dev/null || true
+        fi
       fi
       ;;
     *)

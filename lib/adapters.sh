@@ -166,10 +166,7 @@ editor_open() {
     target="$workspace"
   fi
 
-  # Split multi-word commands (e.g., "code --wait") into an array for safe execution
-  local _cmd_arr
-  read -ra _cmd_arr <<< "$GTR_EDITOR_CMD"
-  "${_cmd_arr[@]}" "$target"
+  _run_configured_command "$GTR_EDITOR_CMD" "$target"
 }
 
 # Globals set by load_ai_adapter: GTR_AI_CMD, GTR_AI_CMD_NAME
@@ -180,10 +177,20 @@ ai_can_start() {
 ai_start() {
   local path="$1"
   shift
-  # Split multi-word commands (e.g., "bunx @github/copilot@latest") into an array for safe execution
-  local _cmd_arr
-  read -ra _cmd_arr <<< "$GTR_AI_CMD"
-  (cd "$path" && "${_cmd_arr[@]}" "$@")
+  (cd "$path" && _run_configured_command "$GTR_AI_CMD" "$@")
+}
+
+# Parse and run a config-supplied command string while preserving quoted args.
+_run_configured_command() {
+  local command_string="$1"
+  shift
+  local extra_args=("$@")
+
+  (
+    eval "set -- $command_string" || exit 1
+    [ "$#" -gt 0 ] || exit 1
+    "$@" "${extra_args[@]}"
+  )
 }
 
 # Standard AI adapter builder — used by adapter files that follow the common pattern
@@ -297,23 +304,21 @@ resolve_workspace_file() {
 # Usage: _load_adapter <type> <name> <label> <builtin_list> <path_hint>
 _load_adapter() {
   local type="$1" name="$2" label="$3" builtin_list="$4" path_hint="$5"
+  local adapter_selector="${name%% *}"
 
-  # Reject adapter names containing path traversal characters
-  case "$name" in
-    */* | *..* | *\\*)
-      log_error "$label name '$name' contains invalid characters"
-      return 1
-      ;;
-  esac
-
-  local adapter_file="$GTR_DIR/adapters/${type}/${name}.sh"
+  local adapter_file="$GTR_DIR/adapters/${type}/${adapter_selector}.sh"
 
   # 1. Try loading explicit adapter file (custom overrides like claude, nano)
-  if [ -f "$adapter_file" ]; then
-    # shellcheck disable=SC1090
-    . "$adapter_file"
-    return 0
-  fi
+  case "$adapter_selector" in
+    */* | *..* | *\\*) ;;
+    *)
+      if [ -f "$adapter_file" ]; then
+        # shellcheck disable=SC1090
+        . "$adapter_file"
+        return 0
+      fi
+      ;;
+  esac
 
   # 2. Try registry lookup (declarative adapters)
   local registry entry
