@@ -179,10 +179,38 @@ BASH
   [[ "$output" == *'"cd new go run'* ]]
 }
 
+@test "bash output includes trust in subcommand completions" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'init trust help version'* ]]
+}
+
 @test "bash output uses git gtr list --porcelain for cd completion" {
   run cmd_init bash
   [ "$status" -eq 0 ]
   [[ "$output" == *"git gtr list --porcelain"* ]]
+}
+
+@test "generated wrappers resolve .gtrconfig from the git common dir" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"git rev-parse --git-common-dir"* ]]
+  [[ "$output" == *'printf '\''%s/.gtrconfig\n'\'''* ]]
+}
+
+@test "generated wrappers scope trust markers by repo root" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_current_trust_key"* ]]
+  [[ "$output" == *"hooks_repo_root"* ]]
+}
+
+@test "generated wrappers validate trust marker contents" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_marker_matches_config"* ]]
+  [[ "$output" == *"hooks_are_trusted"* ]]
+  [[ "$output" == *'cat "$_gtr_trust_path"'* ]]
 }
 
 @test "zsh output includes cd completion" {
@@ -197,16 +225,38 @@ BASH
   [[ "$output" == *"git gtr list --porcelain"* ]]
 }
 
+@test "zsh output validates trust marker contents" {
+  run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_canonical_config_path"* ]]
+  [[ "$output" == *"hooks_marker_matches_config"* ]]
+  [[ "$output" == *'cat "$_gtr_trust_path"'* ]]
+}
+
 @test "fish output includes cd subcommand completion" {
   run cmd_init fish
   [ "$status" -eq 0 ]
   [[ "$output" == *"-a cd -d"* ]]
 }
 
+@test "fish output includes trust subcommand completion" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"-a trust -d"* ]]
+}
+
 @test "fish output uses git gtr list --porcelain for cd completion" {
   run cmd_init fish
   [ "$status" -eq 0 ]
   [[ "$output" == *"git gtr list --porcelain"* ]]
+}
+
+@test "fish output validates trust marker contents" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_canonical_config_path"* ]]
+  [[ "$output" == *"hooks_marker_matches_config"* ]]
+  [[ "$output" == *'cat "$_gtr_trust_path"'* ]]
 }
 
 # ── new --cd wrapper support ────────────────────────────────────────────────
@@ -697,6 +747,19 @@ BASH
   [ "$status" -eq 0 ]
   stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.zsh")"
   [[ "$stamp" == *"version=2.0.0"* ]]
+}
+
+@test "cache invalidates when shell integration schema changes" {
+  GTR_INIT_CACHE_VERSION="1" run cmd_init bash
+  [ "$status" -eq 0 ]
+  local stamp
+  stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.bash")"
+  [[ "$stamp" == *"init=1"* ]]
+
+  GTR_INIT_CACHE_VERSION="2" run cmd_init bash
+  [ "$status" -eq 0 ]
+  stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.bash")"
+  [[ "$stamp" == *"init=2"* ]]
 }
 
 @test "cache uses --as func name in cache key" {

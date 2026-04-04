@@ -408,9 +408,9 @@ cfg_default() {
     value=$(git config --get "$key" 2>/dev/null || true)
   fi
 
-  # 4. Fall back to environment variable (POSIX-compliant indirect reference)
+  # 4. Fall back to environment variable
   if [ -z "$value" ] && [ -n "$env_name" ]; then
-    eval "value=\${${env_name}:-}"
+    value=$(printenv "$env_name" 2>/dev/null) || true
   fi
 
   # 5. Use fallback if still empty

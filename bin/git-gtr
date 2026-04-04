@@ -100,6 +100,9 @@ main() {
     init)
       cmd_init "$@"
       ;;
+    trust)
+      cmd_trust "$@"
+      ;;
     version|--version|-v)
       echo "git gtr version $GTR_VERSION"
       ;;

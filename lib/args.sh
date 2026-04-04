@@ -39,15 +39,13 @@ _pa_match_flag() {
 
     # Check if $flag matches any alternative in the pattern
     local alt matched=0
-    local IFS_save="$IFS"
-    IFS="|"
+    local IFS="|"
     for alt in $line; do
       if [ "$flag" = "$alt" ]; then
         matched=1
         break
       fi
     done
-    IFS="$IFS_save"
 
     if [ "$matched" = "1" ]; then
       # Derive variable name from the first (canonical) pattern

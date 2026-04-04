@@ -45,6 +45,7 @@ _git-gtr() {
     'config:Manage configuration'
     'completion:Generate shell completions'
     'init:Generate shell integration for cd support'
+    'trust:Trust .gtrconfig hooks'
     'version:Show version'
     'help:Show help'
   )

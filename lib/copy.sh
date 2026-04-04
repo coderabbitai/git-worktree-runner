@@ -282,6 +282,21 @@ _apply_directory_excludes() {
         local pattern_prefix="${exclude_pattern%%/*}"
         local pattern_suffix="${exclude_pattern#*/}"
 
+        # Reject empty suffixes and protect Git metadata from removal
+        case "$pattern_suffix" in
+          "")
+            log_warn "Skipping overly broad exclude suffix: $exclude_pattern"
+            continue
+            ;;
+        esac
+
+        case "$exclude_pattern" in
+          .git|*/.git|.git/*|*/.git/*)
+            log_warn "Skipping exclude pattern targeting .git metadata: $exclude_pattern"
+            continue
+            ;;
+        esac
+
         # Intentional glob pattern matching for directory prefix
         # shellcheck disable=SC2254
         case "$dir_path" in
@@ -295,8 +310,13 @@ _apply_directory_excludes() {
             shopt -s dotglob 2>/dev/null || true
 
             local removed_any=0
+            # shellcheck disable=SC2086
             for matched_path in $pattern_suffix; do
               if [ -e "$matched_path" ]; then
+                # Never remove .git directory via exclude patterns
+                case "$matched_path" in
+                  .git|.git/*) continue ;;
+                esac
                 if rm -rf "$matched_path" 2>/dev/null; then
                   removed_any=1
                 fi
