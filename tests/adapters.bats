@@ -146,8 +146,44 @@ EOF
   [ "$status" -eq 1 ]
 }
 
+@test "_load_adapter rejects shell wrapper commands in generic fallback" {
+  run _load_adapter "ai" 'sh -c "printf injected"' "AI tool" "$(_list_registry_names "$_AI_REGISTRY")" "bunx, gpt"
+  [ "$status" -eq 1 ]
+}
+
 @test "_run_configured_command preserves quoted arguments" {
   run _run_configured_command "printf '%s\n' 'hello world'"
   [ "$status" -eq 0 ]
   [ "$output" = "hello world" ]
+}
+
+@test "override AI adapters preserve configured flags" {
+  export HOME="$BATS_TMPDIR/home"
+  mkdir -p "$HOME/.claude/local" "$BATS_TMPDIR/worktree"
+  cat > "$HOME/.claude/local/claude" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" > "$BATS_TMPDIR/claude-args"
+EOF
+  chmod +x "$HOME/.claude/local/claude"
+
+  load_ai_adapter "claude --continue"
+  ai_start "$BATS_TMPDIR/worktree" --resume
+
+  [ "$(cat "$BATS_TMPDIR/claude-args")" = "--continue --resume" ]
+}
+
+@test "override editor adapters preserve configured flags" {
+  mock_bin_dir="$(mktemp -d)"
+  mkdir -p "$BATS_TMPDIR/project"
+  cat > "$mock_bin_dir/nano" <<'EOF'
+#!/usr/bin/env bash
+printf '%s|%s\n' "$(pwd)" "$*" > "$BATS_TMPDIR/nano-call"
+EOF
+  chmod +x "$mock_bin_dir/nano"
+  PATH="$mock_bin_dir:$PATH"
+
+  load_editor_adapter "nano -w"
+  editor_open "$BATS_TMPDIR/project"
+
+  [ "$(cat "$BATS_TMPDIR/nano-call")" = "$BATS_TMPDIR/project|-w" ]
 }

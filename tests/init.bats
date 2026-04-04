@@ -205,6 +205,13 @@ BASH
   [[ "$output" == *'dirname "$_gtr_config_file"'* ]]
 }
 
+@test "generated wrappers validate trust marker contents" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_trusted"* ]]
+  [[ "$output" == *'cat "$_gtr_trust_dir/$_gtr_trust_key"'* ]]
+}
+
 @test "zsh output includes cd completion" {
   run cmd_init zsh
   [ "$status" -eq 0 ]

@@ -41,6 +41,21 @@ EOF
   _hooks_are_trusted "$TEST_REPO/.gtrconfig"
 }
 
+@test "_hooks_are_trusted rejects empty trust marker files" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  local trust_path
+  trust_path="$(_hooks_trust_path "$TEST_REPO/.gtrconfig")"
+  mkdir -p "$(dirname "$trust_path")"
+  : > "$trust_path"
+
+  run _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+  [ "$status" -eq 1 ]
+}
+
 @test "repo-specific trust markers differ for the same hook content" {
   local second_repo="$BATS_TMPDIR/second-repo"
   mkdir -p "$second_repo"

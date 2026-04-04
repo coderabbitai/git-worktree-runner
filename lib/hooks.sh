@@ -38,6 +38,15 @@ _hooks_repo_root() {
   )
 }
 
+# Resolve the canonical path for a .gtrconfig file
+# Usage: _hooks_canonical_config_path <config_file>
+_hooks_canonical_config_path() {
+  local config_file="$1"
+  local repo_root
+  repo_root=$(_hooks_repo_root "$config_file") || return 1
+  printf '%s/%s\n' "$repo_root" "$(basename "$config_file")"
+}
+
 # Compute the repo-scoped trust key for a .gtrconfig file
 # Usage: _hooks_trust_key <config_file>
 _hooks_trust_key() {
@@ -88,7 +97,12 @@ _hooks_are_trusted() {
   local trust_path
   trust_path=$(_hooks_trust_path "$config_file") || return 0  # no hooks = trusted
 
-  [ -f "$trust_path" ]
+  [ -f "$trust_path" ] || return 1
+
+  local marker_content canonical_config_file
+  marker_content="$(cat "$trust_path" 2>/dev/null)" || return 1
+  canonical_config_file=$(_hooks_canonical_config_path "$config_file") || return 1
+  [ "$marker_content" = "$canonical_config_file" ]
 }
 
 # Write a trust marker that matches the reviewed hooks
@@ -96,9 +110,22 @@ _hooks_are_trusted() {
 _hooks_write_trust_marker() {
   local trust_path="$1"
   local config_file="${2:-}"
+  local temp_path=""
+  local canonical_config_file=""
 
   mkdir -p "$_GTR_TRUST_DIR" || return 1
-  printf '%s\n' "$config_file" > "$trust_path"
+  temp_path="$(mktemp "$_GTR_TRUST_DIR/.trust.XXXXXX")" || return 1
+  canonical_config_file=$(_hooks_canonical_config_path "$config_file") || return 1
+
+  if ! printf '%s\n' "$canonical_config_file" > "$temp_path"; then
+    rm -f "$temp_path"
+    return 1
+  fi
+
+  if ! mv -f "$temp_path" "$trust_path"; then
+    rm -f "$temp_path"
+    return 1
+  fi
 }
 
 # Mark .gtrconfig hooks as trusted

@@ -180,17 +180,161 @@ ai_start() {
   (cd "$path" && _run_configured_command "$GTR_AI_CMD" "$@")
 }
 
+# Split a config-supplied command string without shell evaluation.
+# Populates the global _GTR_PARSED_CMD_ARGS array.
+_parse_configured_command() {
+  local command_string="$1"
+  local length="${#command_string}"
+  local i=0 char="" token="" state="normal" escaped=0 token_started=0
+
+  _GTR_PARSED_CMD_ARGS=()
+
+  while [ "$i" -lt "$length" ]; do
+    char="${command_string:$i:1}"
+
+    case "$state" in
+      normal)
+        if [ "$escaped" -eq 1 ]; then
+          token="${token}${char}"
+          token_started=1
+          escaped=0
+        else
+          case "$char" in
+            "\\")
+              escaped=1
+              token_started=1
+              ;;
+            " " | $'\t' | $'\n')
+              if [ "$token_started" -eq 1 ]; then
+                _GTR_PARSED_CMD_ARGS+=("$token")
+                token=""
+                token_started=0
+              fi
+              ;;
+            "'")
+              state="single"
+              token_started=1
+              ;;
+            '"')
+              state="double"
+              token_started=1
+              ;;
+            *)
+              token="${token}${char}"
+              token_started=1
+              ;;
+          esac
+        fi
+        ;;
+      single)
+        if [ "$char" = "'" ]; then
+          state="normal"
+        else
+          token="${token}${char}"
+        fi
+        ;;
+      double)
+        if [ "$escaped" -eq 1 ]; then
+          token="${token}${char}"
+          token_started=1
+          escaped=0
+        else
+          case "$char" in
+            "\\")
+              escaped=1
+              token_started=1
+              ;;
+            '"')
+              state="normal"
+              ;;
+            *)
+              token="${token}${char}"
+              token_started=1
+              ;;
+          esac
+        fi
+        ;;
+    esac
+
+    i=$((i + 1))
+  done
+
+  [ "$escaped" -eq 0 ] || return 1
+  [ "$state" = "normal" ] || return 1
+
+  if [ "$token_started" -eq 1 ]; then
+    _GTR_PARSED_CMD_ARGS+=("$token")
+  fi
+
+  [ "${#_GTR_PARSED_CMD_ARGS[@]}" -gt 0 ]
+}
+
+_configured_command_uses_path_arg() {
+  local arg="$1"
+  case "$arg" in
+    /* | ./* | ../* | ~* | *\\*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+_configured_command_is_wrapper() {
+  local cmd_name="$1"
+  case "$cmd_name" in
+    sh | bash | zsh | dash | ksh | fish | env | eval | source | . | python | python3 | node | ruby | perl | php | lua | pwsh | powershell)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+_validate_configured_command() {
+  local command_string="$1"
+
+  # Reject shell metacharacters in config-supplied command names to prevent injection.
+  # shellcheck disable=SC2016 # Literal '$(' pattern match is intentional
+  case "$command_string" in
+    *\;* | *\`* | *'$('* | *\|* | *\&* | *'>'* | *'<'*)
+      return 1
+      ;;
+  esac
+
+  _parse_configured_command "$command_string" || return 1
+  [ "${#_GTR_PARSED_CMD_ARGS[@]}" -gt 0 ] || return 1
+
+  local cmd_name="${_GTR_PARSED_CMD_ARGS[0]}"
+
+  case "$cmd_name" in
+    */* | *\\*)
+      return 1
+      ;;
+  esac
+
+  if _configured_command_is_wrapper "$cmd_name" && [ "${#_GTR_PARSED_CMD_ARGS[@]}" -gt 1 ]; then
+    return 1
+  fi
+
+  local arg
+  for arg in "${_GTR_PARSED_CMD_ARGS[@]:1}"; do
+    if _configured_command_uses_path_arg "$arg"; then
+      return 1
+    fi
+  done
+
+  type -P "$cmd_name" >/dev/null 2>&1
+}
+
 # Parse and run a config-supplied command string while preserving quoted args.
 _run_configured_command() {
   local command_string="$1"
   shift
   local extra_args=("$@")
 
-  (
-    eval "set -- $command_string" || exit 1
-    [ "$#" -gt 0 ] || exit 1
-    "$@" "${extra_args[@]}"
-  )
+  _parse_configured_command "$command_string" || return 1
+  [ "${#_GTR_PARSED_CMD_ARGS[@]}" -gt 0 ] || return 1
+
+  "${_GTR_PARSED_CMD_ARGS[@]}" "${extra_args[@]}"
 }
 
 # Standard AI adapter builder — used by adapter files that follow the common pattern
@@ -304,7 +448,14 @@ resolve_workspace_file() {
 # Usage: _load_adapter <type> <name> <label> <builtin_list> <path_hint>
 _load_adapter() {
   local type="$1" name="$2" label="$3" builtin_list="$4" path_hint="$5"
-  local adapter_selector="${name%% *}"
+  if ! _validate_configured_command "$name"; then
+    log_error "$label '$name' is not a safe executable command"
+    log_info "Use a PATH command name, optionally with flags (e.g., 'code --wait')"
+    return 1
+  fi
+
+  local adapter_selector="${_GTR_PARSED_CMD_ARGS[0]}"
+  local cmd_args=("${_GTR_PARSED_CMD_ARGS[@]:1}")
 
   local adapter_file="$GTR_DIR/adapters/${type}/${adapter_selector}.sh"
 
@@ -313,6 +464,17 @@ _load_adapter() {
     */* | *..* | *\\*) ;;
     *)
       if [ -f "$adapter_file" ]; then
+        if [ "$type" = "editor" ]; then
+          # shellcheck disable=SC2034 # Used by sourced override adapters.
+          GTR_EDITOR_CMD="$name"
+          GTR_EDITOR_CMD_NAME="$adapter_selector"
+          GTR_EDITOR_CMD_ARGS=("${cmd_args[@]}")
+        else
+          # shellcheck disable=SC2034 # Used by sourced override adapters.
+          GTR_AI_CMD="$name"
+          GTR_AI_CMD_NAME="$adapter_selector"
+          GTR_AI_CMD_ARGS=("${cmd_args[@]}")
+        fi
         # shellcheck disable=SC1090
         . "$adapter_file"
         return 0
@@ -337,44 +499,27 @@ _load_adapter() {
     return 0
   fi
 
-  # 3. Generic fallback: check if command exists in PATH
-  # Extract first word (command name) from potentially multi-word string
-  local cmd_name="${name%% *}"
-
-  case "$cmd_name" in
-    */* | *\\*)
-      log_error "$label '$name' must use a PATH command name, not a filesystem path"
-      log_info "Use a simple command name, optionally with flags (e.g., 'code --wait')"
-      return 1
-      ;;
-  esac
-
-  if ! command -v "$cmd_name" >/dev/null 2>&1; then
+  # 3. Generic fallback: command already validated and resolved in PATH
+  local cmd_name="$adapter_selector"
+  if ! type -P "$cmd_name" >/dev/null 2>&1; then
     log_error "$label '$name' not found"
     log_info "Built-in adapters: $builtin_list"
     log_info "Or use any $label command available in your PATH (e.g., $path_hint)"
     return 1
   fi
 
-  # Reject shell metacharacters in config-supplied command names to prevent injection
-  # Allows multi-word commands (e.g., "code --wait") but blocks shell operators
-  # shellcheck disable=SC2016 # Literal '$(' pattern match is intentional
-  case "$name" in
-    *\;* | *\`* | *'$('* | *\|* | *\&* | *'>'* | *'<'*)
-      log_error "$label '$name' contains shell metacharacters — refusing to execute"
-      log_info "Use a simple command name, optionally with flags (e.g., 'code --wait')"
-      return 1
-      ;;
-  esac
-
   # Set globals for generic adapter functions
   # Note: $name may contain arguments (e.g., "code --wait", "bunx @github/copilot@latest")
   if [ "$type" = "editor" ]; then
     GTR_EDITOR_CMD="$name"
     GTR_EDITOR_CMD_NAME="$cmd_name"
+    # shellcheck disable=SC2034 # Used by sourced override adapters.
+    GTR_EDITOR_CMD_ARGS=("${cmd_args[@]}")
   else
     GTR_AI_CMD="$name"
     GTR_AI_CMD_NAME="$cmd_name"
+    # shellcheck disable=SC2034 # Used by sourced override adapters.
+    GTR_AI_CMD_ARGS=("${cmd_args[@]}")
   fi
 }
 
