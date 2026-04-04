@@ -114,8 +114,8 @@ _hooks_write_trust_marker() {
   local canonical_config_file=""
 
   mkdir -p "$_GTR_TRUST_DIR" || return 1
-  temp_path="$(mktemp "$_GTR_TRUST_DIR/.trust.XXXXXX")" || return 1
   canonical_config_file=$(_hooks_canonical_config_path "$config_file") || return 1
+  temp_path="$(mktemp "$_GTR_TRUST_DIR/.trust.XXXXXX")" || return 1
 
   if ! printf '%s\n' "$canonical_config_file" > "$temp_path"; then
     rm -f "$temp_path"
