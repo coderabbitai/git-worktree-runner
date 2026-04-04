@@ -201,15 +201,16 @@ BASH
 @test "generated wrappers scope trust markers by repo root" {
   run cmd_init bash
   [ "$status" -eq 0 ]
-  [[ "$output" == *"hooks_trust_key"* ]]
-  [[ "$output" == *'dirname "$_gtr_config_file"'* ]]
+  [[ "$output" == *"hooks_current_trust_key"* ]]
+  [[ "$output" == *"hooks_repo_root"* ]]
 }
 
 @test "generated wrappers validate trust marker contents" {
   run cmd_init bash
   [ "$status" -eq 0 ]
-  [[ "$output" == *"hooks_trusted"* ]]
-  [[ "$output" == *'cat "$_gtr_trust_dir/$_gtr_trust_key"'* ]]
+  [[ "$output" == *"hooks_marker_matches_config"* ]]
+  [[ "$output" == *"hooks_are_trusted"* ]]
+  [[ "$output" == *'cat "$_gtr_trust_path"'* ]]
 }
 
 @test "zsh output includes cd completion" {
@@ -222,6 +223,14 @@ BASH
   run cmd_init zsh
   [ "$status" -eq 0 ]
   [[ "$output" == *"git gtr list --porcelain"* ]]
+}
+
+@test "zsh output validates trust marker contents" {
+  run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_canonical_config_path"* ]]
+  [[ "$output" == *"hooks_marker_matches_config"* ]]
+  [[ "$output" == *'cat "$_gtr_trust_path"'* ]]
 }
 
 @test "fish output includes cd subcommand completion" {
@@ -240,6 +249,14 @@ BASH
   run cmd_init fish
   [ "$status" -eq 0 ]
   [[ "$output" == *"git gtr list --porcelain"* ]]
+}
+
+@test "fish output validates trust marker contents" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_canonical_config_path"* ]]
+  [[ "$output" == *"hooks_marker_matches_config"* ]]
+  [[ "$output" == *'cat "$_gtr_trust_path"'* ]]
 }
 
 # ── new --cd wrapper support ────────────────────────────────────────────────

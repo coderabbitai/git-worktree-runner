@@ -27,7 +27,7 @@ cmd_trust() {
   fi
 
   local trust_path
-  trust_path=$(_hooks_trust_path_for_content "$config_file" "$hook_content") || {
+  trust_path=$(_hooks_reviewed_trust_path "$config_file" "$hook_content") || {
     log_error "Failed to compute trust marker for $config_file"
     return 1
   }
@@ -41,7 +41,7 @@ cmd_trust() {
   if prompt_yes_no "Trust these hooks?"; then
     if _hooks_write_trust_marker "$trust_path" "$config_file"; then
       local current_trust_path
-      current_trust_path=$(_hooks_trust_path "$config_file") || true
+      current_trust_path=$(_hooks_current_trust_path "$config_file") || true
       if [ -n "$current_trust_path" ] && [ "$current_trust_path" != "$trust_path" ]; then
         log_warn "Hooks changed during review; current hooks remain untrusted"
         return 1

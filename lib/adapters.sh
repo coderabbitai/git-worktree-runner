@@ -150,7 +150,8 @@ EOF
 
 # Generic adapter functions (used when no explicit adapter file exists)
 # These will be overridden if an adapter file is sourced
-# Globals set by load_editor_adapter: GTR_EDITOR_CMD, GTR_EDITOR_CMD_NAME
+# Globals set by load_editor_adapter:
+#   GTR_EDITOR_CMD, GTR_EDITOR_CMD_NAME, GTR_EDITOR_CMD_ARGS
 editor_can_open() {
   command -v "$GTR_EDITOR_CMD_NAME" >/dev/null 2>&1
 }
@@ -166,10 +167,11 @@ editor_open() {
     target="$workspace"
   fi
 
-  _run_configured_command "$GTR_EDITOR_CMD" "$target"
+  _run_configured_command "$GTR_EDITOR_CMD_NAME" "${GTR_EDITOR_CMD_ARGS[@]}" "$target"
 }
 
-# Globals set by load_ai_adapter: GTR_AI_CMD, GTR_AI_CMD_NAME
+# Globals set by load_ai_adapter:
+#   GTR_AI_CMD, GTR_AI_CMD_NAME, GTR_AI_CMD_ARGS
 ai_can_start() {
   command -v "$GTR_AI_CMD_NAME" >/dev/null 2>&1
 }
@@ -177,17 +179,38 @@ ai_can_start() {
 ai_start() {
   local path="$1"
   shift
-  (cd "$path" && _run_configured_command "$GTR_AI_CMD" "$@")
+  (cd "$path" && _run_configured_command "$GTR_AI_CMD_NAME" "${GTR_AI_CMD_ARGS[@]}" "$@")
+}
+
+# Assign an array to a caller-provided variable name.
+# Bash 3.2 has no namerefs, so this uses a safely quoted eval assignment.
+_set_array_var() {
+  local var_name="$1"
+  shift
+
+  case "$var_name" in
+    [a-zA-Z_][a-zA-Z0-9_]*) ;;
+    *) return 1 ;;
+  esac
+
+  local assignment="${var_name}=("
+  local item
+  for item in "$@"; do
+    assignment="${assignment}$(printf '%q ' "$item")"
+  done
+  assignment="${assignment})"
+
+  eval "$assignment"
 }
 
 # Split a config-supplied command string without shell evaluation.
-# Populates the global _GTR_PARSED_CMD_ARGS array.
+# Usage: _parse_configured_command <out_array_name> <command_string>
 _parse_configured_command() {
-  local command_string="$1"
+  local out_var="$1"
+  local command_string="$2"
   local length="${#command_string}"
   local i=0 char="" token="" state="normal" escaped=0 token_started=0
-
-  _GTR_PARSED_CMD_ARGS=()
+  local parsed_tokens=()
 
   while [ "$i" -lt "$length" ]; do
     char="${command_string:$i:1}"
@@ -206,7 +229,7 @@ _parse_configured_command() {
               ;;
             " " | $'\t' | $'\n')
               if [ "$token_started" -eq 1 ]; then
-                _GTR_PARSED_CMD_ARGS+=("$token")
+                parsed_tokens+=("$token")
                 token=""
                 token_started=0
               fi
@@ -263,10 +286,11 @@ _parse_configured_command() {
   [ "$state" = "normal" ] || return 1
 
   if [ "$token_started" -eq 1 ]; then
-    _GTR_PARSED_CMD_ARGS+=("$token")
+    parsed_tokens+=("$token")
   fi
 
-  [ "${#_GTR_PARSED_CMD_ARGS[@]}" -gt 0 ]
+  [ "${#parsed_tokens[@]}" -gt 0 ] || return 1
+  _set_array_var "$out_var" "${parsed_tokens[@]}"
 }
 
 _configured_command_uses_path_arg() {
@@ -289,7 +313,8 @@ _configured_command_is_wrapper() {
   return 1
 }
 
-_validate_configured_command() {
+# Reject raw shell syntax before argv parsing.
+_configured_command_has_safe_syntax() {
   local command_string="$1"
 
   # Reject shell metacharacters in config-supplied command names to prevent injection.
@@ -299,11 +324,13 @@ _validate_configured_command() {
       return 1
       ;;
   esac
+}
 
-  _parse_configured_command "$command_string" || return 1
-  [ "${#_GTR_PARSED_CMD_ARGS[@]}" -gt 0 ] || return 1
+_configured_command_is_safe() {
+  [ "$#" -gt 0 ] || return 1
 
-  local cmd_name="${_GTR_PARSED_CMD_ARGS[0]}"
+  local cmd_name="$1"
+  shift
 
   case "$cmd_name" in
     */* | *\\*)
@@ -311,28 +338,23 @@ _validate_configured_command() {
       ;;
   esac
 
-  if _configured_command_is_wrapper "$cmd_name" && [ "${#_GTR_PARSED_CMD_ARGS[@]}" -gt 1 ]; then
+  if _configured_command_is_wrapper "$cmd_name" && [ "$#" -gt 0 ]; then
     return 1
   fi
 
   local arg
-  for arg in "${_GTR_PARSED_CMD_ARGS[@]:1}"; do
+  for arg in "$@"; do
     if _configured_command_uses_path_arg "$arg"; then
       return 1
     fi
   done
 }
 
-# Parse and run a config-supplied command string while preserving quoted args.
+# Run a config-supplied command argv that has already been parsed and validated.
+# Usage: _run_configured_command <argv...>
 _run_configured_command() {
-  local command_string="$1"
-  shift
-  local extra_args=("$@")
-
-  _parse_configured_command "$command_string" || return 1
-  [ "${#_GTR_PARSED_CMD_ARGS[@]}" -gt 0 ] || return 1
-
-  "${_GTR_PARSED_CMD_ARGS[@]}" "${extra_args[@]}"
+  [ "$#" -gt 0 ] || return 1
+  "$@"
 }
 
 # Standard AI adapter builder — used by adapter files that follow the common pattern
@@ -446,14 +468,17 @@ resolve_workspace_file() {
 # Usage: _load_adapter <type> <name> <label> <builtin_list> <path_hint>
 _load_adapter() {
   local type="$1" name="$2" label="$3" builtin_list="$4" path_hint="$5"
-  if ! _validate_configured_command "$name"; then
+  local parsed_args=()
+  if ! _configured_command_has_safe_syntax "$name" \
+    || ! _parse_configured_command parsed_args "$name" \
+    || ! _configured_command_is_safe "${parsed_args[@]}"; then
     log_error "$label '$name' is not a safe executable command"
     log_info "Use a PATH command name, optionally with flags (e.g., 'code --wait')"
     return 1
   fi
 
-  local adapter_selector="${_GTR_PARSED_CMD_ARGS[0]}"
-  local cmd_args=("${_GTR_PARSED_CMD_ARGS[@]:1}")
+  local adapter_selector="${parsed_args[0]}"
+  local cmd_args=("${parsed_args[@]:1}")
 
   local adapter_file="$GTR_DIR/adapters/${type}/${adapter_selector}.sh"
 
@@ -509,11 +534,13 @@ _load_adapter() {
   # Set globals for generic adapter functions
   # Note: $name may contain arguments (e.g., "code --wait", "bunx @github/copilot@latest")
   if [ "$type" = "editor" ]; then
+    # shellcheck disable=SC2034 # Exposed for adapter state/introspection.
     GTR_EDITOR_CMD="$name"
     GTR_EDITOR_CMD_NAME="$cmd_name"
     # shellcheck disable=SC2034 # Used by sourced override adapters.
     GTR_EDITOR_CMD_ARGS=("${cmd_args[@]}")
   else
+    # shellcheck disable=SC2034 # Exposed for adapter state/introspection.
     GTR_AI_CMD="$name"
     GTR_AI_CMD_NAME="$cmd_name"
     # shellcheck disable=SC2034 # Used by sourced override adapters.

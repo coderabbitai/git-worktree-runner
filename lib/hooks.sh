@@ -8,10 +8,21 @@
 #
 # Trust state is stored in ~/.config/gtr/trusted/<key>
 # where <key> is a SHA-256 of the canonical repo root plus the hook content hash.
+# Trust is scoped to repo identity + hook definitions, not repo snapshot state.
 
 _GTR_TRUST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"
 
-# Compute a content hash for hook definitions
+# Read all hook definitions from a .gtrconfig file.
+# Usage: _hooks_read_definitions <config_file>
+_hooks_read_definitions() {
+  local config_file="$1"
+  local hook_content
+  hook_content=$(git config -f "$config_file" --get-regexp '^hooks\.' 2>/dev/null) || true
+  [ -n "$hook_content" ] || return 1
+  printf '%s\n' "$hook_content"
+}
+
+# Compute a content hash for hook definitions.
 # Usage: _hooks_content_hash <hook_content>
 _hooks_content_hash() {
   local hook_content="$1"
@@ -19,13 +30,18 @@ _hooks_content_hash() {
   printf '%s\n' "$hook_content" | shasum -a 256 | cut -d' ' -f1
 }
 
-# Compute a content hash of all hook entries in a .gtrconfig file
-# Usage: _hooks_file_hash <config_file>
-_hooks_file_hash() {
+# Compute a content hash of all current hook entries in a .gtrconfig file.
+# Usage: _hooks_current_content_hash <config_file>
+_hooks_current_content_hash() {
   local config_file="$1"
   local hook_content
-  hook_content=$(git config -f "$config_file" --get-regexp '^hooks\.' 2>/dev/null) || true
+  hook_content=$(_hooks_read_definitions "$config_file") || return 1
   _hooks_content_hash "$hook_content"
+}
+
+# Backward-compatible alias used by tests and older call sites.
+_hooks_file_hash() {
+  _hooks_current_content_hash "$1"
 }
 
 # Resolve the canonical repository root for a .gtrconfig file
@@ -47,19 +63,9 @@ _hooks_canonical_config_path() {
   printf '%s/%s\n' "$repo_root" "$(basename "$config_file")"
 }
 
-# Compute the repo-scoped trust key for a .gtrconfig file
-# Usage: _hooks_trust_key <config_file>
-_hooks_trust_key() {
-  local config_file="$1"
-  local hash repo_root
-  hash=$(_hooks_file_hash "$config_file") || return 1
-  repo_root=$(_hooks_repo_root "$config_file") || return 1
-  printf '%s\n%s\n' "$repo_root" "$hash" | shasum -a 256 | cut -d' ' -f1
-}
-
 # Compute the repo-scoped trust key for reviewed hook content
-# Usage: _hooks_trust_key_for_content <config_file> <hook_content>
-_hooks_trust_key_for_content() {
+# Usage: _hooks_reviewed_trust_key <config_file> <hook_content>
+_hooks_reviewed_trust_key() {
   local config_file="$1"
   local hook_content="$2"
   local hash repo_root
@@ -68,23 +74,59 @@ _hooks_trust_key_for_content() {
   printf '%s\n%s\n' "$repo_root" "$hash" | shasum -a 256 | cut -d' ' -f1
 }
 
-# Resolve the trust marker path for a .gtrconfig file
-# Usage: _hooks_trust_path <config_file>
-_hooks_trust_path() {
+# Compute the repo-scoped trust key for the current hook content
+# Usage: _hooks_current_trust_key <config_file>
+_hooks_current_trust_key() {
   local config_file="$1"
-  local trust_key
-  trust_key=$(_hooks_trust_key "$config_file") || return 1
-  printf '%s/%s\n' "$_GTR_TRUST_DIR" "$trust_key"
+  local hook_content
+  hook_content=$(_hooks_read_definitions "$config_file") || return 1
+  _hooks_reviewed_trust_key "$config_file" "$hook_content"
+}
+
+# Backward-compatible alias used by existing call sites.
+_hooks_trust_key() {
+  _hooks_current_trust_key "$1"
 }
 
 # Resolve the trust marker path for reviewed hook content
-# Usage: _hooks_trust_path_for_content <config_file> <hook_content>
-_hooks_trust_path_for_content() {
+# Usage: _hooks_reviewed_trust_path <config_file> <hook_content>
+_hooks_reviewed_trust_path() {
   local config_file="$1"
   local hook_content="$2"
   local trust_key
-  trust_key=$(_hooks_trust_key_for_content "$config_file" "$hook_content") || return 1
+  trust_key=$(_hooks_reviewed_trust_key "$config_file" "$hook_content") || return 1
   printf '%s/%s\n' "$_GTR_TRUST_DIR" "$trust_key"
+}
+
+# Resolve the trust marker path for a .gtrconfig file
+# Usage: _hooks_current_trust_path <config_file>
+_hooks_current_trust_path() {
+  local config_file="$1"
+  local trust_key
+  trust_key=$(_hooks_current_trust_key "$config_file") || return 1
+  printf '%s/%s\n' "$_GTR_TRUST_DIR" "$trust_key"
+}
+
+# Backward-compatible aliases used by existing call sites.
+_hooks_trust_path() {
+  _hooks_current_trust_path "$1"
+}
+
+_hooks_trust_path_for_content() {
+  _hooks_reviewed_trust_path "$1" "$2"
+}
+
+# Check whether a trust marker matches the canonical config path.
+# Usage: _hooks_marker_matches_config <trust_path> <config_file>
+_hooks_marker_matches_config() {
+  local trust_path="$1"
+  local config_file="$2"
+  local marker_content canonical_config_file
+
+  [ -f "$trust_path" ] || return 1
+  marker_content="$(cat "$trust_path" 2>/dev/null)" || return 1
+  canonical_config_file=$(_hooks_canonical_config_path "$config_file") || return 1
+  [ "$marker_content" = "$canonical_config_file" ]
 }
 
 # Check if .gtrconfig hooks are trusted for the current repository
@@ -95,14 +137,8 @@ _hooks_are_trusted() {
   [ ! -f "$config_file" ] && return 0
 
   local trust_path
-  trust_path=$(_hooks_trust_path "$config_file") || return 0  # no hooks = trusted
-
-  [ -f "$trust_path" ] || return 1
-
-  local marker_content canonical_config_file
-  marker_content="$(cat "$trust_path" 2>/dev/null)" || return 1
-  canonical_config_file=$(_hooks_canonical_config_path "$config_file") || return 1
-  [ "$marker_content" = "$canonical_config_file" ]
+  trust_path=$(_hooks_current_trust_path "$config_file") || return 0  # no hooks = trusted
+  _hooks_marker_matches_config "$trust_path" "$config_file"
 }
 
 # Write a trust marker that matches the reviewed hooks
@@ -133,7 +169,7 @@ _hooks_write_trust_marker() {
 _hooks_mark_trusted() {
   local config_file="$1"
   local trust_path
-  trust_path=$(_hooks_trust_path "$config_file") || return 0
+  trust_path=$(_hooks_current_trust_path "$config_file") || return 0
 
   _hooks_write_trust_marker "$trust_path" "$config_file"
 }

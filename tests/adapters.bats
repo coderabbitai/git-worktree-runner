@@ -151,8 +151,21 @@ EOF
   [ "$status" -eq 1 ]
 }
 
-@test "_run_configured_command preserves quoted arguments" {
-  run _run_configured_command "printf '%s\n' 'hello world'"
+@test "_parse_configured_command writes caller-owned argv without shell evaluation" {
+  local -a parsed_argv=()
+  _parse_configured_command parsed_argv "printf '%s\n' 'hello world'"
+
+  [ "${#parsed_argv[@]}" -eq 3 ]
+  [ "${parsed_argv[0]}" = "printf" ]
+  [ "${parsed_argv[1]}" = "%s\n" ]
+  [ "${parsed_argv[2]}" = "hello world" ]
+}
+
+@test "_run_configured_command preserves quoted arguments from parsed argv" {
+  local -a parsed_argv=()
+  _parse_configured_command parsed_argv "printf '%s\n' 'hello world'"
+
+  run _run_configured_command "${parsed_argv[@]}"
   [ "$status" -eq 0 ]
   [ "$output" = "hello world" ]
 }

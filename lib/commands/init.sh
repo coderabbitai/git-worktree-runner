@@ -68,7 +68,7 @@ cmd_init() {
   # Generate output (cached to ~/.cache/gtr/, auto-invalidates on shell integration changes)
   local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gtr"
   local cache_file="$cache_dir/init-${func_name}.${shell}"
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-4}"
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-5}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # Return cached output if version matches
@@ -90,12 +90,13 @@ cmd_init() {
   fi
 }
 
-_init_bash() {
-  cat <<'BASH'
-# git-gtr shell integration (cached to ~/.cache/gtr/)
-# Setup: see git gtr help init
+_init_emit_posix_trust_helpers() {
+  local shell_prelude="$1"
+  local template
 
+  template=$(cat <<'EOF'
 __FUNC___gtrconfig_path() {
+__SHELL_PRELUDE__
   local _gtr_git_common_dir _gtr_repo_root
   _gtr_git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null)" || return 1
 
@@ -108,32 +109,131 @@ __FUNC___gtrconfig_path() {
   printf '%s/.gtrconfig\n' "$_gtr_repo_root"
 }
 
-__FUNC___hooks_hash() {
+__FUNC___hooks_current_content_hash() {
+__SHELL_PRELUDE__
   local _gtr_config_file="$1"
   local _gtr_hook_defs
   _gtr_hook_defs="$(git config -f "$_gtr_config_file" --get-regexp '^hooks\.' 2>/dev/null)" || return 1
   printf '%s\n' "$_gtr_hook_defs" | shasum -a 256 | cut -d' ' -f1
 }
 
-__FUNC___hooks_trust_key() {
+__FUNC___hooks_repo_root() {
+__SHELL_PRELUDE__
+  local _gtr_config_file="$1"
+  cd "$(dirname "$_gtr_config_file")" 2>/dev/null && pwd -P
+}
+
+__FUNC___hooks_canonical_config_path() {
+__SHELL_PRELUDE__
+  local _gtr_config_file="$1"
+  local _gtr_repo_root
+  _gtr_repo_root="$(__FUNC___hooks_repo_root "$_gtr_config_file" 2>/dev/null)" || return 1
+  printf '%s/%s\n' "$_gtr_repo_root" "$(basename "$_gtr_config_file")"
+}
+
+__FUNC___hooks_current_trust_key() {
+__SHELL_PRELUDE__
   local _gtr_config_file="$1"
   local _gtr_hook_hash _gtr_repo_root
-  _gtr_hook_hash="$(__FUNC___hooks_hash "$_gtr_config_file" 2>/dev/null)" || return 1
-  _gtr_repo_root="$(cd "$(dirname "$_gtr_config_file")" 2>/dev/null && pwd -P)" || return 1
+  _gtr_hook_hash="$(__FUNC___hooks_current_content_hash "$_gtr_config_file" 2>/dev/null)" || return 1
+  _gtr_repo_root="$(__FUNC___hooks_repo_root "$_gtr_config_file" 2>/dev/null)" || return 1
   printf '%s\n%s\n' "$_gtr_repo_root" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
 }
 
-__FUNC___hooks_trusted() {
-  local _gtr_config_file="$1"
-  local _gtr_trust_dir="$2"
-  local _gtr_trust_key _gtr_marker _gtr_canonical_config
-  _gtr_trust_key="$(__FUNC___hooks_trust_key "$_gtr_config_file" 2>/dev/null)" || return 1
-  [ -f "$_gtr_trust_dir/$_gtr_trust_key" ] || return 1
-  _gtr_marker="$(cat "$_gtr_trust_dir/$_gtr_trust_key" 2>/dev/null)" || return 1
-  _gtr_canonical_config="$(cd "$(dirname "$_gtr_config_file")" 2>/dev/null && pwd -P)/$(basename "$_gtr_config_file")" || return 1
+__FUNC___hooks_marker_matches_config() {
+__SHELL_PRELUDE__
+  local _gtr_trust_path="$1"
+  local _gtr_config_file="$2"
+  local _gtr_marker _gtr_canonical_config
+  [ -f "$_gtr_trust_path" ] || return 1
+  _gtr_marker="$(cat "$_gtr_trust_path" 2>/dev/null)" || return 1
+  _gtr_canonical_config="$(__FUNC___hooks_canonical_config_path "$_gtr_config_file" 2>/dev/null)" || return 1
   [ "$_gtr_marker" = "$_gtr_canonical_config" ]
 }
 
+__FUNC___hooks_are_trusted() {
+__SHELL_PRELUDE__
+  local _gtr_config_file="$1"
+  local _gtr_trust_dir="$2"
+  local _gtr_trust_key
+  _gtr_trust_key="$(__FUNC___hooks_current_trust_key "$_gtr_config_file" 2>/dev/null)" || return 1
+  __FUNC___hooks_marker_matches_config "$_gtr_trust_dir/$_gtr_trust_key" "$_gtr_config_file"
+}
+EOF
+)
+
+  printf '%s\n' "${template//__SHELL_PRELUDE__/$shell_prelude}"
+}
+
+_init_emit_fish_trust_helpers() {
+  cat <<'FISH'
+function __FUNC___gtrconfig_path
+  set -l _gtr_git_common_dir (git rev-parse --git-common-dir 2>/dev/null)
+  test -n "$_gtr_git_common_dir"; or return 1
+
+  if test "$_gtr_git_common_dir" = ".git"
+    set -l _gtr_repo_root (git rev-parse --show-toplevel 2>/dev/null)
+    test -n "$_gtr_repo_root"; or return 1
+    printf '%s/.gtrconfig\n' "$_gtr_repo_root"
+  else
+    printf '%s/.gtrconfig\n' (string replace -r '/\\.git$' '' -- "$_gtr_git_common_dir")
+  end
+end
+
+function __FUNC___hooks_current_content_hash
+  set -l _gtr_config_file "$argv[1]"
+  set -l _gtr_hook_defs (git config -f "$_gtr_config_file" --get-regexp '^hooks\.' 2>/dev/null)
+  test $status -eq 0; or return 1
+  printf '%s\n' "$_gtr_hook_defs" | shasum -a 256 | cut -d' ' -f1
+end
+
+function __FUNC___hooks_repo_root
+  set -l _gtr_config_file "$argv[1]"
+  cd (dirname "$_gtr_config_file") 2>/dev/null; and pwd -P
+end
+
+function __FUNC___hooks_canonical_config_path
+  set -l _gtr_config_file "$argv[1]"
+  set -l _gtr_repo_root (__FUNC___hooks_repo_root "$_gtr_config_file" 2>/dev/null)
+  test -n "$_gtr_repo_root"; or return 1
+  printf '%s/%s\n' "$_gtr_repo_root" (basename "$_gtr_config_file")
+end
+
+function __FUNC___hooks_current_trust_key
+  set -l _gtr_config_file "$argv[1]"
+  set -l _gtr_hook_hash (__FUNC___hooks_current_content_hash "$_gtr_config_file" 2>/dev/null)
+  test -n "$_gtr_hook_hash"; or return 1
+  set -l _gtr_repo_root (__FUNC___hooks_repo_root "$_gtr_config_file" 2>/dev/null)
+  test -n "$_gtr_repo_root"; or return 1
+  printf '%s\n%s\n' "$_gtr_repo_root" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
+end
+
+function __FUNC___hooks_marker_matches_config
+  set -l _gtr_trust_path "$argv[1]"
+  set -l _gtr_config_file "$argv[2]"
+  test -f "$_gtr_trust_path"; or return 1
+  set -l _gtr_marker (cat "$_gtr_trust_path" 2>/dev/null)
+  set -l _gtr_canonical_config (__FUNC___hooks_canonical_config_path "$_gtr_config_file" 2>/dev/null)
+  test "$_gtr_marker" = "$_gtr_canonical_config"
+end
+
+function __FUNC___hooks_are_trusted
+  set -l _gtr_config_file "$argv[1]"
+  set -l _gtr_trust_dir "$argv[2]"
+  set -l _gtr_trust_key (__FUNC___hooks_current_trust_key "$_gtr_config_file" 2>/dev/null)
+  test -n "$_gtr_trust_key"; or return 1
+  __FUNC___hooks_marker_matches_config "$_gtr_trust_dir/$_gtr_trust_key" "$_gtr_config_file"
+end
+FISH
+}
+
+_init_bash() {
+  cat <<'BASH'
+# git-gtr shell integration (cached to ~/.cache/gtr/)
+# Setup: see git gtr help init
+BASH
+  _init_emit_posix_trust_helpers ""
+  cat <<'BASH'
 __FUNC___run_post_cd_hooks() {
   local dir="$1"
   local _gtr_trust_dir="${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"
@@ -151,7 +251,7 @@ __FUNC___run_post_cd_hooks() {
       _gtr_file_hooks="$(git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)" || true
       if [ -n "$_gtr_file_hooks" ]; then
         # Verify trust before including .gtrconfig hooks
-        if __FUNC___hooks_trusted "$_gtr_config_file" "$_gtr_trust_dir"; then
+        if __FUNC___hooks_are_trusted "$_gtr_config_file" "$_gtr_trust_dir"; then
           if [ -n "$_gtr_hooks" ]; then
             _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
           else
@@ -315,50 +415,9 @@ _init_zsh() {
   cat <<'ZSH'
 # git-gtr shell integration (cached to ~/.cache/gtr/)
 # Setup: see git gtr help init
-
-__FUNC___gtrconfig_path() {
-  emulate -L zsh
-  local _gtr_git_common_dir _gtr_repo_root
-  _gtr_git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null)" || return 1
-
-  if [ "$_gtr_git_common_dir" = ".git" ]; then
-    _gtr_repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
-  else
-    _gtr_repo_root="${_gtr_git_common_dir%/.git}"
-  fi
-
-  printf '%s/.gtrconfig\n' "$_gtr_repo_root"
-}
-
-__FUNC___hooks_hash() {
-  emulate -L zsh
-  local _gtr_config_file="$1"
-  local _gtr_hook_defs
-  _gtr_hook_defs="$(git config -f "$_gtr_config_file" --get-regexp '^hooks\.' 2>/dev/null)" || return 1
-  printf '%s\n' "$_gtr_hook_defs" | shasum -a 256 | cut -d' ' -f1
-}
-
-__FUNC___hooks_trust_key() {
-  emulate -L zsh
-  local _gtr_config_file="$1"
-  local _gtr_hook_hash _gtr_repo_root
-  _gtr_hook_hash="$(__FUNC___hooks_hash "$_gtr_config_file" 2>/dev/null)" || return 1
-  _gtr_repo_root="$(cd "$(dirname "$_gtr_config_file")" 2>/dev/null && pwd -P)" || return 1
-  printf '%s\n%s\n' "$_gtr_repo_root" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
-}
-
-__FUNC___hooks_trusted() {
-  emulate -L zsh
-  local _gtr_config_file="$1"
-  local _gtr_trust_dir="$2"
-  local _gtr_trust_key _gtr_marker _gtr_canonical_config
-  _gtr_trust_key="$(__FUNC___hooks_trust_key "$_gtr_config_file" 2>/dev/null)" || return 1
-  [ -f "$_gtr_trust_dir/$_gtr_trust_key" ] || return 1
-  _gtr_marker="$(cat "$_gtr_trust_dir/$_gtr_trust_key" 2>/dev/null)" || return 1
-  _gtr_canonical_config="$(cd "$(dirname "$_gtr_config_file")" 2>/dev/null && pwd -P)/$(basename "$_gtr_config_file")" || return 1
-  [ "$_gtr_marker" = "$_gtr_canonical_config" ]
-}
-
+ZSH
+  _init_emit_posix_trust_helpers "  emulate -L zsh"
+  cat <<'ZSH'
 __FUNC___run_post_cd_hooks() {
   emulate -L zsh
   local dir="$1"
@@ -377,7 +436,7 @@ __FUNC___run_post_cd_hooks() {
       _gtr_file_hooks="$(git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)" || true
       if [ -n "$_gtr_file_hooks" ]; then
         # Verify trust before including .gtrconfig hooks
-        if __FUNC___hooks_trusted "$_gtr_config_file" "$_gtr_trust_dir"; then
+        if __FUNC___hooks_are_trusted "$_gtr_config_file" "$_gtr_trust_dir"; then
           if [ -n "$_gtr_hooks" ]; then
             _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
           else
@@ -543,47 +602,9 @@ _init_fish() {
 # git-gtr shell integration
 # Add to ~/.config/fish/config.fish:
 #   git gtr init fish | source
-
-function __FUNC___gtrconfig_path
-  set -l _gtr_git_common_dir (git rev-parse --git-common-dir 2>/dev/null)
-  test -n "$_gtr_git_common_dir"; or return 1
-
-  if test "$_gtr_git_common_dir" = ".git"
-    set -l _gtr_repo_root (git rev-parse --show-toplevel 2>/dev/null)
-    test -n "$_gtr_repo_root"; or return 1
-    printf '%s/.gtrconfig\n' "$_gtr_repo_root"
-  else
-    printf '%s/.gtrconfig\n' (string replace -r '/\\.git$' '' -- "$_gtr_git_common_dir")
-  end
-end
-
-function __FUNC___hooks_hash
-  set -l _gtr_config_file "$argv[1]"
-  set -l _gtr_hook_defs (git config -f "$_gtr_config_file" --get-regexp '^hooks\.' 2>/dev/null)
-  test $status -eq 0; or return 1
-  printf '%s\n' "$_gtr_hook_defs" | shasum -a 256 | cut -d' ' -f1
-end
-
-function __FUNC___hooks_trust_key
-  set -l _gtr_config_file "$argv[1]"
-  set -l _gtr_hook_hash (__FUNC___hooks_hash "$_gtr_config_file" 2>/dev/null)
-  test -n "$_gtr_hook_hash"; or return 1
-  set -l _gtr_repo_root (cd (dirname "$_gtr_config_file") 2>/dev/null; and pwd -P)
-  test -n "$_gtr_repo_root"; or return 1
-  printf '%s\n%s\n' "$_gtr_repo_root" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
-end
-
-function __FUNC___hooks_trusted
-  set -l _gtr_config_file "$argv[1]"
-  set -l _gtr_trust_dir "$argv[2]"
-  set -l _gtr_trust_key (__FUNC___hooks_trust_key "$_gtr_config_file" 2>/dev/null)
-  test -n "$_gtr_trust_key"; or return 1
-  test -f "$_gtr_trust_dir/$_gtr_trust_key"; or return 1
-  set -l _gtr_marker (cat "$_gtr_trust_dir/$_gtr_trust_key" 2>/dev/null)
-  set -l _gtr_canonical_config (cd (dirname "$_gtr_config_file") 2>/dev/null; and pwd -P)"/"(basename "$_gtr_config_file")
-  test "$_gtr_marker" = "$_gtr_canonical_config"
-end
-
+FISH
+  _init_emit_fish_trust_helpers
+  cat <<'FISH'
 function __FUNC___run_post_cd_hooks
   set -l dir "$argv[1]"
   set -l _gtr_trust_dir "$HOME/.config/gtr/trusted"
@@ -603,7 +624,7 @@ function __FUNC___run_post_cd_hooks
       set -l _gtr_candidate_hooks (git config -f "$_gtr_config_file" --get-all hooks.postCd 2>/dev/null)
       if test (count $_gtr_candidate_hooks) -gt 0
         # Verify trust before including .gtrconfig hooks
-        if __FUNC___hooks_trusted "$_gtr_config_file" "$_gtr_trust_dir"
+        if __FUNC___hooks_are_trusted "$_gtr_config_file" "$_gtr_trust_dir"
           set _gtr_file_hooks $_gtr_candidate_hooks
         else
           echo "__FUNC__: Untrusted .gtrconfig hooks skipped — run 'git gtr trust' to approve" >&2

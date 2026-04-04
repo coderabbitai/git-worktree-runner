@@ -348,7 +348,7 @@ Review and approve hook commands defined in the repository's `.gtrconfig` file. 
 git gtr trust                              # Review and approve .gtrconfig hooks
 ```
 
-Trust is stored per content hash and must be re-approved if hooks change. Hooks from your local git config (`.git/config`, `~/.gitconfig`) are always trusted.
+Trust is stored per repository path plus hook definitions and must be re-approved if hooks change. Hooks from your local git config (`.git/config`, `~/.gitconfig`) are always trusted.
 
 ### Other Commands
 
@@ -368,6 +368,14 @@ git gtr config set gtr.editor.default cursor
 
 # Set your AI tool (aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode)
 git gtr config set gtr.ai.default claude
+
+# Override-backed adapters may include flags
+git gtr config set gtr.editor.default "nano -w"
+git gtr config set gtr.ai.default "claude --continue"
+
+# Generic fallbacks may use other safe PATH commands
+git gtr config set gtr.editor.default "code --wait"
+git gtr config set gtr.ai.default "bunx @github/copilot@latest"
 
 # Copy env files to new worktrees
 git gtr config add gtr.copy.include "**/.env.example"
@@ -401,6 +409,8 @@ git gtr config set gtr.ui.color never
 ```
 
 **Hook trust:** Hooks defined in `.gtrconfig` require explicit approval before they execute. Run `git gtr trust` after cloning a repository or when `.gtrconfig` hooks change. This protects against malicious hook injection in shared repositories.
+
+**Adapter safety:** Generic `gtr.editor.default` and `gtr.ai.default` values must resolve to safe PATH commands. Filesystem paths such as `./tool` and shell wrapper forms such as `sh -c ...` are rejected. Override-backed adapters like `claude`, `cursor`, and `nano` may include additional flags, for example `claude --continue` or `nano -w`.
 
 **Configuration precedence** (highest to lowest):
 

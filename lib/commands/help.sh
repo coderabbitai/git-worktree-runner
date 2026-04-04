@@ -57,11 +57,12 @@ Special:
 
 Available editors:
   antigravity, atom, cursor, emacs, idea, nano, nvim, pycharm, sublime, vim,
-  vscode, webstorm, zed, none (or any command in your PATH)
+  vscode, webstorm, zed, none (or any safe command in your PATH)
 
 Examples:
   git gtr editor my-feature                     # Uses default editor
   git gtr editor my-feature --editor vscode     # Override with vscode
+  git gtr editor my-feature --editor "nano -w"  # Override-backed adapter with flags
   git gtr editor 1                              # Open main repo
 EOF
 }
@@ -84,11 +85,12 @@ Special:
 
 Available AI tools:
   aider, auggie, claude, codex, continue, copilot, cursor, gemini,
-  opencode, none (or any command in your PATH)
+  opencode, none (or any safe command in your PATH)
 
 Examples:
   git gtr ai my-feature                         # Uses default AI tool
   git gtr ai my-feature --ai aider              # Override with aider
+  git gtr ai my-feature --ai "claude --continue"
   git gtr ai my-feature -- --verbose            # Pass args to AI tool
   git gtr ai 1                                  # AI in main repo
 EOF
@@ -255,9 +257,14 @@ Examples:
   git gtr config                                # List all config
   git gtr config list --local                   # List local config only
   git gtr config set gtr.editor.default cursor  # Set default editor
+  git gtr config set gtr.editor.default "code --wait"
   git gtr config add gtr.copy.include ".env*"   # Add copy pattern
   git gtr config get gtr.ai.default             # Get AI tool setting
   git gtr config unset gtr.worktrees.prefix     # Remove prefix setting
+
+Generic editor/AI defaults must be safe PATH commands. Filesystem paths
+such as ./tool and shell-wrapper forms such as sh -c ... are rejected.
+Override-backed adapters like claude, cursor, and nano may include flags.
 EOF
 }
 
@@ -283,8 +290,10 @@ git gtr adapter - List available adapters
 Usage: git gtr adapter
 
 Lists all built-in editor and AI tool adapters, along with their availability
-on the current system. Any command in your PATH can also be used as an
-editor or AI tool without a built-in adapter.
+on the current system. Safe PATH commands can also be used without a built-in
+adapter. Path-based commands like ./tool and shell wrappers like sh -c are
+rejected, while override-backed adapters such as claude, cursor, and nano may
+include flags.
 
 Examples:
   git gtr adapter                               # Show all adapters
@@ -411,8 +420,9 @@ Reviews and approves hook commands defined in the repository's .gtrconfig
 file. Hooks from .gtrconfig are not executed until explicitly trusted.
 
 This prevents malicious contributors from injecting arbitrary shell
-commands via shared .gtrconfig files. Trust is stored per content hash
-in ~/.config/gtr/trusted/ and must be re-approved if hooks change.
+commands via shared .gtrconfig files. Trust is stored per repository
+path plus hook definitions in ~/.config/gtr/trusted/ and must be
+re-approved if hooks change.
 
 Hooks from your local git config (.git/config, ~/.gitconfig) are always
 trusted since you control those files directly.
@@ -582,7 +592,7 @@ SETUP & MAINTENANCE:
 
   adapter
          List available editor & AI tool adapters
-         Note: Any command in your PATH can be used (e.g., code-insiders, bunx)
+         Note: Safe PATH commands can be used (e.g., code --wait, bunx @github/copilot@latest)
 
   clean [options]
          Remove stale/prunable worktrees and empty directories
