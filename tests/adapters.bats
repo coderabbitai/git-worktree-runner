@@ -159,6 +159,7 @@ EOF
 
 @test "override AI adapters preserve configured flags" {
   export HOME="$BATS_TMPDIR/home"
+  PATH="/usr/bin:/bin"
   mkdir -p "$HOME/.claude/local" "$BATS_TMPDIR/worktree"
   cat > "$HOME/.claude/local/claude" <<'EOF'
 #!/usr/bin/env bash

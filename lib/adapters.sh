@@ -321,8 +321,6 @@ _validate_configured_command() {
       return 1
     fi
   done
-
-  type -P "$cmd_name" >/dev/null 2>&1
 }
 
 # Parse and run a config-supplied command string while preserving quoted args.
