@@ -41,7 +41,7 @@ run_hooks() {
       done
       # Execute the hook
       eval "$hook"
-    ); then
+    ) </dev/null; then
       log_info "Hook $hook_count completed successfully"
     else
       local rc=$?
