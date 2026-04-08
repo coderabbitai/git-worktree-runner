@@ -161,3 +161,12 @@ teardown() {
   (cd "$TEST_REPO" && run_hooks_export postCd REPO_ROOT="$TEST_REPO")
   [ -z "${LEAK_TEST:-}" ]
 }
+
+@test "run_hooks_export continues after hook that reads stdin (postCd)" {
+  git config --add gtr.hook.postCd 'echo first >> "$REPO_ROOT/order"'
+  git config --add gtr.hook.postCd 'cat'
+  git config --add gtr.hook.postCd 'echo third >> "$REPO_ROOT/order"'
+  (cd "$TEST_REPO" && run_hooks_export postCd REPO_ROOT="$TEST_REPO")
+  [ "$(head -1 "$TEST_REPO/order")" = "first" ]
+  [ "$(tail -1 "$TEST_REPO/order")" = "third" ]
+}
