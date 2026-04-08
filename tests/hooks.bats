@@ -83,6 +83,15 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+@test "run_hooks continues after hook that reads stdin" {
+  git config --add gtr.hook.postCreate 'echo first >> "$REPO_ROOT/order"'
+  git config --add gtr.hook.postCreate 'cat'
+  git config --add gtr.hook.postCreate 'echo third >> "$REPO_ROOT/order"'
+  run_hooks postCreate REPO_ROOT="$TEST_REPO"
+  [ "$(head -1 "$TEST_REPO/order")" = "first" ]
+  [ "$(tail -1 "$TEST_REPO/order")" = "third" ]
+}
+
 @test "run_hooks REPO_ROOT and BRANCH env vars available" {
   git config --add gtr.hook.postCreate 'echo "$REPO_ROOT|$BRANCH" > "$REPO_ROOT/vars"'
   run_hooks postCreate REPO_ROOT="$TEST_REPO" BRANCH="test-branch"
