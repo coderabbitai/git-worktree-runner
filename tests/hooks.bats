@@ -83,11 +83,29 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
-@test "run_hooks continues after hook that reads stdin" {
+@test "run_hooks continues after hook that reads stdin (postCreate)" {
   git config --add gtr.hook.postCreate 'echo first >> "$REPO_ROOT/order"'
   git config --add gtr.hook.postCreate 'cat'
   git config --add gtr.hook.postCreate 'echo third >> "$REPO_ROOT/order"'
   run_hooks postCreate REPO_ROOT="$TEST_REPO"
+  [ "$(head -1 "$TEST_REPO/order")" = "first" ]
+  [ "$(tail -1 "$TEST_REPO/order")" = "third" ]
+}
+
+@test "run_hooks continues after hook that reads stdin (preRemove)" {
+  git config --add gtr.hook.preRemove 'echo first >> "$REPO_ROOT/order"'
+  git config --add gtr.hook.preRemove 'cat'
+  git config --add gtr.hook.preRemove 'echo third >> "$REPO_ROOT/order"'
+  run_hooks preRemove REPO_ROOT="$TEST_REPO"
+  [ "$(head -1 "$TEST_REPO/order")" = "first" ]
+  [ "$(tail -1 "$TEST_REPO/order")" = "third" ]
+}
+
+@test "run_hooks continues after hook that reads stdin (postRemove)" {
+  git config --add gtr.hook.postRemove 'echo first >> "$REPO_ROOT/order"'
+  git config --add gtr.hook.postRemove 'cat'
+  git config --add gtr.hook.postRemove 'echo third >> "$REPO_ROOT/order"'
+  run_hooks postRemove REPO_ROOT="$TEST_REPO"
   [ "$(head -1 "$TEST_REPO/order")" = "first" ]
   [ "$(tail -1 "$TEST_REPO/order")" = "third" ]
 }
