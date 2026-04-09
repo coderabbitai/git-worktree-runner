@@ -121,3 +121,14 @@ teardown() {
   expected=$(cd "$TEST_REPO" && pwd -P)
   [ "$root" = "$expected" ]
 }
+
+@test "discover_repo_root returns 1 outside a git repository" {
+  local outside_repo
+  outside_repo=$(mktemp -d)
+  cd "$outside_repo"
+
+  run discover_repo_root
+  [ "$status" -eq 1 ]
+
+  rm -rf "$outside_repo"
+}

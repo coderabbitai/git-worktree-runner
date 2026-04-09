@@ -16,9 +16,7 @@ declare _ctx_is_main _ctx_worktree_path _ctx_branch
 # Exit code: 0 on success, 1 if not in a git repo
 discover_repo_root() {
   local root
-  root=$(_resolve_main_repo_root)
-
-  if [ -z "$root" ]; then
+  if ! root=$(_resolve_main_repo_root); then
     log_error "Not in a git repository"
     return 1
   fi
