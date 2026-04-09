@@ -112,3 +112,12 @@ teardown() {
   expected=$(pwd -P)
   [ "$root" = "$expected" ]
 }
+
+@test "discover_repo_root returns main repo root when called from a repo subdirectory" {
+  mkdir -p "$TEST_REPO/subdir/nested"
+  cd "$TEST_REPO/subdir/nested"
+  local root expected
+  root=$(discover_repo_root)
+  expected=$(cd "$TEST_REPO" && pwd -P)
+  [ "$root" = "$expected" ]
+}
