@@ -66,14 +66,23 @@ setup() {
     [ "$7" = "--state" ] || return 1
     [ "$8" = "merged" ] || return 1
     [ "$9" = "--json" ] || return 1
-    [ "${10}" = "state" ] || return 1
+    [ "${10}" = "state,headRefOid" ] || return 1
     [ "${11}" = "--jq" ] || return 1
-    [ "${12}" = ".[0].state" ] || return 1
-    printf "MERGED"
+    [[ "${12}" == *'.headRefOid == "abc123"'* ]] || return 1
+    printf "1"
   }
 
-  run check_branch_merged github feature/test main
+  run check_branch_merged github feature/test main abc123
   [ "$status" -eq 0 ]
+}
+
+@test "check_branch_merged rejects reused GitHub branch names with different HEAD" {
+  gh() {
+    printf "0"
+  }
+
+  run check_branch_merged github feature/test main def456
+  [ "$status" -eq 1 ]
 }
 
 @test "check_branch_merged passes target branch to glab" {

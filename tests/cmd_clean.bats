@@ -123,9 +123,10 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "cmd_clean accepts --to with a value" {
+@test "cmd_clean rejects --to without --merged" {
   run cmd_clean --to main
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"--to can only be used with --merged"* ]]
 }
 
 @test "cmd_clean --merged --force removes dirty merged worktrees" {
@@ -146,16 +147,50 @@ teardown() {
 
 @test "cmd_clean --merged --to filters by target ref" {
   create_test_worktree "merged-to-main"
+  create_test_worktree "merged-to-feature"
 
   _clean_detect_provider() { printf "github"; }
   ensure_provider_cli() { return 0; }
-  check_branch_merged() { [ "$2" = "merged-to-main" ] && [ "$3" = "main" ]; }
+  check_branch_merged() {
+    [ "$3" = "main" ] && [ "$2" = "merged-to-main" ]
+  }
   run_hooks_in() { return 0; }
   run_hooks() { return 0; }
 
   run cmd_clean --merged --to main --yes
   [ "$status" -eq 0 ]
   [ ! -d "$TEST_WORKTREES_DIR/merged-to-main" ]
+  [ -d "$TEST_WORKTREES_DIR/merged-to-feature" ]
+}
+
+@test "cmd_clean passes current branch HEAD to merged check" {
+  create_test_worktree "merged-tip"
+  local branch_tip
+  branch_tip=$(git -C "$TEST_WORKTREES_DIR/merged-tip" rev-parse HEAD)
+
+  _clean_detect_provider() { printf "github"; }
+  ensure_provider_cli() { return 0; }
+  check_branch_merged() { [ "$2" = "merged-tip" ] && [ "$3" = "main" ] && [ "$4" = "$branch_tip" ]; }
+  run_hooks_in() { return 0; }
+  run_hooks() { return 0; }
+
+  run cmd_clean --merged --to main --yes
+  [ "$status" -eq 0 ]
+  [ ! -d "$TEST_WORKTREES_DIR/merged-tip" ]
+}
+
+@test "cmd_clean does not log dirty skip for non-merged worktree" {
+  create_test_worktree "dirty-not-merged"
+  echo "dirty" > "$TEST_WORKTREES_DIR/dirty-not-merged/dirty.txt"
+  git -C "$TEST_WORKTREES_DIR/dirty-not-merged" add dirty.txt
+
+  _clean_detect_provider() { printf "github"; }
+  ensure_provider_cli() { return 0; }
+  check_branch_merged() { return 1; }
+
+  run cmd_clean --merged --to main --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"dirty-not-merged"* ]]
 }
 
 @test "cmd_clean --merged --force skips the current active worktree" {

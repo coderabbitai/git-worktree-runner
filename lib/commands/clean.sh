@@ -90,17 +90,19 @@ _clean_merged() {
 
     local branch
     branch=$(current_branch "$dir") || true
+    local branch_tip
+    branch_tip=$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)
 
     # Skip main repo branch silently (not counted)
     [ "$branch" = "$main_branch" ] && continue
 
-    if _clean_should_skip "$dir" "$branch" "$force" "$active_worktree_path"; then
-      skipped=$((skipped + 1))
-      continue
-    fi
-
     # Check if branch has a merged PR/MR
-    if check_branch_merged "$provider" "$branch" "$target_ref"; then
+    if check_branch_merged "$provider" "$branch" "$target_ref" "$branch_tip"; then
+      if _clean_should_skip "$dir" "$branch" "$force" "$active_worktree_path"; then
+        skipped=$((skipped + 1))
+        continue
+      fi
+
       if [ "$dry_run" -eq 1 ]; then
         log_info "[dry-run] Would remove: $branch ($dir)"
         removed=$((removed + 1))
@@ -158,6 +160,11 @@ cmd_clean() {
   local dry_run="${_arg_dry_run:-0}"
   local force="${_arg_force:-0}"
   local active_worktree_path=""
+
+  if [ -n "$target_ref" ] && [ "$merged_mode" -ne 1 ]; then
+    log_error "--to can only be used with --merged"
+    return 1
+  fi
 
   log_step "Cleaning up stale worktrees..."
 

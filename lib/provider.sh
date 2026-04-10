@@ -97,23 +97,34 @@ ensure_provider_cli() {
   esac
 }
 
-# Check if a branch has a merged PR/MR on the detected provider
-# Usage: check_branch_merged <provider> <branch> [target_ref]
+# Check if a branch has a merged PR/MR on the detected provider.
+# When branch_tip is provided, require the merged PR/MR to point at the same
+# commit so reused branch names do not match older merged PRs.
+# Usage: check_branch_merged <provider> <branch> [target_ref] [branch_tip]
 # Returns 0 if merged, 1 if not
 check_branch_merged() {
   local provider="$1"
   local branch="$2"
   local target_ref="${3:-}"
+  local branch_tip="${4:-}"
 
   case "$provider" in
     github)
-      local pr_state
+      local pr_matches
       if [ -n "$target_ref" ]; then
-        pr_state=$(gh pr list --head "$branch" --base "$target_ref" --state merged --json state --jq '.[0].state' 2>/dev/null || true)
+        if [ -n "$branch_tip" ]; then
+          pr_matches=$(gh pr list --head "$branch" --base "$target_ref" --state merged --json state,headRefOid --jq "map(select(.state == \"MERGED\" and .headRefOid == \"$branch_tip\")) | length" 2>/dev/null || true)
+        else
+          pr_matches=$(gh pr list --head "$branch" --base "$target_ref" --state merged --json state --jq 'map(select(.state == "MERGED")) | length' 2>/dev/null || true)
+        fi
       else
-        pr_state=$(gh pr list --head "$branch" --state merged --json state --jq '.[0].state' 2>/dev/null || true)
+        if [ -n "$branch_tip" ]; then
+          pr_matches=$(gh pr list --head "$branch" --state merged --json state,headRefOid --jq "map(select(.state == \"MERGED\" and .headRefOid == \"$branch_tip\")) | length" 2>/dev/null || true)
+        else
+          pr_matches=$(gh pr list --head "$branch" --state merged --json state --jq 'map(select(.state == "MERGED")) | length' 2>/dev/null || true)
+        fi
       fi
-      [ "$pr_state" = "MERGED" ]
+      [ "${pr_matches:-0}" -gt 0 ]
       ;;
     gitlab)
       local mr_result
