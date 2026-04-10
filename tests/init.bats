@@ -110,6 +110,12 @@ printf '\n'
 SCRIPT
 }
 
+require_runtime_shell() {
+  local shell_name="$1"
+
+  command -v "$shell_name" >/dev/null 2>&1 || skip "$shell_name is not installed"
+}
+
 # ── Default function name ────────────────────────────────────────────────────
 
 @test "bash output defines gtr() function by default" {
@@ -294,6 +300,7 @@ SCRIPT
 }
 
 @test "bash generated postCd hooks continue after stdin read" {
+  require_runtime_shell bash
   run run_generated_post_cd_hooks bash
 
   [ "$status" -eq 0 ]
@@ -301,6 +308,7 @@ SCRIPT
 }
 
 @test "zsh generated postCd hooks continue after stdin read" {
+  require_runtime_shell zsh
   run run_generated_post_cd_hooks zsh
 
   [ "$status" -eq 0 ]
