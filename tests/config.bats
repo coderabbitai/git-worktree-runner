@@ -6,6 +6,13 @@ setup() {
   source "$PROJECT_ROOT/lib/config.sh"
 }
 
+teardown() {
+  if [ -n "${TEST_REPO:-}" ]; then
+    teardown_integration_repo
+    unset TEST_REPO TEST_WORKTREES_DIR
+  fi
+}
+
 # ── Key mapping ──────────────────────────────────────────────────────────────
 
 @test "cfg_map_to_file_key maps gtr.copy.include to copy.include" {
@@ -124,4 +131,28 @@ setup() {
   [[ "$result" == *"gtr.editor.default"* ]]
   [[ "$result" == *"vscode"* ]]
   [[ "$result" == *"[local]"* ]]
+}
+
+# ── Repo context integration ─────────────────────────────────────────────────
+
+@test "_resolve_main_repo_root returns the repo root from a subdirectory" {
+  setup_integration_repo
+  mkdir -p "$TEST_REPO/subdir/nested"
+  cd "$TEST_REPO/subdir/nested"
+  local expected
+  expected=$(cd "$TEST_REPO" && pwd -P)
+
+  result=$(_resolve_main_repo_root)
+  [ "$result" = "$expected" ]
+}
+
+@test "_gtrconfig_path points at the repo root from a subdirectory" {
+  setup_integration_repo
+  mkdir -p "$TEST_REPO/subdir/nested"
+  cd "$TEST_REPO/subdir/nested"
+  local expected
+  expected="$(cd "$TEST_REPO" && pwd -P)/.gtrconfig"
+
+  result=$(_gtrconfig_path)
+  [ "$result" = "$expected" ]
 }
