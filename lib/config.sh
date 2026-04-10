@@ -10,24 +10,38 @@
 # 5. Environment variables
 # 6. Fallback values
 
+# Resolve the main repo root from the current git context.
+# Works from the main repo root, a subdirectory, or a linked worktree.
+# Returns: absolute path to main repo root or empty on failure
+_resolve_main_repo_root() {
+  local git_common_dir repo_root
+  git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || return 1
+
+  [ -n "$git_common_dir" ] || return 1
+
+  case "$git_common_dir" in
+    /*)
+      repo_root="${git_common_dir%/.git}"
+      ;;
+    *)
+      repo_root=$(
+        unset CDPATH
+        cd -P -- "$git_common_dir/.." 2>/dev/null && pwd -P
+      ) || return 1
+      ;;
+  esac
+
+  [ -n "$repo_root" ] || return 1
+  printf "%s" "$repo_root"
+}
+
 # Get the path to .gtrconfig file in main repo root
 # Usage: _gtrconfig_path
 # Returns: path to .gtrconfig or empty if not in a repo
-# Note: Uses --git-common-dir to find main repo even from worktrees
+# Note: Uses _resolve_main_repo_root to find main repo even from worktrees/subdirectories
 _gtrconfig_path() {
-  local git_common_dir repo_root
-  git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || return 0
-
-  # git-common-dir returns:
-  # - ".git" when in main repo (relative)
-  # - "/absolute/path/to/repo/.git" when in worktree (absolute)
-  if [ "$git_common_dir" = ".git" ]; then
-    # In main repo - use show-toplevel
-    repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
-  else
-    # In worktree - strip /.git suffix from absolute path
-    repo_root="${git_common_dir%/.git}"
-  fi
+  local repo_root
+  repo_root=$(_resolve_main_repo_root) || return 0
 
   printf "%s/.gtrconfig" "$repo_root"
 }

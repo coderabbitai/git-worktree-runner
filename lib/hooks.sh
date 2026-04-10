@@ -248,7 +248,7 @@ run_hooks() {
       done
       # Execute the hook
       eval "$hook"
-    ); then
+    ) </dev/null; then
       log_info "Hook $hook_count completed successfully"
     else
       local rc=$?
@@ -325,7 +325,7 @@ run_hooks_export() {
     log_info "Hook $hook_count: $hook"
 
     # eval directly (no subshell) so exports persist
-    eval "$hook" || log_warn "Hook $hook_count failed (continuing)"
+    eval "$hook" </dev/null || log_warn "Hook $hook_count failed (continuing)"
   done <<EOF
 $hooks
 EOF
