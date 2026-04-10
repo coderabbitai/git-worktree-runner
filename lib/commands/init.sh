@@ -126,7 +126,7 @@ __FUNC___run_post_cd_hooks() {
         [ -z "$_gtr_hook" ] && continue
         case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
         _gtr_seen="$_gtr_seen|$_gtr_hook|"
-        eval "$_gtr_hook" || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
+        eval "$_gtr_hook" </dev/null || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
       done <<< "$_gtr_hooks"
       unset WORKTREE_PATH REPO_ROOT BRANCH
     fi
@@ -303,7 +303,7 @@ __FUNC___run_post_cd_hooks() {
         [ -z "$_gtr_hook" ] && continue
         case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
         _gtr_seen="$_gtr_seen|$_gtr_hook|"
-        eval "$_gtr_hook" || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
+        eval "$_gtr_hook" </dev/null || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
       done <<< "$_gtr_hooks"
       unset WORKTREE_PATH REPO_ROOT BRANCH
     fi

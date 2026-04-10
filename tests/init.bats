@@ -70,6 +70,52 @@ printf 'REPLY=%s\n' "${COMPREPLY[*]}"
 BASH
 }
 
+run_generated_post_cd_hooks() {
+  local shell_name="$1"
+
+  "$shell_name" -s -- "$PROJECT_ROOT" "$shell_name" <<'SCRIPT'
+PROJECT_ROOT="$1"
+shell_name="$2"
+
+log_info() { :; }
+log_warn() { :; }
+log_error() { :; }
+show_command_help() { :; }
+compdef() { :; }
+
+# shellcheck disable=SC1090
+. "$PROJECT_ROOT/lib/commands/init.sh"
+
+repo=$(mktemp -d)
+cleanup() {
+  rm -rf "$repo"
+}
+trap cleanup EXIT
+
+git -C "$repo" init --quiet
+git -C "$repo" config user.name "Test User"
+git -C "$repo" config user.email "test@example.com"
+git -C "$repo" commit --allow-empty -m "init" --quiet
+
+git -C "$repo" config --add gtr.hook.postCd 'echo first >> "$REPO_ROOT/order"'
+git -C "$repo" config --add gtr.hook.postCd 'cat'
+git -C "$repo" config --add gtr.hook.postCd 'echo third >> "$REPO_ROOT/order"'
+
+eval "$(cmd_init "$shell_name")"
+gtr_run_post_cd_hooks "$repo"
+
+printf 'ORDER='
+paste -sd, "$repo/order"
+printf '\n'
+SCRIPT
+}
+
+require_runtime_shell() {
+  local shell_name="$1"
+
+  command -v "$shell_name" >/dev/null 2>&1 || skip "$shell_name is not installed"
+}
+
 # ── Default function name ────────────────────────────────────────────────────
 
 @test "bash output defines gtr() function by default" {
@@ -251,6 +297,22 @@ BASH
   [[ "$output" == *"git worktree list --porcelain"* ]]
   [[ "$output" == *'run_post_cd_hooks "$_gtr_new_dir"'* ]]
   [[ "$output" == *'could not determine new directory for --cd'* ]]
+}
+
+@test "bash generated postCd hooks continue after stdin read" {
+  require_runtime_shell bash
+  run run_generated_post_cd_hooks bash
+
+  [ "$status" -eq 0 ]
+  [ "$output" = "ORDER=first,third" ]
+}
+
+@test "zsh generated postCd hooks continue after stdin read" {
+  require_runtime_shell zsh
+  run run_generated_post_cd_hooks zsh
+
+  [ "$status" -eq 0 ]
+  [ "$output" = "ORDER=first,third" ]
 }
 
 @test "fish output uses worktree diff to locate the new directory for --cd" {

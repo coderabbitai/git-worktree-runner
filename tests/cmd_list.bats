@@ -76,3 +76,12 @@ teardown() {
   [[ "$output" == *"$TEST_REPO"* ]]
   [[ "$output" == *"wt-porcelain"* ]]
 }
+
+@test "cmd_list from a repo subdirectory shows the main repo root" {
+  mkdir -p "$TEST_REPO/subdir/nested"
+  cd "$TEST_REPO/subdir/nested"
+  run cmd_list
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$TEST_REPO"* ]]
+  [[ "$output" != *"subdir/..-worktrees"* ]]
+}
