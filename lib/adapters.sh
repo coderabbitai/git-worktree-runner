@@ -293,16 +293,6 @@ _parse_configured_command() {
   _set_array_var "$out_var" "${parsed_tokens[@]}"
 }
 
-_configured_command_uses_path_arg() {
-  local arg="$1"
-  case "$arg" in
-    /* | ./* | ../* | ~* | *\\*)
-      return 0
-      ;;
-  esac
-  return 1
-}
-
 _configured_command_is_wrapper() {
   local cmd_name="$1"
   case "$cmd_name" in
@@ -311,19 +301,6 @@ _configured_command_is_wrapper() {
       ;;
   esac
   return 1
-}
-
-# Reject raw shell syntax before argv parsing.
-_configured_command_has_safe_syntax() {
-  local command_string="$1"
-
-  # Reject shell metacharacters in config-supplied command names to prevent injection.
-  # shellcheck disable=SC2016 # Literal '$(' pattern match is intentional
-  case "$command_string" in
-    *\;* | *\`* | *'$('* | *\|* | *\&* | *'>'* | *'<'*)
-      return 1
-      ;;
-  esac
 }
 
 _configured_command_is_safe() {
@@ -342,12 +319,7 @@ _configured_command_is_safe() {
     return 1
   fi
 
-  local arg
-  for arg in "$@"; do
-    if _configured_command_uses_path_arg "$arg"; then
-      return 1
-    fi
-  done
+  return 0
 }
 
 # Run a config-supplied command argv that has already been parsed and validated.
@@ -469,8 +441,7 @@ resolve_workspace_file() {
 _load_adapter() {
   local type="$1" name="$2" label="$3" builtin_list="$4" path_hint="$5"
   local parsed_args=()
-  if ! _configured_command_has_safe_syntax "$name" \
-    || ! _parse_configured_command parsed_args "$name" \
+  if ! _parse_configured_command parsed_args "$name" \
     || ! _configured_command_is_safe "${parsed_args[@]}"; then
     log_error "$label '$name' is not a safe executable command"
     log_info "Use a PATH command name, optionally with flags (e.g., 'code --wait')"

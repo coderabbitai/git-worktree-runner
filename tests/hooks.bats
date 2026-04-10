@@ -56,6 +56,37 @@ EOF
   [ "$status" -eq 1 ]
 }
 
+@test "_hooks_are_trusted treats configs without hooks as trusted" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[copy]
+  include = .env
+EOF
+
+  _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "_hooks_are_trusted fails closed when trust path resolution errors" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  _hooks_reviewed_trust_path() { return 1; }
+
+  ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "_hooks_mark_trusted fails when trust path resolution errors" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  _hooks_reviewed_trust_path() { return 1; }
+
+  ! _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+}
+
 @test "repo-specific trust markers differ for the same hook content" {
   local second_repo="$BATS_TMPDIR/second-repo"
   mkdir -p "$second_repo"

@@ -141,6 +141,34 @@ EOF
   [ "$GTR_AI_CMD_NAME" = "bunx" ]
 }
 
+@test "_load_adapter allows path-like literal arguments" {
+  mock_bin_dir="$(mktemp -d)"
+  cat > "$mock_bin_dir/tool" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$mock_bin_dir/tool"
+  PATH="$mock_bin_dir:$PATH"
+
+  _load_adapter "ai" "tool ~/.toolrc ../config/local.yml" "AI tool" "$(_list_registry_names "$_AI_REGISTRY")" "tool"
+  [ "$GTR_AI_CMD" = "tool ~/.toolrc ../config/local.yml" ]
+  [ "$GTR_AI_CMD_NAME" = "tool" ]
+}
+
+@test "_load_adapter allows raw metacharacters inside literal argv data" {
+  mock_bin_dir="$(mktemp -d)"
+  cat > "$mock_bin_dir/tool" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$mock_bin_dir/tool"
+  PATH="$mock_bin_dir:$PATH"
+
+  _load_adapter "ai" "tool --label foo&bar" "AI tool" "$(_list_registry_names "$_AI_REGISTRY")" "tool"
+  [ "$GTR_AI_CMD" = "tool --label foo&bar" ]
+  [ "$GTR_AI_CMD_NAME" = "tool" ]
+}
+
 @test "_load_adapter rejects filesystem path commands in generic fallback" {
   run _load_adapter "editor" "./bin/gtr" "Editor" "$(_list_registry_names "$_EDITOR_REGISTRY")" "code, vim"
   [ "$status" -eq 1 ]

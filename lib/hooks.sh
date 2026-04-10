@@ -136,8 +136,9 @@ _hooks_are_trusted() {
   local config_file="$1"
   [ ! -f "$config_file" ] && return 0
 
-  local trust_path
-  trust_path=$(_hooks_current_trust_path "$config_file") || return 0  # no hooks = trusted
+  local hook_content trust_path
+  hook_content=$(_hooks_read_definitions "$config_file") || return 0
+  trust_path=$(_hooks_reviewed_trust_path "$config_file" "$hook_content") || return 1
   _hooks_marker_matches_config "$trust_path" "$config_file"
 }
 
@@ -168,8 +169,9 @@ _hooks_write_trust_marker() {
 # Usage: _hooks_mark_trusted <config_file>
 _hooks_mark_trusted() {
   local config_file="$1"
-  local trust_path
-  trust_path=$(_hooks_current_trust_path "$config_file") || return 0
+  local hook_content trust_path
+  hook_content=$(_hooks_read_definitions "$config_file") || return 0
+  trust_path=$(_hooks_reviewed_trust_path "$config_file" "$hook_content") || return 1
 
   _hooks_write_trust_marker "$trust_path" "$config_file"
 }
