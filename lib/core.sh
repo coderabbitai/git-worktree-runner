@@ -139,7 +139,7 @@ resolve_default_branch() {
 
   # Auto-detect from the selected remote's HEAD
   default_branch=$(git symbolic-ref --quiet "refs/remotes/$remote/HEAD" 2>/dev/null || true)
-  default_branch="${default_branch#refs/remotes/$remote/}"
+  default_branch="${default_branch#refs/remotes/"$remote"/}"
 
   if [ -n "$default_branch" ]; then
     printf "%s" "$default_branch"
