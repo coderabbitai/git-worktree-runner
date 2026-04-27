@@ -319,7 +319,7 @@ EOF
 }
 
 # Copy directories matching patterns (typically git-ignored directories like node_modules)
-# Usage: copy_directories src_root dst_root dir_patterns excludes
+# Usage: copy_directories src_root dst_root dir_patterns excludes [dry_run]
 # dir_patterns: newline-separated directory names to copy (e.g., "node_modules", ".venv")
 # excludes: newline-separated directory patterns to exclude (supports globs like "node_modules/.cache")
 # WARNING: This copies entire directories including potentially sensitive files.
@@ -329,6 +329,7 @@ copy_directories() {
   local dst_root="$2"
   local dir_patterns="$3"
   local excludes="$4"
+  local dry_run="${5:-false}"
 
   if [ -z "$dir_patterns" ]; then
     return 0
@@ -372,6 +373,13 @@ copy_directories() {
       local dest_dir="$dst_root/$dir_path"
       local dest_parent
       dest_parent=$(dirname "$dest_dir")
+
+      if [ "$dry_run" = "true" ]; then
+        log_info "[dry-run] Would copy directory $dir_path"
+        copied_count=$((copied_count + 1))
+        continue
+      fi
+
       mkdir -p "$dest_parent"
 
       # Copy directory using CoW when available (preserves symlinks as symlinks)
@@ -392,7 +400,11 @@ EOF
   cd "$old_pwd" || return 1
 
   if [ "$copied_count" -gt 0 ]; then
-    log_info "Copied $copied_count directories"
+    if [ "$dry_run" = "true" ]; then
+      log_info "[dry-run] Would copy $copied_count directories"
+    else
+      log_info "Copied $copied_count directories"
+    fi
   fi
 
   return 0

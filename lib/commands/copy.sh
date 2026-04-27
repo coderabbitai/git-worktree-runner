@@ -43,17 +43,19 @@ cmd_copy() {
   src_path="$_ctx_worktree_path"
 
   # Get patterns (flag > config + .worktreeinclude)
-  local excludes
+  local excludes dir_includes="" dir_excludes=""
   if [ -z "$patterns" ]; then
     merge_copy_patterns "$repo_root"
   
     patterns="$_ctx_copy_includes" excludes="$_ctx_copy_excludes"
+    dir_includes=$(cfg_get_all gtr.copy.includeDirs copy.includeDirs)
+    dir_excludes=$(cfg_get_all gtr.copy.excludeDirs copy.excludeDirs)
   else
     excludes=$(cfg_get_all gtr.copy.exclude copy.exclude)
   fi
 
-  if [ -z "$patterns" ]; then
-    log_error "No patterns specified. Use '-- <pattern>...' or configure gtr.copy.include"
+  if [ -z "$patterns" ] && [ -z "$dir_includes" ]; then
+    log_error "No patterns specified. Use '-- <pattern>...' or configure gtr.copy.include or gtr.copy.includeDirs"
     exit 1
   fi
 
@@ -85,10 +87,12 @@ cmd_copy() {
 
     if [ "$dry_run" -eq 1 ]; then
       log_step "[dry-run] Would copy to: $dst_branch"
-      copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true" "true"
+      [ -n "$patterns" ] && copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true" "true"
+      [ -n "$dir_includes" ] && copy_directories "$src_path" "$dst_path" "$dir_includes" "$dir_excludes" "true"
     else
       log_step "Copying to: $dst_branch"
-      copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true"
+      [ -n "$patterns" ] && copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true"
+      [ -n "$dir_includes" ] && copy_directories "$src_path" "$dst_path" "$dir_includes" "$dir_excludes"
     fi
     copied_any=1
   done
