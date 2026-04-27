@@ -17,6 +17,7 @@ feature/user-auth becomes folder "feature-user-auth").
 Options:
   --from <ref>        Create from a specific ref (default: default branch)
   --from-current      Create from the current branch (for parallel variants)
+  --remote <name>     Remote used for default base refs (default: gtr.defaultRemote)
   --track <mode>      Branch tracking mode: auto|remote|local|none (default: auto)
                       auto: tries remote first, then local, then creates new
   --no-copy           Skip file copying (gtr.copy.include patterns)
@@ -473,6 +474,7 @@ CORE COMMANDS (daily workflow):
          Create a new worktree (folder named after branch)
          --from <ref>: create from specific ref
          --from-current: create from current branch (for parallel variants)
+         --remote <name>: remote used for default base refs
          --track <mode>: tracking mode (auto|remote|local|none)
          --no-copy: skip file copying
          --no-fetch: skip git fetch
@@ -636,6 +638,7 @@ CONFIGURATION OPTIONS:
   gtr.worktrees.dir        Worktrees base directory
   gtr.worktrees.prefix     Worktree folder prefix (default: "")
   gtr.defaultBranch        Default branch (default: auto)
+  gtr.defaultRemote        Default remote (default: origin)
   gtr.editor.default       Default editor
                            Options: antigravity, atom, cursor, emacs,
                            idea, nano, nvim, pycharm, sublime, vim,

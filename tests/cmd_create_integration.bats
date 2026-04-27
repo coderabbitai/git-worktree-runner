@@ -25,6 +25,21 @@ teardown() {
   [ -d "$TEST_WORKTREES_DIR/track-none" ]
 }
 
+@test "cmd_create --remote uses selected remote default branch" {
+  local old_sha expected_sha actual_sha
+  old_sha=$(git rev-parse HEAD)
+  git update-ref refs/remotes/origin/main "$old_sha"
+
+  git commit --allow-empty -m "upstream main" --quiet
+  expected_sha=$(git rev-parse HEAD)
+  git update-ref refs/remotes/upstream/main "$expected_sha"
+
+  cmd_create remote-default --remote upstream --track none --no-fetch --yes
+
+  actual_sha=$(git -C "$TEST_WORKTREES_DIR/remote-default" rev-parse HEAD)
+  [ "$actual_sha" = "$expected_sha" ]
+}
+
 @test "cmd_create creates worktree with --name suffix" {
   cmd_create named-branch --from HEAD --name backend --no-fetch --yes
   [ -d "$TEST_WORKTREES_DIR/named-branch-backend" ]

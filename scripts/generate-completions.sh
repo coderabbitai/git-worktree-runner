@@ -193,7 +193,7 @@ MIDDLE1
     new)
       # Complete flags
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--from --from-current --track --no-copy --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
+        COMPREPLY=($(compgen -W "--from --from-current --remote --track --no-copy --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
       elif [ "$prev" = "--track" ]; then
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
       fi
@@ -320,6 +320,7 @@ _git-gtr() {
       '1:branch name:' \
       '--from[Base ref]:ref:' \
       '--from-current[Create from current branch]' \
+      '--remote[Remote used for default base refs]:remote:' \
       '--track[Track mode]:mode:(auto remote local none)' \
       '--no-copy[Skip file copying]' \
       '--no-fetch[Skip git fetch]' \
@@ -535,6 +536,7 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 # New command options
 complete -c git -n '__fish_git_gtr_using_command new' -l from -d 'Base ref' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l from-current -d 'Create from current branch'
+complete -c git -n '__fish_git_gtr_using_command new' -l remote -d 'Remote used for default base refs' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l track -d 'Track mode' -r -a 'auto remote local none'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-copy -d 'Skip file copying'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-fetch -d 'Skip git fetch'
@@ -615,6 +617,7 @@ MIDDLE2
       gtr.worktrees.dir)    desc="Worktrees base directory" ;;
       gtr.worktrees.prefix) desc="Worktree folder prefix" ;;
       gtr.defaultBranch)    desc="Default branch" ;;
+      gtr.defaultRemote)    desc="Default remote" ;;
       gtr.editor.default)   desc="Default editor" ;;
       gtr.editor.workspace) desc="Path to workspace file (.code-workspace)" ;;
       gtr.ai.default)       desc="Default AI tool" ;;

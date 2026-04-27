@@ -172,6 +172,7 @@ git gtr new my-feature --name descriptive-variant                               
 
 - `--from <ref>`: Create from specific ref
 - `--from-current`: Create from current branch (useful for parallel variant work)
+- `--remote <name>`: Remote used for default base refs
 - `--track <mode>`: Tracking mode (auto|remote|local|none)
 - `--no-copy`: Skip file copying
 - `--no-fetch`: Skip git fetch
@@ -388,6 +389,7 @@ git gtr config set gtr.ui.color never
 [defaults]
     editor = cursor
     ai = claude
+    remote = upstream
 ```
 
 **Configuration precedence** (highest to lowest):

@@ -63,22 +63,22 @@ _post_create_next_steps() {
 }
 
 # Determine the base ref for worktree creation
-# Usage: _create_resolve_from_ref <from_ref> <from_current> <repo_root>
+# Usage: _create_resolve_from_ref <from_ref> <from_current> <repo_root> [remote]
 # Prints: resolved ref
 _create_resolve_from_ref() {
-  local from_ref="$1" from_current="$2" repo_root="$3"
+  local from_ref="$1" from_current="$2" repo_root="$3" remote="${4:-$(resolve_default_remote)}"
 
   if [ -z "$from_ref" ]; then
     if [ "$from_current" -eq 1 ]; then
       from_ref=$(get_current_branch)
       if [ -z "$from_ref" ] || [ "$from_ref" = "HEAD" ]; then
         log_warn "Currently in detached HEAD state - falling back to default branch"
-        from_ref="origin/$(resolve_default_branch "$repo_root")"
+        from_ref="$remote/$(resolve_default_branch "$repo_root" "$remote")"
       else
         log_info "Creating from current branch: $from_ref"
       fi
     else
-      from_ref="origin/$(resolve_default_branch "$repo_root")"
+      from_ref="$remote/$(resolve_default_branch "$repo_root" "$remote")"
     fi
   fi
 
@@ -89,6 +89,7 @@ cmd_create() {
   local _spec
   _spec="--from: value
 --from-current
+--remote: value
 --track: value
 --no-copy
 --no-fetch
@@ -104,6 +105,7 @@ cmd_create() {
   local branch_name="${_pa_positional[0]:-}"
   local from_ref="${_arg_from:-}"
   local from_current="${_arg_from_current:-0}"
+  local remote="${_arg_remote:-$(resolve_default_remote)}"
   local track_mode="${_arg_track:-auto}"
   local skip_copy="${_arg_no_copy:-0}"
   local skip_fetch="${_arg_no_fetch:-0}"
@@ -152,7 +154,7 @@ cmd_create() {
   fi
 
   # Determine from_ref with precedence: --from > --from-current > default
-  from_ref=$(_create_resolve_from_ref "$from_ref" "$from_current" "$repo_root")
+  from_ref=$(_create_resolve_from_ref "$from_ref" "$from_current" "$repo_root" "$remote")
 
   # Construct folder name for display
   local folder_name
@@ -170,7 +172,7 @@ cmd_create() {
 
   # Create the worktree
   local worktree_path
-  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name" "$folder_override"); then
+  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name" "$folder_override" "$remote"); then
     exit 1
   fi
 

@@ -108,6 +108,7 @@ _CFG_KEY_MAP=(
   "gtr.worktrees.dir|worktrees.dir"
   "gtr.worktrees.prefix|worktrees.prefix"
   "gtr.defaultBranch|defaults.branch"
+  "gtr.defaultRemote|defaults.remote"
   "gtr.provider|defaults.provider"
   "gtr.ui.color|ui.color"
 )
