@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 - Repo root resolution now works correctly from subdirectories ([#166](https://github.com/coderabbitai/git-worktree-runner/pull/166))
 - Hooks that read stdin no longer drain input and skip later hooks ([#165](https://github.com/coderabbitai/git-worktree-runner/pull/165))
-- Fish `gtr cd` fzf picker now changes directory when pressing Enter ([#172](https://github.com/coderabbitai/git-worktree-runner/pull/172))
+- Fish `git gtr cd` fzf picker now changes directory when pressing Enter ([#172](https://github.com/coderabbitai/git-worktree-runner/pull/172))
 - `git gtr copy` now honors configured `gtr.copy.includeDirs` and `gtr.copy.excludeDirs`, including dry-run, `--all`, and `--from` flows ([#173](https://github.com/coderabbitai/git-worktree-runner/pull/173))
 
 ## [2.6.0] - 2026-03-19
@@ -34,9 +34,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ### Added
 
-- `gtr new --cd` shell integration so newly created worktrees can open in the current shell ([#151](https://github.com/coderabbitai/git-worktree-runner/pull/151))
+- `git gtr new --cd` shell integration so newly created worktrees can open in the current shell ([#151](https://github.com/coderabbitai/git-worktree-runner/pull/151))
 - Cached `git gtr init` output for faster shell startup ([#142](https://github.com/coderabbitai/git-worktree-runner/pull/142))
-- `ctrl-n` keybinding in the interactive `gtr cd` picker to create a new worktree inline ([#141](https://github.com/coderabbitai/git-worktree-runner/pull/141))
+- `ctrl-n` keybinding in the interactive `git gtr cd` picker to create a new worktree inline ([#141](https://github.com/coderabbitai/git-worktree-runner/pull/141))
 
 ### Changed
 
@@ -54,7 +54,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ### Added
 
-- Interactive fzf worktree picker for `gtr cd` with preview, keybindings, and multi-action support ([#136](https://github.com/coderabbitai/git-worktree-runner/pull/136))
+- Interactive fzf worktree picker for `git gtr cd` with preview, keybindings, and multi-action support ([#136](https://github.com/coderabbitai/git-worktree-runner/pull/136))
 - Helpful error message when running `git gtr cd` explaining shell integration requirement ([#137](https://github.com/coderabbitai/git-worktree-runner/pull/137))
 
 ### Changed
@@ -105,7 +105,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 ### Added
 
 - `mv`/`rename` command for worktree renaming ([#95](https://github.com/coderabbitai/git-worktree-runner/pull/95))
-- Shell integration via `git gtr init` with `gtr cd` navigation ([#104](https://github.com/coderabbitai/git-worktree-runner/pull/104))
+- Shell integration via `git gtr init` with `git gtr cd` navigation ([#104](https://github.com/coderabbitai/git-worktree-runner/pull/104))
 - `postCd` hook for shell integration ([#109](https://github.com/coderabbitai/git-worktree-runner/pull/109))
 - GitLab support for `clean --merged` ([#105](https://github.com/coderabbitai/git-worktree-runner/pull/105))
 - `--folder` flag for custom worktree folder names ([#82](https://github.com/coderabbitai/git-worktree-runner/pull/82))
