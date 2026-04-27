@@ -326,6 +326,7 @@ Remove worktrees: clean up empty directories, or remove those with merged PRs/MR
 ```bash
 git gtr clean                                  # Remove empty worktree directories and prune
 git gtr clean --merged                         # Remove worktrees for merged PRs/MRs
+git gtr clean --merged --to main               # Only remove worktrees merged to main
 git gtr clean --merged --dry-run               # Preview which worktrees would be removed
 git gtr clean --merged --yes                   # Remove without confirmation prompts
 git gtr clean --merged --force                 # Force-clean merged, ignoring local changes
@@ -335,6 +336,7 @@ git gtr clean --merged --force --yes           # Force-clean and auto-confirm
 **Options:**
 
 - `--merged`: Remove worktrees whose branches have merged PRs/MRs (also deletes the branch)
+- `--to <ref>`: Limit `--merged` cleanup to PRs/MRs merged into the given base ref
 - `--dry-run`, `-n`: Preview changes without removing
 - `--yes`, `-y`: Non-interactive mode (skip confirmation prompts)
 - `--force`, `-f`: Force removal even if worktree has uncommitted changes or untracked files

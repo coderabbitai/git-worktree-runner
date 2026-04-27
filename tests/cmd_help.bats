@@ -81,6 +81,7 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"git gtr clean"* ]]
   [[ "$output" == *"--merged"* ]]
+  [[ "$output" == *"--to <ref>"* ]]
 }
 
 @test "cmd_help copy shows copy help" {

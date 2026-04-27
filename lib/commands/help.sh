@@ -304,6 +304,7 @@ the remote URL.
 
 Options:
   --merged            Also remove worktrees with merged PRs/MRs
+  --to <ref>          Only remove worktrees for PRs/MRs merged into <ref>
   --yes, -y           Skip confirmation prompts
   --dry-run, -n       Show what would be removed without removing
   --force, -f         Force removal even if worktree has uncommitted changes or untracked files
@@ -311,6 +312,7 @@ Options:
 Examples:
   git gtr clean                                 # Clean empty directories
   git gtr clean --merged                        # Also clean merged PRs
+  git gtr clean --merged --to main              # Only clean PRs merged to main
   git gtr clean --merged --dry-run              # Preview merged cleanup
   git gtr clean --merged --yes                  # Auto-confirm everything
   git gtr clean --merged --force                # Force-clean merged, ignoring local changes
@@ -568,6 +570,7 @@ SETUP & MAINTENANCE:
   clean [options]
          Remove stale/prunable worktrees and empty directories
          --merged: also remove worktrees with merged PRs/MRs
+         --to <ref>: limit merged cleanup to PRs/MRs merged into <ref>
                    Auto-detects GitHub (gh) or GitLab (glab) from remote URL
                    Override: git gtr config set gtr.provider gitlab
          --yes, -y: skip confirmation prompts

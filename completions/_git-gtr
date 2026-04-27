@@ -81,6 +81,7 @@ _git-gtr() {
   if (( CURRENT >= 4 )) && [[ $words[3] == clean ]]; then
     _arguments \
       '--merged[Remove worktrees with merged PRs/MRs]' \
+      '--to[Only remove worktrees for PRs/MRs merged into this ref]:ref:' \
       '--yes[Skip confirmation prompts]' \
       '-y[Skip confirmation prompts]' \
       '--dry-run[Show what would be removed]' \

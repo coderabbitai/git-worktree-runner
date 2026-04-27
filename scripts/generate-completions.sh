@@ -176,7 +176,7 @@ MIDDLE1
       ;;
     clean)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--merged --yes -y --dry-run -n --force -f" -- "$cur"))
+        COMPREPLY=($(compgen -W "--merged --to --yes -y --dry-run -n --force -f" -- "$cur"))
       fi
       ;;
     copy)
@@ -340,6 +340,7 @@ _git-gtr() {
   if (( CURRENT >= 4 )) && [[ $words[3] == clean ]]; then
     _arguments \
       '--merged[Remove worktrees with merged PRs/MRs]' \
+      '--to[Only remove worktrees for PRs/MRs merged into this ref]:ref:' \
       '--yes[Skip confirmation prompts]' \
       '-y[Skip confirmation prompts]' \
       '--dry-run[Show what would be removed]' \
@@ -580,6 +581,7 @@ MIDDLE1
 
 # Clean command options
 complete -c git -n '__fish_git_gtr_using_command clean' -l merged -d 'Remove worktrees with merged PRs/MRs'
+complete -c git -n '__fish_git_gtr_using_command clean' -l to -d 'Only remove worktrees for PRs/MRs merged into this ref' -r
 complete -c git -n '__fish_git_gtr_using_command clean' -l yes -d 'Skip confirmation prompts'
 complete -c git -n '__fish_git_gtr_using_command clean' -s y -d 'Skip confirmation prompts'
 complete -c git -n '__fish_git_gtr_using_command clean' -l dry-run -d 'Show what would be removed'
