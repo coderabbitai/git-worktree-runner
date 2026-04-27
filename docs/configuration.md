@@ -62,6 +62,7 @@ Create a `.gtrconfig` file in your repository root to share configuration across
 [defaults]
     editor = cursor
     ai = claude
+    remote = upstream
 ```
 
 > [!TIP]
@@ -92,6 +93,9 @@ gtr.worktrees.prefix = dev-
 
 # Default branch (default: auto-detect)
 gtr.defaultBranch = main
+
+# Default remote for fetches, tracking, and default base refs (default: origin)
+gtr.defaultRemote = upstream
 ```
 
 > [!IMPORTANT]
@@ -440,6 +444,7 @@ git gtr config add gtr.hook.postCreate "pnpm run build"
 # Set global preferences
 git gtr config set gtr.editor.default cursor --global
 git gtr config set gtr.ai.default claude --global
+git gtr config set gtr.defaultRemote upstream --global
 ```
 
 ---
@@ -454,6 +459,7 @@ git gtr config set gtr.ai.default claude --global
 | `GTR_EDITOR_CMD_NAME` | First word of `GTR_EDITOR_CMD` for availability checks               | None                       |
 | `GTR_AI_CMD`          | Custom AI tool command (e.g., `copilot`)                             | None                       |
 | `GTR_AI_CMD_NAME`     | First word of `GTR_AI_CMD` for availability checks                   | None                       |
+| `GTR_DEFAULT_REMOTE`  | Remote used for default base refs and tracking                       | `origin`                   |
 | `GTR_COLOR`           | Override color output (`always`, `never`, `auto`)                    | `auto`                     |
 | `GTR_PROVIDER`        | Override hosting provider (`github` or `gitlab`)                     | Auto-detected from URL     |
 | `NO_COLOR`            | Disable color output when set ([no-color.org](https://no-color.org)) | Unset                      |

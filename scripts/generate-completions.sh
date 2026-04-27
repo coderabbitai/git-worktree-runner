@@ -176,7 +176,7 @@ MIDDLE1
       ;;
     clean)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--merged --yes -y --dry-run -n --force -f" -- "$cur"))
+        COMPREPLY=($(compgen -W "--merged --to --yes -y --dry-run -n --force -f" -- "$cur"))
       fi
       ;;
     copy)
@@ -193,7 +193,7 @@ MIDDLE1
     new)
       # Complete flags
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--from --from-current --track --no-copy --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
+        COMPREPLY=($(compgen -W "--from --from-current --remote --track --no-copy --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
       elif [ "$prev" = "--track" ]; then
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
       fi
@@ -321,6 +321,7 @@ _git-gtr() {
       '1:branch name:' \
       '--from[Base ref]:ref:' \
       '--from-current[Create from current branch]' \
+      '--remote[Remote used for default base refs]:remote:' \
       '--track[Track mode]:mode:(auto remote local none)' \
       '--no-copy[Skip file copying]' \
       '--no-fetch[Skip git fetch]' \
@@ -340,6 +341,7 @@ _git-gtr() {
   if (( CURRENT >= 4 )) && [[ $words[3] == clean ]]; then
     _arguments \
       '--merged[Remove worktrees with merged PRs/MRs]' \
+      '--to[Only remove worktrees for PRs/MRs merged into this ref]:ref:' \
       '--yes[Skip confirmation prompts]' \
       '-y[Skip confirmation prompts]' \
       '--dry-run[Show what would be removed]' \
@@ -537,6 +539,7 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 # New command options
 complete -c git -n '__fish_git_gtr_using_command new' -l from -d 'Base ref' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l from-current -d 'Create from current branch'
+complete -c git -n '__fish_git_gtr_using_command new' -l remote -d 'Remote used for default base refs' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l track -d 'Track mode' -r -a 'auto remote local none'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-copy -d 'Skip file copying'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-fetch -d 'Skip git fetch'
@@ -580,6 +583,7 @@ MIDDLE1
 
 # Clean command options
 complete -c git -n '__fish_git_gtr_using_command clean' -l merged -d 'Remove worktrees with merged PRs/MRs'
+complete -c git -n '__fish_git_gtr_using_command clean' -l to -d 'Only remove worktrees for PRs/MRs merged into this ref' -r
 complete -c git -n '__fish_git_gtr_using_command clean' -l yes -d 'Skip confirmation prompts'
 complete -c git -n '__fish_git_gtr_using_command clean' -s y -d 'Skip confirmation prompts'
 complete -c git -n '__fish_git_gtr_using_command clean' -l dry-run -d 'Show what would be removed'
@@ -617,6 +621,7 @@ MIDDLE2
       gtr.worktrees.dir)    desc="Worktrees base directory" ;;
       gtr.worktrees.prefix) desc="Worktree folder prefix" ;;
       gtr.defaultBranch)    desc="Default branch" ;;
+      gtr.defaultRemote)    desc="Default remote" ;;
       gtr.editor.default)   desc="Default editor" ;;
       gtr.editor.workspace) desc="Path to workspace file (.code-workspace)" ;;
       gtr.ai.default)       desc="Default AI tool" ;;

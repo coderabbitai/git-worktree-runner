@@ -61,6 +61,7 @@ complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 # New command options
 complete -c git -n '__fish_git_gtr_using_command new' -l from -d 'Base ref' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l from-current -d 'Create from current branch'
+complete -c git -n '__fish_git_gtr_using_command new' -l remote -d 'Remote used for default base refs' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l track -d 'Track mode' -r -a 'auto remote local none'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-copy -d 'Skip file copying'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-fetch -d 'Skip git fetch'
@@ -100,6 +101,7 @@ complete -c git -n '__fish_git_gtr_using_command ai' -l ai -d 'AI tool to use' -
 
 # Clean command options
 complete -c git -n '__fish_git_gtr_using_command clean' -l merged -d 'Remove worktrees with merged PRs/MRs'
+complete -c git -n '__fish_git_gtr_using_command clean' -l to -d 'Only remove worktrees for PRs/MRs merged into this ref' -r
 complete -c git -n '__fish_git_gtr_using_command clean' -l yes -d 'Skip confirmation prompts'
 complete -c git -n '__fish_git_gtr_using_command clean' -s y -d 'Skip confirmation prompts'
 complete -c git -n '__fish_git_gtr_using_command clean' -l dry-run -d 'Show what would be removed'
@@ -141,6 +143,7 @@ complete -f -c git -n '__fish_git_gtr_using_command config' -a "
   gtr.worktrees.dir	'Worktrees base directory'
   gtr.worktrees.prefix	'Worktree folder prefix'
   gtr.defaultBranch	'Default branch'
+  gtr.defaultRemote	'Default remote'
   gtr.provider	'Hosting provider (github, gitlab)'
   gtr.ui.color	'Color output mode (auto, always, never)'
 "

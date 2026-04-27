@@ -526,6 +526,17 @@ require_runtime_shell() {
   [[ "$output" == *'cd $dir'* ]]
 }
 
+@test "fish fzf enter keeps selection variables in function scope" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'set -l _gtr_key'* ]]
+  [[ "$output" == *'set -l _gtr_line'* ]]
+  [[ "$output" == *'set _gtr_key ""'* ]]
+  [[ "$output" == *'set _gtr_line "$_gtr_selection[1]"'* ]]
+  [[ "$output" != *'set -l _gtr_key ""'* ]]
+  [[ "$output" != *'set -l _gtr_line "$_gtr_selection[1]"'* ]]
+}
+
 # ── fzf: ctrl-e (editor) — via --expect ──────────────────────────────────────
 
 @test "bash fzf ctrl-e handled via --expect for full terminal access" {

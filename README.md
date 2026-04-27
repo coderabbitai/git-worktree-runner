@@ -172,6 +172,7 @@ git gtr new my-feature --name descriptive-variant                               
 
 - `--from <ref>`: Create from specific ref
 - `--from-current`: Create from current branch (useful for parallel variant work)
+- `--remote <name>`: Remote used for default base refs
 - `--track <mode>`: Tracking mode (auto|remote|local|none)
 - `--no-copy`: Skip file copying
 - `--no-fetch`: Skip git fetch
@@ -325,6 +326,7 @@ Remove worktrees: clean up empty directories, or remove those with merged PRs/MR
 ```bash
 git gtr clean                                  # Remove empty worktree directories and prune
 git gtr clean --merged                         # Remove worktrees for merged PRs/MRs
+git gtr clean --merged --to main               # Only remove worktrees merged to main
 git gtr clean --merged --dry-run               # Preview which worktrees would be removed
 git gtr clean --merged --yes                   # Remove without confirmation prompts
 git gtr clean --merged --force                 # Force-clean merged, ignoring local changes
@@ -334,6 +336,7 @@ git gtr clean --merged --force --yes           # Force-clean and auto-confirm
 **Options:**
 
 - `--merged`: Remove worktrees whose branches have merged PRs/MRs (also deletes the branch)
+- `--to <ref>`: Limit `--merged` cleanup to PRs/MRs merged into the given base ref
 - `--dry-run`, `-n`: Preview changes without removing
 - `--yes`, `-y`: Non-interactive mode (skip confirmation prompts)
 - `--force`, `-f`: Force removal even if worktree has uncommitted changes or untracked files
@@ -406,6 +409,7 @@ git gtr config set gtr.ui.color never
 [defaults]
     editor = cursor
     ai = claude
+    remote = upstream
 ```
 
 **Hook trust:** Hooks defined in `.gtrconfig` require explicit approval before they execute. Run `git gtr trust` after cloning a repository or when `.gtrconfig` hooks change. This protects against malicious hook injection in shared repositories.

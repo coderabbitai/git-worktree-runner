@@ -17,6 +17,7 @@ feature/user-auth becomes folder "feature-user-auth").
 Options:
   --from <ref>        Create from a specific ref (default: default branch)
   --from-current      Create from the current branch (for parallel variants)
+  --remote <name>     Remote used for default base refs (default: gtr.defaultRemote)
   --track <mode>      Branch tracking mode: auto|remote|local|none (default: auto)
                       auto: tries remote first, then local, then creates new
   --no-copy           Skip file copying (gtr.copy.include patterns)
@@ -312,6 +313,7 @@ the remote URL.
 
 Options:
   --merged            Also remove worktrees with merged PRs/MRs
+  --to <ref>          Only remove worktrees for PRs/MRs merged into <ref>
   --yes, -y           Skip confirmation prompts
   --dry-run, -n       Show what would be removed without removing
   --force, -f         Force removal even if worktree has uncommitted changes or untracked files
@@ -319,6 +321,7 @@ Options:
 Examples:
   git gtr clean                                 # Clean empty directories
   git gtr clean --merged                        # Also clean merged PRs
+  git gtr clean --merged --to main              # Only clean PRs merged to main
   git gtr clean --merged --dry-run              # Preview merged cleanup
   git gtr clean --merged --yes                  # Auto-confirm everything
   git gtr clean --merged --force                # Force-clean merged, ignoring local changes
@@ -504,6 +507,7 @@ CORE COMMANDS (daily workflow):
          Create a new worktree (folder named after branch)
          --from <ref>: create from specific ref
          --from-current: create from current branch (for parallel variants)
+         --remote <name>: remote used for default base refs
          --track <mode>: tracking mode (auto|remote|local|none)
          --no-copy: skip file copying
          --no-fetch: skip git fetch
@@ -597,6 +601,7 @@ SETUP & MAINTENANCE:
   clean [options]
          Remove stale/prunable worktrees and empty directories
          --merged: also remove worktrees with merged PRs/MRs
+         --to <ref>: limit merged cleanup to PRs/MRs merged into <ref>
                    Auto-detects GitHub (gh) or GitLab (glab) from remote URL
                    Override: git gtr config set gtr.provider gitlab
          --yes, -y: skip confirmation prompts
@@ -672,6 +677,7 @@ CONFIGURATION OPTIONS:
   gtr.worktrees.dir        Worktrees base directory
   gtr.worktrees.prefix     Worktree folder prefix (default: "")
   gtr.defaultBranch        Default branch (default: auto)
+  gtr.defaultRemote        Default remote (default: origin)
   gtr.editor.default       Default editor
                            Options: antigravity, atom, cursor, emacs,
                            idea, nano, nvim, pycharm, sublime, vim,

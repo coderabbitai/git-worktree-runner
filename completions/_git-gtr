@@ -62,6 +62,7 @@ _git-gtr() {
       '1:branch name:' \
       '--from[Base ref]:ref:' \
       '--from-current[Create from current branch]' \
+      '--remote[Remote used for default base refs]:remote:' \
       '--track[Track mode]:mode:(auto remote local none)' \
       '--no-copy[Skip file copying]' \
       '--no-fetch[Skip git fetch]' \
@@ -81,6 +82,7 @@ _git-gtr() {
   if (( CURRENT >= 4 )) && [[ $words[3] == clean ]]; then
     _arguments \
       '--merged[Remove worktrees with merged PRs/MRs]' \
+      '--to[Only remove worktrees for PRs/MRs merged into this ref]:ref:' \
       '--yes[Skip confirmation prompts]' \
       '-y[Skip confirmation prompts]' \
       '--dry-run[Show what would be removed]' \
@@ -184,7 +186,7 @@ _git-gtr() {
                 '--local[Use local git config]' \
                 '--global[Use global git config]' \
                 '--system[Use system git config]' \
-                '*:config key:(gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.provider gtr.ui.color)'
+                '*:config key:(gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.defaultRemote gtr.provider gtr.ui.color)'
               ;;
             set|add|unset)
               # Write operations only support --local and --global
@@ -192,7 +194,7 @@ _git-gtr() {
               _arguments \
                 '--local[Use local git config]' \
                 '--global[Use global git config]' \
-                '*:config key:(gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.provider gtr.ui.color)'
+                '*:config key:(gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.defaultRemote gtr.provider gtr.ui.color)'
               ;;
           esac
         fi

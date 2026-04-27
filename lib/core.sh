@@ -115,10 +115,17 @@ resolve_base_dir() {
   printf "%s" "$base_dir"
 }
 
+# Resolve the default remote name
+# Usage: resolve_default_remote
+resolve_default_remote() {
+  cfg_default "gtr.defaultRemote" "GTR_DEFAULT_REMOTE" "origin"
+}
+
 # Resolve the default branch name
-# Usage: resolve_default_branch [repo_root]
+# Usage: resolve_default_branch [repo_root] [remote]
 resolve_default_branch() {
   local repo_root="${1:-$(pwd)}"
+  local remote="${2:-$(resolve_default_remote)}"
   local default_branch
   local configured_branch
 
@@ -130,8 +137,9 @@ resolve_default_branch() {
     return 0
   fi
 
-  # Auto-detect from origin/HEAD
-  default_branch=$(git symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+  # Auto-detect from the selected remote's HEAD
+  default_branch=$(git symbolic-ref --quiet "refs/remotes/$remote/HEAD" 2>/dev/null || true)
+  default_branch="${default_branch#refs/remotes/"$remote"/}"
 
   if [ -n "$default_branch" ]; then
     printf "%s" "$default_branch"
@@ -139,9 +147,9 @@ resolve_default_branch() {
   fi
 
   # Fallback: try common branch names
-  if git show-ref --verify --quiet "refs/remotes/origin/main"; then
+  if git show-ref --verify --quiet "refs/remotes/$remote/main"; then
     printf "main"
-  elif git show-ref --verify --quiet "refs/remotes/origin/master"; then
+  elif git show-ref --verify --quiet "refs/remotes/$remote/master"; then
     printf "master"
   else
     # Last resort: just use 'main'
@@ -370,34 +378,36 @@ _resolve_folder_name() {
 
 # Check if a branch exists on remote and/or locally.
 # Sets globals: _wt_remote_exists, _wt_local_exists (0 or 1)
-# Usage: _check_branch_refs <branch_name>
+# Usage: _check_branch_refs <branch_name> [remote]
 declare _wt_remote_exists _wt_local_exists
 _check_branch_refs() {
+  local branch_name="$1" remote="${2:-$(resolve_default_remote)}"
+
   _wt_remote_exists=0
   _wt_local_exists=0
-  git show-ref --verify --quiet "refs/remotes/origin/$1" && _wt_remote_exists=1
-  git show-ref --verify --quiet "refs/heads/$1" && _wt_local_exists=1
+  git show-ref --verify --quiet "refs/remotes/$remote/$branch_name" && _wt_remote_exists=1
+  git show-ref --verify --quiet "refs/heads/$branch_name" && _wt_local_exists=1
   return 0
 }
 
 # Auto-track: create local tracking branch from remote if needed, then add worktree.
-# Usage: _worktree_add_tracked <worktree_path> <branch_name> [force_args...]
+# Usage: _worktree_add_tracked <worktree_path> <branch_name> [remote] [force_args...]
 # shellcheck disable=SC2317  # Called indirectly from create_worktree
 _worktree_add_tracked() {
-  local wt_path="$1" branch_name="$2"
-  shift 2
+  local wt_path="$1" branch_name="$2" remote="${3:-$(resolve_default_remote)}"
+  shift 3
 
-  log_step "Branch '$branch_name' exists on remote"
-  if git branch --track "$branch_name" "origin/$branch_name" >/dev/null 2>&1; then
-    log_info "Created local branch tracking origin/$branch_name"
+  log_step "Branch '$branch_name' exists on $remote"
+  if git branch --track "$branch_name" "$remote/$branch_name" >/dev/null 2>&1; then
+    log_info "Created local branch tracking $remote/$branch_name"
   fi
   _try_worktree_add "$wt_path" "" \
-    "Worktree created tracking origin/$branch_name" \
+    "Worktree created tracking $remote/$branch_name" \
     "$@" "$branch_name"
 }
 
 # Create a new git worktree
-# Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override]
+# Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override] [remote]
 # track_mode: auto, remote, local, or none
 # skip_fetch: 0 (default, fetch) or 1 (skip)
 # force: 0 (default, check branch) or 1 (allow same branch in multiple worktrees)
@@ -407,6 +417,7 @@ create_worktree() {
   local base_dir="$1" prefix="$2" branch_name="$3" from_ref="$4"
   local track_mode="${5:-auto}" skip_fetch="${6:-0}" force="${7:-0}"
   local custom_name="${8:-}" folder_override="${9:-}"
+  local remote="${10:-$(resolve_default_remote)}"
 
   local sanitized_name
   sanitized_name=$(_resolve_folder_name "$branch_name" "$custom_name" "$folder_override") || return 1
@@ -424,31 +435,31 @@ create_worktree() {
 
   if [ "$skip_fetch" -eq 0 ]; then
     log_step "Fetching remote branches..."
-    git fetch origin 2>/dev/null || log_warn "Could not fetch from origin"
+    git fetch "$remote" 2>/dev/null || log_warn "Could not fetch from $remote"
   fi
 
-  _check_branch_refs "$branch_name"
+  _check_branch_refs "$branch_name" "$remote"
 
   # Resolve from_ref to a commit SHA to prevent git's guess-remote logic
   # from overriding the -b flag when from_ref matches a remote branch name.
-  # Try the ref as-is first, then with origin/ prefix for remote-only refs.
+  # Try the ref as-is first, then with the selected remote prefix for remote-only refs.
   local resolved_ref
   resolved_ref=$(git rev-parse --verify "${from_ref}^{commit}" 2>/dev/null) \
-    || resolved_ref=$(git rev-parse --verify "origin/${from_ref}^{commit}" 2>/dev/null) \
+    || resolved_ref=$(git rev-parse --verify "$remote/${from_ref}^{commit}" 2>/dev/null) \
     || resolved_ref="$from_ref"
 
   case "$track_mode" in
     remote)
       if [ "$_wt_remote_exists" -eq 1 ]; then
         _try_worktree_add "$worktree_path" \
-          "Creating worktree from remote branch origin/$branch_name" \
-          "Worktree created tracking origin/$branch_name" \
-          "${force_args[@]}" -b "$branch_name" "origin/$branch_name" && return 0
+          "Creating worktree from remote branch $remote/$branch_name" \
+          "Worktree created tracking $remote/$branch_name" \
+          "${force_args[@]}" -b "$branch_name" "$remote/$branch_name" && return 0
         _try_worktree_add "$worktree_path" "" \
-          "Worktree created tracking origin/$branch_name" \
+          "Worktree created tracking $remote/$branch_name" \
           "${force_args[@]}" "$branch_name" && return 0
       fi
-      log_error "Remote branch origin/$branch_name does not exist"
+      log_error "Remote branch $remote/$branch_name does not exist"
       return 1
       ;;
 
@@ -474,7 +485,7 @@ create_worktree() {
 
     auto|*)
       if [ "$_wt_remote_exists" -eq 1 ] && [ "$_wt_local_exists" -eq 0 ]; then
-        _worktree_add_tracked "$worktree_path" "$branch_name" "${force_args[@]}" && return 0
+        _worktree_add_tracked "$worktree_path" "$branch_name" "$remote" "${force_args[@]}" && return 0
       elif [ "$_wt_local_exists" -eq 1 ]; then
         _try_worktree_add "$worktree_path" \
           "Using existing local branch $branch_name" \

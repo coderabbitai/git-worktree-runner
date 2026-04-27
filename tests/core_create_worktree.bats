@@ -47,6 +47,24 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+# ── default remote/branch resolution ─────────────────────────────────────────
+
+@test "resolve_default_remote reads gtr.defaultRemote" {
+  git config gtr.defaultRemote upstream
+
+  local result
+  result=$(resolve_default_remote)
+  [ "$result" = "upstream" ]
+}
+
+@test "resolve_default_branch detects branch from selected remote" {
+  git update-ref refs/remotes/upstream/main HEAD
+
+  local result
+  result=$(resolve_default_branch "$TEST_REPO" "upstream")
+  [ "$result" = "main" ]
+}
+
 # ── _check_branch_refs ──────────────────────────────────────────────────────
 
 @test "_check_branch_refs detects local branch" {
@@ -60,6 +78,14 @@ teardown() {
   _check_branch_refs "nonexistent-branch"
   [ "$_wt_local_exists" -eq 0 ]
   [ "$_wt_remote_exists" -eq 0 ]
+}
+
+@test "_check_branch_refs detects selected remote branch" {
+  git update-ref refs/remotes/upstream/remote-only HEAD
+
+  _check_branch_refs "remote-only" "upstream"
+  [ "$_wt_remote_exists" -eq 1 ]
+  [ "$_wt_local_exists" -eq 0 ]
 }
 
 # ── create_worktree ─────────────────────────────────────────────────────────
@@ -99,6 +125,21 @@ teardown() {
   local wt_path
   wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "existing-local" "HEAD" "auto" "1")
   [ -d "$wt_path" ]
+}
+
+@test "create_worktree auto mode tracks selected remote branch" {
+  git remote add upstream "$TEST_REPO" 2>/dev/null || true
+  git branch selected-remote HEAD
+  git fetch upstream --quiet
+  git branch -D selected-remote >/dev/null
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "selected-remote" "HEAD" "auto" "1" "0" "" "" "upstream")
+  [ -d "$wt_path" ]
+
+  local upstream
+  upstream=$(git -C "$wt_path" rev-parse --abbrev-ref --symbolic-full-name '@{u}')
+  [ "$upstream" = "upstream/selected-remote" ]
 }
 
 @test "create_worktree rejects duplicate worktree" {
