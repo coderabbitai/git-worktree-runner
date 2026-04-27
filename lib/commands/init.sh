@@ -176,7 +176,7 @@ function __FUNC___gtrconfig_path
     test -n "$_gtr_repo_root"; or return 1
     printf '%s/.gtrconfig\n' "$_gtr_repo_root"
   else
-    printf '%s/.gtrconfig\n' (string replace -r '/\\.git$' '' -- "$_gtr_git_common_dir")
+    printf '%s/.gtrconfig\n' (string replace -r '/\.git$' '' -- "$_gtr_git_common_dir")
   end
 end
 

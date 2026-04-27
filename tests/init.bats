@@ -305,6 +305,21 @@ require_runtime_shell() {
   [[ "$output" == *'cat "$_gtr_trust_path"'* ]]
 }
 
+@test "fish output strips linked-worktree git common dir suffix" {
+  require_runtime_shell fish
+
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+
+  local pattern
+  pattern=$(printf '%s\n' "$output" | sed -n "s/.*string replace -r '\([^']*\)'.*/\1/p" | head -n 1)
+  [ "$pattern" = '/\.git$' ]
+
+  run fish -c 'string replace -r -- $argv[1] "" /tmp/repo/.git' -- "$pattern"
+  [ "$status" -eq 0 ]
+  [ "$output" = "/tmp/repo" ]
+}
+
 # ── new --cd wrapper support ────────────────────────────────────────────────
 
 @test "bash output intercepts new --cd and strips flag before delegating" {
