@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-04-27
+
+### Added
+
+- `git gtr new --remote` and `gtr.defaultRemote` / `GTR_DEFAULT_REMOTE` to choose the remote used for default branch detection, fetches, and tracked branch creation ([#171](https://github.com/coderabbitai/git-worktree-runner/pull/171))
+- `--to <ref>` for `git gtr clean --merged` to limit cleanup to PRs/MRs merged into a specific target ref, with branch-tip matching for reused branch names ([#167](https://github.com/coderabbitai/git-worktree-runner/pull/167))
+
+### Fixed
+
+- Repo root resolution now works correctly from subdirectories ([#166](https://github.com/coderabbitai/git-worktree-runner/pull/166))
+- Hooks that read stdin no longer drain input and skip later hooks ([#165](https://github.com/coderabbitai/git-worktree-runner/pull/165))
+- Fish `gtr cd` fzf picker now changes directory when pressing Enter ([#172](https://github.com/coderabbitai/git-worktree-runner/pull/172))
+- `git gtr copy` now honors configured `gtr.copy.includeDirs` and `gtr.copy.excludeDirs`, including dry-run, `--all`, and `--from` flows ([#173](https://github.com/coderabbitai/git-worktree-runner/pull/173))
+
 ## [2.6.0] - 2026-03-19
 
 ### Added
@@ -186,7 +200,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 - Improved base directory resolution logic to distinguish `.` (repo root), `./path` (repo-internal) from other relative values (sibling directories)
 
-[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.7.0...HEAD
+[2.7.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.6.0...v2.7.0
+[2.6.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.3.0...v2.3.1
