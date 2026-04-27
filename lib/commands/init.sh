@@ -113,7 +113,7 @@ __FUNC___hooks_current_content_hash() {
 __SHELL_PRELUDE__
   local _gtr_config_file="$1"
   local _gtr_hook_defs
-  _gtr_hook_defs="$(git config -f "$_gtr_config_file" --get-regexp '^hooks\.' 2>/dev/null)" || return 1
+  _gtr_hook_defs="$(git config -f "$_gtr_config_file" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null)" || return 1
   printf '%s\n' "$_gtr_hook_defs" | shasum -a 256 | cut -d' ' -f1
 }
 
@@ -182,7 +182,7 @@ end
 
 function __FUNC___hooks_current_content_hash
   set -l _gtr_config_file "$argv[1]"
-  set -l _gtr_hook_defs (git config -f "$_gtr_config_file" --get-regexp '^hooks\.' 2>/dev/null)
+  set -l _gtr_hook_defs (git config -f "$_gtr_config_file" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null)
   test $status -eq 0; or return 1
   printf '%s\n' "$_gtr_hook_defs" | shasum -a 256 | cut -d' ' -f1
 end
@@ -783,7 +783,7 @@ complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a adapter -d 'List avai
 complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a config -d 'Manage configuration'
 complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a completion -d 'Generate shell completions'
 complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a init -d 'Generate shell integration'
-complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a trust -d 'Trust .gtrconfig hooks'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a trust -d 'Trust .gtrconfig commands'
 complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a version -d 'Show version'
 complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a help -d 'Show help'
 

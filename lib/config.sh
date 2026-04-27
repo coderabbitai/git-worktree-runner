@@ -431,3 +431,54 @@ cfg_default() {
   # 5. Use fallback if still empty
   printf "%s" "${value:-$fallback}"
 }
+
+# Get a default config value while trust-gating the .gtrconfig source.
+# Usage: cfg_default_trusted_file key env_name fallback_value file_key
+# Precedence: local config > trusted .gtrconfig > global/system config > env var > fallback
+cfg_default_trusted_file() {
+  local key="$1"
+  local env_name="$2"
+  local fallback="$3"
+  local file_key="${4:-}"
+  local value file_value config_file
+
+  # Auto-map file_key if not provided and key is a gtr.* key
+  if [ -z "$file_key" ] && [[ "$key" == gtr.* ]]; then
+    file_key=$(cfg_map_to_file_key "$key")
+  fi
+
+  # 1. Try local git config first (highest priority)
+  value=$(git config --local --get "$key" 2>/dev/null || true)
+
+  # 2. Try .gtrconfig file only if its trusted command definitions are approved
+  if [ -z "$value" ] && [ -n "$file_key" ]; then
+    config_file=$(_gtrconfig_path)
+    if [ -n "$config_file" ] && [ -f "$config_file" ]; then
+      file_value=$(git config -f "$config_file" --get "$file_key" 2>/dev/null || true)
+      if [ -n "$file_value" ]; then
+        if _hooks_are_trusted "$config_file"; then
+          value="$file_value"
+        else
+          log_warn "Untrusted .gtrconfig $file_key skipped — run: git gtr trust"
+        fi
+      fi
+    fi
+  fi
+
+  # 3. Try global/system git config
+  if [ -z "$value" ]; then
+    value=$(git config --global --get "$key" 2>/dev/null || true)
+  fi
+
+  if [ -z "$value" ]; then
+    value=$(git config --system --get "$key" 2>/dev/null || true)
+  fi
+
+  # 4. Fall back to environment variable
+  if [ -z "$value" ] && [ -n "$env_name" ]; then
+    value=$(printenv "$env_name" 2>/dev/null) || true
+  fi
+
+  # 5. Use fallback if still empty
+  printf "%s" "${value:-$fallback}"
+}

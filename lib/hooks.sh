@@ -2,27 +2,29 @@
 # Hook execution system
 
 # ── Hook trust model ────────────────────────────────────────────────────
-# Hooks from .gtrconfig files (committed to repositories) require explicit
-# user approval before execution. This prevents malicious contributors from
-# injecting arbitrary commands via shared config files.
+# Hooks and executable defaults from .gtrconfig files (committed to
+# repositories) require explicit user approval before use. This prevents
+# malicious contributors from injecting arbitrary commands via shared config
+# files.
 #
 # Trust state is stored in ~/.config/gtr/trusted/<key>
-# where <key> is a SHA-256 of the canonical repo root plus the hook content hash.
-# Trust is scoped to repo identity + hook definitions, not repo snapshot state.
+# where <key> is a SHA-256 of the canonical repo root plus trusted content hash.
+# Trust is scoped to repo identity + trusted .gtrconfig definitions, not repo
+# snapshot state.
 
 _GTR_TRUST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"
 
-# Read all hook definitions from a .gtrconfig file.
+# Read all trusted command definitions from a .gtrconfig file.
 # Usage: _hooks_read_definitions <config_file>
 _hooks_read_definitions() {
   local config_file="$1"
   local hook_content
-  hook_content=$(git config -f "$config_file" --get-regexp '^hooks\.' 2>/dev/null) || true
+  hook_content=$(git config -f "$config_file" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null) || true
   [ -n "$hook_content" ] || return 1
   printf '%s\n' "$hook_content"
 }
 
-# Compute a content hash for hook definitions.
+# Compute a content hash for trusted command definitions.
 # Usage: _hooks_content_hash <hook_content>
 _hooks_content_hash() {
   local hook_content="$1"
@@ -30,7 +32,7 @@ _hooks_content_hash() {
   printf '%s\n' "$hook_content" | shasum -a 256 | cut -d' ' -f1
 }
 
-# Compute a content hash of all current hook entries in a .gtrconfig file.
+# Compute a content hash of all current trusted command entries in a .gtrconfig file.
 # Usage: _hooks_current_content_hash <config_file>
 _hooks_current_content_hash() {
   local config_file="$1"
@@ -63,7 +65,7 @@ _hooks_canonical_config_path() {
   printf '%s/%s\n' "$repo_root" "$(basename "$config_file")"
 }
 
-# Compute the repo-scoped trust key for reviewed hook content
+# Compute the repo-scoped trust key for reviewed trusted command content
 # Usage: _hooks_reviewed_trust_key <config_file> <hook_content>
 _hooks_reviewed_trust_key() {
   local config_file="$1"
@@ -74,7 +76,7 @@ _hooks_reviewed_trust_key() {
   printf '%s\n%s\n' "$repo_root" "$hash" | shasum -a 256 | cut -d' ' -f1
 }
 
-# Compute the repo-scoped trust key for the current hook content
+# Compute the repo-scoped trust key for the current trusted command content
 # Usage: _hooks_current_trust_key <config_file>
 _hooks_current_trust_key() {
   local config_file="$1"
@@ -88,7 +90,7 @@ _hooks_trust_key() {
   _hooks_current_trust_key "$1"
 }
 
-# Resolve the trust marker path for reviewed hook content
+# Resolve the trust marker path for reviewed trusted command content
 # Usage: _hooks_reviewed_trust_path <config_file> <hook_content>
 _hooks_reviewed_trust_path() {
   local config_file="$1"
@@ -129,9 +131,9 @@ _hooks_marker_matches_config() {
   [ "$marker_content" = "$canonical_config_file" ]
 }
 
-# Check if .gtrconfig hooks are trusted for the current repository
+# Check if .gtrconfig command definitions are trusted for the current repository
 # Usage: _hooks_are_trusted <config_file>
-# Returns: 0 if trusted (or no hooks), 1 if untrusted
+# Returns: 0 if trusted (or no trusted command definitions), 1 if untrusted
 _hooks_are_trusted() {
   local config_file="$1"
   [ ! -f "$config_file" ] && return 0
@@ -142,7 +144,7 @@ _hooks_are_trusted() {
   _hooks_marker_matches_config "$trust_path" "$config_file"
 }
 
-# Write a trust marker that matches the reviewed hooks
+# Write a trust marker that matches the reviewed command definitions
 # Usage: _hooks_write_trust_marker <trust_path> [config_file]
 _hooks_write_trust_marker() {
   local trust_path="$1"
@@ -165,7 +167,7 @@ _hooks_write_trust_marker() {
   fi
 }
 
-# Mark .gtrconfig hooks as trusted
+# Mark .gtrconfig command definitions as trusted
 # Usage: _hooks_mark_trusted <config_file>
 _hooks_mark_trusted() {
   local config_file="$1"

@@ -5,11 +5,11 @@
 
 # Config default helpers — single source of truth for editor/AI config keys
 _cfg_editor_default() {
-  cfg_default gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor
+  cfg_default_trusted_file gtr.editor.default GTR_EDITOR_DEFAULT "none" defaults.editor
 }
 
 _cfg_ai_default() {
-  cfg_default gtr.ai.default GTR_AI_DEFAULT "none" defaults.ai
+  cfg_default_trusted_file gtr.ai.default GTR_AI_DEFAULT "none" defaults.ai
 }
 
 # Open a worktree in an editor (shared by _auto_launch_editor and cmd_editor)

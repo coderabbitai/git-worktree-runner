@@ -415,23 +415,24 @@ EOF
 
 _help_trust() {
   cat <<'EOF'
-git gtr trust - Trust .gtrconfig hooks
+git gtr trust - Trust .gtrconfig commands
 
 Usage: git gtr trust
 
-Reviews and approves hook commands defined in the repository's .gtrconfig
-file. Hooks from .gtrconfig are not executed until explicitly trusted.
+Reviews and approves executable commands defined in the repository's
+.gtrconfig file. Hooks and editor/AI defaults from .gtrconfig are not
+used until explicitly trusted.
 
 This prevents malicious contributors from injecting arbitrary shell
 commands via shared .gtrconfig files. Trust is stored per repository
-path plus hook definitions in ~/.config/gtr/trusted/ and must be
-re-approved if hooks change.
+path plus executable command definitions in ~/.config/gtr/trusted/ and
+must be re-approved if those commands change.
 
-Hooks from your local git config (.git/config, ~/.gitconfig) are always
-trusted since you control those files directly.
+Hooks and defaults from your local git config (.git/config, ~/.gitconfig)
+are always trusted since you control those files directly.
 
 Examples:
-  git gtr trust                                 # Review and approve hooks
+  git gtr trust                                 # Review and approve commands
 EOF
 }
 
@@ -609,9 +610,9 @@ SETUP & MAINTENANCE:
          --force, -f: force removal even if worktree has uncommitted changes or untracked files
 
   trust
-         Review and approve .gtrconfig hook commands
-         Hooks from .gtrconfig are not executed until trusted
-         Trust is re-required when hook content changes
+         Review and approve .gtrconfig executable commands
+         Hooks and editor/AI defaults from .gtrconfig are not used until trusted
+         Trust is re-required when executable command entries change
 
   completion <shell>
          Generate shell completions (bash, zsh, fish)

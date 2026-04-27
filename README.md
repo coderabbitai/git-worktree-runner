@@ -345,13 +345,13 @@ git gtr clean --merged --force --yes           # Force-clean and auto-confirm
 
 ### `git gtr trust`
 
-Review and approve hook commands defined in the repository's `.gtrconfig` file. Hooks from `.gtrconfig` are **not executed** until explicitly trusted — this prevents malicious contributors from injecting arbitrary shell commands via shared config files.
+Review and approve executable commands defined in the repository's `.gtrconfig` file. Hooks and editor/AI defaults from `.gtrconfig` are **not used** until explicitly trusted — this prevents malicious contributors from injecting arbitrary shell commands via shared config files.
 
 ```bash
-git gtr trust                              # Review and approve .gtrconfig hooks
+git gtr trust                              # Review and approve .gtrconfig commands
 ```
 
-Trust is stored per repository path plus hook definitions and must be re-approved if hooks change. Hooks from your local git config (`.git/config`, `~/.gitconfig`) are always trusted.
+Trust is stored per repository path plus executable command definitions and must be re-approved if hooks or editor/AI defaults change. Hooks and defaults from your local git config (`.git/config`, `~/.gitconfig`) are always trusted.
 
 ### Other Commands
 
@@ -412,14 +412,14 @@ git gtr config set gtr.ui.color never
     remote = upstream
 ```
 
-**Hook trust:** Hooks defined in `.gtrconfig` require explicit approval before they execute. Run `git gtr trust` after cloning a repository or when `.gtrconfig` hooks change. This protects against malicious hook injection in shared repositories.
+**Command trust:** Hooks and editor/AI defaults defined in `.gtrconfig` require explicit approval before they execute or select tools. Run `git gtr trust` after cloning a repository or when `.gtrconfig` command entries change. This protects against malicious command injection in shared repositories.
 
 **Adapter safety:** Generic `gtr.editor.default` and `gtr.ai.default` values must resolve to safe PATH commands. Filesystem paths such as `./tool` and shell wrapper forms such as `sh -c ...` are rejected. Override-backed adapters like `claude`, `cursor`, and `nano` may include additional flags, for example `claude --continue` or `nano -w`.
 
 **Configuration precedence** (highest to lowest):
 
 1. `git config --local` (`.git/config`) - personal overrides
-2. `.gtrconfig` (repo root) - team defaults (hooks require `git gtr trust`)
+2. `.gtrconfig` (repo root) - team defaults (hooks and editor/AI defaults require `git gtr trust`)
 3. `git config --global` (`~/.gitconfig`) - user defaults
 
 > For complete configuration reference including all settings, hooks, file copying patterns, and environment variables, see [docs/configuration.md](docs/configuration.md)

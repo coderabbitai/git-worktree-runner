@@ -304,7 +304,7 @@ _git-gtr() {
     'config:Manage configuration'
     'completion:Generate shell completions'
     'init:Generate shell integration for cd support'
-    'trust:Trust .gtrconfig hooks'
+    'trust:Trust .gtrconfig commands'
     'version:Show version'
     'help:Show help'
   )
@@ -532,7 +532,7 @@ complete -f -c git -n '__fish_git_gtr_using_command completion' -a 'bash zsh fis
 complete -f -c git -n '__fish_git_gtr_needs_command' -a init -d 'Generate shell integration for cd support'
 complete -f -c git -n '__fish_git_gtr_using_command init' -a 'bash zsh fish' -d 'Shell type'
 complete -c git -n '__fish_git_gtr_using_command init' -l as -d 'Custom function name' -r
-complete -f -c git -n '__fish_git_gtr_needs_command' -a trust -d 'Trust .gtrconfig hooks'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a trust -d 'Trust .gtrconfig commands'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a version -d 'Show version'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 

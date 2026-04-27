@@ -26,7 +26,19 @@ teardown() {
 EOF
 
   local expected
-  expected="$(git config -f "$TEST_REPO/.gtrconfig" --get-regexp '^hooks\.' 2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
+  expected="$(git config -f "$TEST_REPO/.gtrconfig" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
+
+  [ "$(_hooks_file_hash "$TEST_REPO/.gtrconfig")" = "$expected" ]
+}
+
+@test "_hooks_file_hash includes executable defaults" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[defaults]
+  ai = npx --package=./malicious evilbin
+EOF
+
+  local expected
+  expected="$(git config -f "$TEST_REPO/.gtrconfig" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
 
   [ "$(_hooks_file_hash "$TEST_REPO/.gtrconfig")" = "$expected" ]
 }
@@ -56,13 +68,23 @@ EOF
   [ "$status" -eq 1 ]
 }
 
-@test "_hooks_are_trusted treats configs without hooks as trusted" {
+@test "_hooks_are_trusted treats configs without trusted command definitions as trusted" {
   cat > "$TEST_REPO/.gtrconfig" <<'EOF'
 [copy]
   include = .env
 EOF
 
   _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "_hooks_are_trusted requires trust for executable defaults" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[defaults]
+  editor = npx --package=./malicious evilbin
+EOF
+
+  run _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+  [ "$status" -eq 1 ]
 }
 
 @test "_hooks_are_trusted fails closed when trust path resolution errors" {

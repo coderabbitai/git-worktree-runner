@@ -13,10 +13,12 @@ teardown() {
   teardown_integration_repo
 }
 
-@test "cmd_trust marks hooks as trusted after confirmation" {
+@test "cmd_trust marks executable commands as trusted after confirmation" {
   cat > "$TEST_REPO/.gtrconfig" <<'EOF'
 [hooks]
   postCd = echo hi
+[defaults]
+  ai = claude
 EOF
 
   prompt_yes_no() { return 0; }
@@ -44,7 +46,7 @@ EOF
   fi
 
   [ "$rc" -eq 1 ]
-  grep -F "Failed to mark hooks as trusted" "$output_file"
+  grep -F "Failed to mark executable commands as trusted" "$output_file"
 }
 
 @test "cmd_trust trusts the reviewed snapshot and fails if hooks change during confirmation" {
@@ -75,7 +77,7 @@ EOF
   [ "$rc" -eq 1 ]
   [ -f "$reviewed_trust_path" ]
   ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
-  grep -F "Hooks changed during review; current hooks remain untrusted" "$output_file"
+  grep -F "Executable commands changed during review; current commands remain untrusted" "$output_file"
 }
 
 @test "cmd_trust writes the reviewed marker when hooks change during confirmation" {
@@ -97,7 +99,7 @@ EOF
 
   run cmd_trust
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Hooks changed during review; current hooks remain untrusted"* ]]
+  [[ "$output" == *"Executable commands changed during review; current commands remain untrusted"* ]]
   [ -f "$reviewed_marker" ]
 
   run _hooks_are_trusted "$TEST_REPO/.gtrconfig"
