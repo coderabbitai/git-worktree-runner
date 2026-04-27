@@ -509,12 +509,14 @@ function __FUNC__
       # --expect gives two lines: key (index 1) and selection (index 2)
       # Fish collapses empty lines in command substitution, so when Enter
       # is pressed the empty key line disappears and count drops to 1.
+      set -l _gtr_key
+      set -l _gtr_line
       if test (count $_gtr_selection) -eq 1
-        set -l _gtr_key ""
-        set -l _gtr_line "$_gtr_selection[1]"
+        set _gtr_key ""
+        set _gtr_line "$_gtr_selection[1]"
       else
-        set -l _gtr_key "$_gtr_selection[1]"
-        set -l _gtr_line "$_gtr_selection[2]"
+        set _gtr_key "$_gtr_selection[1]"
+        set _gtr_line "$_gtr_selection[2]"
       end
       if test "$_gtr_key" = "ctrl-n"
         read -P "Branch name: " _gtr_branch
