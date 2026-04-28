@@ -6,9 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+## [2.7.2] - 2026-04-28
+
 ### Fixed
 
-- Directory copying now skips excluded child subtrees during copy instead of cloning them and deleting them afterward.
+- Directory copying now skips excluded child subtrees during copy instead of cloning them and deleting them afterward ([#176](https://github.com/coderabbitai/git-worktree-runner/pull/176)).
 
 ## [2.7.1] - 2026-04-28
 
@@ -215,7 +217,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 - Improved base directory resolution logic to distinguish `.` (repo root), `./path` (repo-internal) from other relative values (sibling directories)
 
-[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.7.0...HEAD
+[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.7.2...HEAD
+[2.7.2]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.7.1...v2.7.2
+[2.7.1]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.4.0...v2.5.0
