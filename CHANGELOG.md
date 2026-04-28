@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+### Fixed
+
+- Directory copying now skips excluded child subtrees during copy instead of cloning them and deleting them afterward.
+
 ## [2.7.1] - 2026-04-28
 
 ### Added

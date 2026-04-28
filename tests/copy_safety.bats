@@ -203,3 +203,142 @@ teardown() {
 
   [ -e "$dest/node_modules/.git" ]
 }
+
+@test "_has_subdir_excludes returns true for child exclude" {
+  _has_subdir_excludes ".claude" $'.claude/worktrees'
+}
+
+@test "_has_subdir_excludes returns false for unrelated exclude" {
+  ! _has_subdir_excludes ".claude" $'node_modules\n.venv'
+}
+
+@test "_has_subdir_excludes returns false for exact parent exclude" {
+  ! _has_subdir_excludes ".claude" ".claude"
+}
+
+@test "_has_subdir_excludes supports glob prefixes" {
+  _has_subdir_excludes ".claude" $'*/worktrees'
+}
+
+@test "_has_subdir_excludes supports nested include paths" {
+  _has_subdir_excludes "vendor/bundle" $'vendor/bundle/cache'
+}
+
+@test "_apply_directory_excludes supports nested include paths" {
+  _test_tmpdir=$(mktemp -d)
+  local dest="$_test_tmpdir/dest"
+  mkdir -p "$dest/vendor/bundle/cache" "$dest/vendor/bundle/gems"
+  touch "$dest/vendor/bundle/cache/blob"
+  touch "$dest/vendor/bundle/gems/spec"
+
+  _apply_directory_excludes "$dest" "vendor/bundle" $'vendor/bundle/cache'
+
+  [ ! -e "$dest/vendor/bundle/cache" ]
+  [ -f "$dest/vendor/bundle/gems/spec" ]
+}
+
+@test "_apply_directory_excludes supports nested glob prefixes" {
+  _test_tmpdir=$(mktemp -d)
+  local dest="$_test_tmpdir/dest"
+  mkdir -p "$dest/vendor/bundle/cache" "$dest/vendor/bundle/gems"
+  touch "$dest/vendor/bundle/cache/blob"
+  touch "$dest/vendor/bundle/gems/spec"
+
+  _apply_directory_excludes "$dest" "vendor/bundle" $'vendor/*/cache'
+
+  [ ! -e "$dest/vendor/bundle/cache" ]
+  [ -f "$dest/vendor/bundle/gems/spec" ]
+}
+
+@test "_apply_directory_excludes uses deepest matching glob prefix" {
+  _test_tmpdir=$(mktemp -d)
+  local dest="$_test_tmpdir/dest"
+  mkdir -p "$dest/vendor/bundle/cache/tmp" "$dest/vendor/bundle/cache/keep"
+  touch "$dest/vendor/bundle/cache/tmp/blob"
+  touch "$dest/vendor/bundle/cache/keep/spec"
+
+  _apply_directory_excludes "$dest" "vendor/bundle" $'*/bundle/cache/tmp'
+
+  [ ! -e "$dest/vendor/bundle/cache/tmp" ]
+  [ -f "$dest/vendor/bundle/cache/keep/spec" ]
+}
+
+@test "_selective_copy_dir skips excluded direct child" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/.claude/settings" "$src/.claude/worktrees" "$dst"
+  echo "keep" > "$src/.claude/settings/config.json"
+  echo "skip" > "$src/.claude/worktrees/session.json"
+
+  cd "$src"
+  _selective_copy_dir ".claude" "$dst" $'.claude/worktrees'
+
+  [ -f "$dst/.claude/settings/config.json" ]
+  [ ! -e "$dst/.claude/worktrees" ]
+}
+
+@test "_selective_copy_dir skips trailing-slash excluded direct child" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/.claude/settings" "$src/.claude/worktrees" "$dst"
+  echo "keep" > "$src/.claude/settings/config.json"
+  echo "skip" > "$src/.claude/worktrees/session.json"
+
+  cd "$src"
+  _selective_copy_dir ".claude" "$dst" $'.claude/worktrees/'
+
+  [ -f "$dst/.claude/settings/config.json" ]
+  [ ! -e "$dst/.claude/worktrees" ]
+}
+
+@test "_selective_copy_dir still applies deeper excludes after copy" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/.claude/worktrees/cache" "$src/.claude/worktrees/keep" "$dst"
+  echo "skip" > "$src/.claude/worktrees/cache/blob"
+  echo "keep" > "$src/.claude/worktrees/keep/session.json"
+
+  cd "$src"
+  _selective_copy_dir ".claude" "$dst" $'.claude/worktrees/cache'
+
+  [ ! -e "$dst/.claude/worktrees/cache" ]
+  [ -f "$dst/.claude/worktrees/keep/session.json" ]
+}
+
+@test "copy_directories does not copy excluded direct child subtree" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" copy_log="$_test_tmpdir/copy.log"
+  mkdir -p "$src/.claude/settings" "$src/.claude/worktrees" "$dst"
+  echo "keep" > "$src/.claude/settings/config.json"
+  echo "skip" > "$src/.claude/worktrees/session.json"
+
+  _fast_copy_dir() {
+    printf '%s\n' "$1" >> "$copy_log"
+    cp -RP "$1" "$2"
+  }
+
+  copy_directories "$src" "$dst" ".claude" $'.claude/worktrees'
+
+  [ -f "$dst/.claude/settings/config.json" ]
+  [ ! -e "$dst/.claude/worktrees" ]
+  ! grep -qx ".claude/worktrees" "$copy_log"
+}
+
+@test "copy_directories does not copy excluded child under nested include path" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" copy_log="$_test_tmpdir/copy.log"
+  mkdir -p "$src/vendor/bundle/cache" "$src/vendor/bundle/gems" "$dst"
+  echo "skip" > "$src/vendor/bundle/cache/blob"
+  echo "keep" > "$src/vendor/bundle/gems/spec"
+
+  _fast_copy_dir() {
+    printf '%s\n' "$1" >> "$copy_log"
+    cp -RP "$1" "$2"
+  }
+
+  copy_directories "$src" "$dst" "vendor/bundle" $'vendor/bundle/cache'
+
+  [ -f "$dst/vendor/bundle/gems/spec" ]
+  [ ! -e "$dst/vendor/bundle/cache" ]
+  ! grep -qx "vendor/bundle/cache" "$copy_log"
+}

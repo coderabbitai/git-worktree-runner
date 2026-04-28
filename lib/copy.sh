@@ -259,6 +259,54 @@ EOF
   return 0
 }
 
+# Return the portion of an exclude pattern that is relative to a copied directory.
+# Supports nested include paths and glob prefixes like "vendor/*/cache" or "*/.cache".
+# Usage: _directory_exclude_suffix <dir_path> <exclude_pattern>
+_directory_exclude_suffix() {
+  local dir_path="$1" exclude_pattern="$2"
+
+  case "$exclude_pattern" in
+    */*) ;;
+    *) return 1 ;;
+  esac
+
+  case "$exclude_pattern" in
+    .git|*/.git|.git/*|*/.git/*) return 1 ;;
+  esac
+
+  local prefix suffix matched_suffix
+  prefix="${exclude_pattern%%/*}"
+  suffix="${exclude_pattern#*/}"
+  matched_suffix=""
+
+  while :; do
+    [ -z "$suffix" ] && break
+
+    # Intentional glob pattern matching for directory prefix
+    # shellcheck disable=SC2254
+    case "$dir_path" in
+      $prefix)
+        matched_suffix="$suffix"
+        ;;
+    esac
+
+    case "$suffix" in
+      */*)
+        prefix="$prefix/${suffix%%/*}"
+        suffix="${suffix#*/}"
+        ;;
+      *) break ;;
+    esac
+  done
+
+  if [ -n "$matched_suffix" ]; then
+    printf '%s\n' "$matched_suffix"
+    return 0
+  fi
+
+  return 1
+}
+
 # Remove excluded subdirectories from a copied directory.
 # Supports patterns like "node_modules/.cache", "*/.cache", "node_modules/*", "*/.*"
 # Usage: _apply_directory_excludes <dest_parent> <dir_path> <excludes>
@@ -276,66 +324,110 @@ _apply_directory_excludes() {
       continue
     fi
 
-    # Only process patterns with directory separators
-    case "$exclude_pattern" in
-      */*)
-        local pattern_prefix="${exclude_pattern%%/*}"
-        local pattern_suffix="${exclude_pattern#*/}"
+    local pattern_suffix
+    pattern_suffix=$(_directory_exclude_suffix "$dir_path" "$exclude_pattern") || true
+    if [ -z "$pattern_suffix" ]; then
+      case "$exclude_pattern" in
+        */)
+          log_warn "Skipping overly broad exclude suffix: $exclude_pattern"
+          ;;
+        .git|*/.git|.git/*|*/.git/*)
+          log_warn "Skipping exclude pattern targeting .git metadata: $exclude_pattern"
+          ;;
+      esac
+      continue
+    fi
 
-        # Reject empty suffixes and protect Git metadata from removal
-        case "$pattern_suffix" in
-          "")
-            log_warn "Skipping overly broad exclude suffix: $exclude_pattern"
-            continue
-            ;;
+    local exclude_old_pwd
+    exclude_old_pwd=$(pwd)
+    cd "$dest_parent/$dir_path" 2>/dev/null || continue
+
+    local exclude_shopt_save
+    exclude_shopt_save="$(shopt -p dotglob 2>/dev/null || true)"
+    shopt -s dotglob 2>/dev/null || true
+
+    local removed_any=0
+    # shellcheck disable=SC2086
+    for matched_path in $pattern_suffix; do
+      if [ -e "$matched_path" ]; then
+        # Never remove .git directory via exclude patterns
+        case "$matched_path" in
+          .git|.git/*) continue ;;
         esac
+        if rm -rf "$matched_path" 2>/dev/null; then
+          removed_any=1
+        fi
+      fi
+    done
 
-        case "$exclude_pattern" in
-          .git|*/.git|.git/*|*/.git/*)
-            log_warn "Skipping exclude pattern targeting .git metadata: $exclude_pattern"
-            continue
-            ;;
-        esac
+    eval "$exclude_shopt_save" 2>/dev/null || true
+    cd "$exclude_old_pwd" || true
 
-        # Intentional glob pattern matching for directory prefix
-        # shellcheck disable=SC2254
-        case "$dir_path" in
-          $pattern_prefix)
-            local exclude_old_pwd
-            exclude_old_pwd=$(pwd)
-            cd "$dest_parent/$dir_path" 2>/dev/null || continue
-
-            local exclude_shopt_save
-            exclude_shopt_save="$(shopt -p dotglob 2>/dev/null || true)"
-            shopt -s dotglob 2>/dev/null || true
-
-            local removed_any=0
-            # shellcheck disable=SC2086
-            for matched_path in $pattern_suffix; do
-              if [ -e "$matched_path" ]; then
-                # Never remove .git directory via exclude patterns
-                case "$matched_path" in
-                  .git|.git/*) continue ;;
-                esac
-                if rm -rf "$matched_path" 2>/dev/null; then
-                  removed_any=1
-                fi
-              fi
-            done
-
-            eval "$exclude_shopt_save" 2>/dev/null || true
-            cd "$exclude_old_pwd" || true
-
-            if [ "$removed_any" -eq 1 ]; then
-              log_info "Excluded subdirectory $exclude_pattern"
-            fi
-            ;;
-        esac
-        ;;
-    esac
+    if [ "$removed_any" -eq 1 ]; then
+      log_info "Excluded subdirectory $exclude_pattern"
+    fi
   done <<EOF
 $excludes
 EOF
+}
+
+# Check whether any exclude pattern applies beneath a copied directory.
+# Usage: _has_subdir_excludes <dir_path> <excludes>
+_has_subdir_excludes() {
+  local dir_path="$1" excludes="$2"
+
+  [ -z "$excludes" ] && return 1
+
+  local exclude_pattern
+  while IFS= read -r exclude_pattern; do
+    [ -z "$exclude_pattern" ] && continue
+
+    if _is_unsafe_path "$exclude_pattern"; then
+      continue
+    fi
+
+    if _directory_exclude_suffix "$dir_path" "$exclude_pattern" >/dev/null; then
+      return 0
+    fi
+  done <<EOF
+$excludes
+EOF
+
+  return 1
+}
+
+# Copy a directory one direct child at a time, skipping excluded child subtrees
+# before they are copied. Deeper excludes are still removed after copy.
+# Usage: _selective_copy_dir <dir_path> <dst_root> <excludes>
+_selective_copy_dir() {
+  local dir_path="$1" dst_root="$2" excludes="$3"
+  local dest_dir="$dst_root/$dir_path"
+
+  mkdir -p "$dest_dir" || return 1
+
+  local find_results
+  find_results=$(find "$dir_path" -mindepth 1 -maxdepth 1 2>/dev/null || true)
+
+  local child_path child_name child_rel
+  while IFS= read -r child_path; do
+    [ -z "$child_path" ] && continue
+
+    child_name=$(basename "$child_path")
+    child_rel="$dir_path/$child_name"
+
+    if is_excluded "$child_rel" "$excludes" || is_excluded "$child_rel/" "$excludes"; then
+      log_info "Skipped excluded directory $child_rel"
+      continue
+    fi
+
+    if ! _fast_copy_dir "$child_path" "$dest_dir/"; then
+      return 1
+    fi
+  done <<EOF
+$find_results
+EOF
+
+  _apply_directory_excludes "$dst_root" "$dir_path" "$excludes"
 }
 
 # Copy directories matching patterns (typically git-ignored directories like node_modules)
@@ -403,10 +495,17 @@ copy_directories() {
       mkdir -p "$dest_parent"
 
       # Copy directory using CoW when available (preserves symlinks as symlinks)
-      if _fast_copy_dir "$dir_path" "$dest_parent/"; then
+      if _has_subdir_excludes "$dir_path" "$excludes"; then
+        if _selective_copy_dir "$dir_path" "$dst_root" "$excludes"; then
+          log_info "Copied directory $dir_path"
+          copied_count=$((copied_count + 1))
+        else
+          log_warn "Failed to copy directory $dir_path"
+        fi
+      elif _fast_copy_dir "$dir_path" "$dest_parent/"; then
         log_info "Copied directory $dir_path"
         copied_count=$((copied_count + 1))
-        _apply_directory_excludes "$dest_parent" "$dir_path" "$excludes"
+        _apply_directory_excludes "$dst_root" "$dir_path" "$excludes"
       else
         log_warn "Failed to copy directory $dir_path"
       fi
