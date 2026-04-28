@@ -115,7 +115,7 @@ _git_gtr() {
 
   # If we're completing the first argument after 'git gtr'
   if [ "$cword" -eq 2 ]; then
-    COMPREPLY=($(compgen -W "new go run copy editor ai rm mv rename ls list clean doctor adapter config completion init help version" -- "$cur"))
+    COMPREPLY=($(compgen -W "new go run copy editor ai rm mv rename ls list clean doctor adapter config completion init trust help version" -- "$cur"))
     return 0
   fi
 
@@ -304,6 +304,7 @@ _git-gtr() {
     'config:Manage configuration'
     'completion:Generate shell completions'
     'init:Generate shell integration for cd support'
+    'trust:Trust .gtrconfig commands'
     'version:Show version'
     'help:Show help'
   )
@@ -531,6 +532,7 @@ complete -f -c git -n '__fish_git_gtr_using_command completion' -a 'bash zsh fis
 complete -f -c git -n '__fish_git_gtr_needs_command' -a init -d 'Generate shell integration for cd support'
 complete -f -c git -n '__fish_git_gtr_using_command init' -a 'bash zsh fish' -d 'Shell type'
 complete -c git -n '__fish_git_gtr_using_command init' -l as -d 'Custom function name' -r
+complete -f -c git -n '__fish_git_gtr_needs_command' -a trust -d 'Trust .gtrconfig commands'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a version -d 'Show version'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a help -d 'Show help'
 

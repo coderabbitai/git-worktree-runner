@@ -5,16 +5,129 @@ load test_helper
 
 setup() {
   setup_integration_repo
+  export XDG_CONFIG_HOME="$BATS_TMPDIR/gtr-hooks-config-$$"
   source_gtr_libs
 }
 
 teardown() {
+  rm -rf "$XDG_CONFIG_HOME"
   teardown_integration_repo
 }
 
 @test "run_hooks returns 0 when no hooks configured" {
   run run_hooks postCreate REPO_ROOT="$TEST_REPO"
   [ "$status" -eq 0 ]
+}
+
+@test "_hooks_file_hash matches the init wrapper trust hash" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  local expected
+  expected="$(git config -f "$TEST_REPO/.gtrconfig" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
+
+  [ "$(_hooks_file_hash "$TEST_REPO/.gtrconfig")" = "$expected" ]
+}
+
+@test "_hooks_file_hash includes executable defaults" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[defaults]
+  ai = npx --package=./malicious evilbin
+EOF
+
+  local expected
+  expected="$(git config -f "$TEST_REPO/.gtrconfig" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
+
+  [ "$(_hooks_file_hash "$TEST_REPO/.gtrconfig")" = "$expected" ]
+}
+
+@test "_hooks_mark_trusted creates a marker recognized by _hooks_are_trusted" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "_hooks_are_trusted rejects empty trust marker files" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  local trust_path
+  trust_path="$(_hooks_trust_path "$TEST_REPO/.gtrconfig")"
+  mkdir -p "$(dirname "$trust_path")"
+  : > "$trust_path"
+
+  run _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+  [ "$status" -eq 1 ]
+}
+
+@test "_hooks_are_trusted treats configs without trusted command definitions as trusted" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[copy]
+  include = .env
+EOF
+
+  _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "_hooks_are_trusted requires trust for executable defaults" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[defaults]
+  editor = npx --package=./malicious evilbin
+EOF
+
+  run _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+  [ "$status" -eq 1 ]
+}
+
+@test "_hooks_are_trusted fails closed when trust path resolution errors" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  _hooks_reviewed_trust_path() { return 1; }
+
+  ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "_hooks_mark_trusted fails when trust path resolution errors" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  _hooks_reviewed_trust_path() { return 1; }
+
+  ! _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "repo-specific trust markers differ for the same hook content" {
+  local second_repo="$BATS_TMPDIR/second-repo"
+  mkdir -p "$second_repo"
+
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = ./scripts/bootstrap
+EOF
+
+  cat > "$second_repo/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = ./scripts/bootstrap
+EOF
+
+  local first_path second_path
+  first_path="$(_hooks_trust_path "$TEST_REPO/.gtrconfig")"
+  second_path="$(_hooks_trust_path "$second_repo/.gtrconfig")"
+
+  [ "$first_path" != "$second_path" ]
 }
 
 @test "run_hooks executes single hook" {

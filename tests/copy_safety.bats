@@ -181,3 +181,25 @@ teardown() {
   [ -f "$dst/CLAUDE.md" ]
   [ -f "$dst/config/CLAUDE.md" ]
 }
+
+@test "_apply_directory_excludes supports node_modules/* patterns" {
+  _test_tmpdir=$(mktemp -d)
+  local dest="$_test_tmpdir/dest"
+  mkdir -p "$dest/node_modules/.cache"
+  touch "$dest/node_modules/.cache/file"
+
+  _apply_directory_excludes "$dest" "node_modules" $'node_modules/*'
+
+  [ ! -e "$dest/node_modules/.cache" ]
+}
+
+@test "_apply_directory_excludes skips patterns targeting .git metadata" {
+  _test_tmpdir=$(mktemp -d)
+  local dest="$_test_tmpdir/dest"
+  mkdir -p "$dest/node_modules/.git"
+  touch "$dest/node_modules/.git/config"
+
+  _apply_directory_excludes "$dest" "node_modules" $'node_modules/.git'
+
+  [ -e "$dest/node_modules/.git" ]
+}

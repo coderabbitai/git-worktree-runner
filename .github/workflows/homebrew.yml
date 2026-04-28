@@ -4,13 +4,15 @@ on:
   release:
     types: [published]
 
+permissions: read-all
+
 jobs:
   homebrew:
     name: Bump Homebrew formula
     runs-on: ubuntu-latest
     if: ${{ !github.event.release.prerelease }}
     steps:
-      - uses: mislav/bump-homebrew-formula-action@v3
+      - uses: mislav/bump-homebrew-formula-action@56a283fa15557e9abaa4bdb63b8212abc68e655c # v3
         with:
           formula-name: git-gtr
           formula-path: Formula/git-gtr.rb

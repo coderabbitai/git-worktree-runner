@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+### Added
+
+- `git gtr trust` now covers `.gtrconfig` `defaults.editor` and `defaults.ai` entries as executable commands, preventing shared config from selecting editor or AI commands until reviewed.
+
 ## [2.7.0] - 2026-04-27
 
 ### Added

@@ -42,6 +42,7 @@ ai_can_start() {
 ai_start() {
   local path="$1"
   shift
+  local configured_args=("${GTR_AI_CMD_ARGS[@]}")
 
   local claude_cmd
   claude_cmd="$(find_claude_executable)"
@@ -57,5 +58,5 @@ ai_start() {
     return 1
   fi
 
-  (cd "$path" && "$claude_cmd" "$@")
+  (cd "$path" && "$claude_cmd" "${configured_args[@]}" "$@")
 }

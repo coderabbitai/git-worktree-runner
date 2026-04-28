@@ -140,7 +140,7 @@ prompt_input() {
   read -r input
 
   if [ -n "$var_name" ]; then
-    eval "$var_name=\"\$input\""
+    printf -v "$var_name" '%s' "$input"
   else
     printf "%s" "$input"
   fi

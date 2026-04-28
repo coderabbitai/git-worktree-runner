@@ -11,6 +11,7 @@ ai_can_start() {
 ai_start() {
   local path="$1"
   shift
+  local configured_args=("${GTR_AI_CMD_ARGS[@]}")
 
   if ! ai_can_start; then
     log_error "Cursor not found. Install from https://cursor.com"
@@ -25,9 +26,9 @@ ai_start() {
 
   # Try cursor-agent first, then fallback to cursor CLI commands
   if command -v cursor-agent >/dev/null 2>&1; then
-    (cd "$path" && cursor-agent "$@")
+    (cd "$path" && cursor-agent "${configured_args[@]}" "$@")
   elif command -v cursor >/dev/null 2>&1; then
     # Try various Cursor CLI patterns (implementation varies by version)
-    (cd "$path" && cursor cli "$@") 2>/dev/null || (cd "$path" && cursor "$@")
+    (cd "$path" && cursor cli "${configured_args[@]}" "$@") 2>/dev/null || (cd "$path" && cursor "${configured_args[@]}" "$@")
   fi
 }

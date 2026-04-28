@@ -10,10 +10,16 @@ editor_can_open() {
 # Usage: editor_open path
 editor_open() {
   local path="$1"
+  local configured_args=("${GTR_EDITOR_CMD_ARGS[@]}")
 
   if ! editor_can_open; then
     log_error "Nano not found. Usually pre-installed on Unix systems."
     return 1
+  fi
+
+  if [ "${#configured_args[@]}" -gt 0 ]; then
+    (cd "$path" && nano "${configured_args[@]}")
+    return $?
   fi
 
   # Open nano in the directory (just cd there, nano doesn't open directories)

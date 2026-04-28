@@ -110,6 +110,71 @@ printf '\n'
 SCRIPT
 }
 
+run_generated_fish_gtrconfig_post_cd_hooks() {
+  local trust_state="$1"
+  local root repo wt xdg init_file
+
+  root=$(mktemp -d)
+  repo="$root/repo"
+  wt="$root/wt"
+  xdg="$root/xdg"
+  init_file="$root/gtr.fish"
+
+  git init --quiet "$repo"
+  git -C "$repo" config user.name "Test User"
+  git -C "$repo" config user.email "test@example.com"
+  git -C "$repo" commit --allow-empty -m "init" --quiet
+  git -C "$repo" worktree add --quiet "$wt" -b feature
+
+  cat > "$repo/.gtrconfig" <<'CFG'
+[hooks]
+  postCd = pwd > "$WORKTREE_PATH/hook-pwd"
+  postCd = echo second >> "$WORKTREE_PATH/hook-order"
+[defaults]
+  ai = codex
+CFG
+
+  cmd_init fish > "$init_file"
+
+  if [ "$trust_state" = "trusted" ]; then
+    (
+      export XDG_CONFIG_HOME="$xdg"
+      # shellcheck disable=SC1091
+      . "$PROJECT_ROOT/lib/hooks.sh"
+      _hooks_mark_trusted "$repo/.gtrconfig"
+    )
+  fi
+
+  XDG_CONFIG_HOME="$xdg" fish -c '
+    source "$argv[1]"
+    set -l wt "$argv[2]"
+    set -l root "$argv[3]"
+
+    cd /
+    gtr_run_post_cd_hooks "$wt" > "$root/stdout" 2> "$root/stderr"
+    set -l rc $status
+
+    printf "RC=%s\n" "$rc"
+    printf "PWD=%s\n" "$PWD"
+    printf "WT=%s\n" "$wt"
+    if test -f "$wt/hook-pwd"
+      printf "HOOK_PWD=%s\n" (cat "$wt/hook-pwd")
+    else
+      printf "HOOK_PWD=<missing>\n"
+    end
+    if test -f "$wt/hook-order"
+      printf "HOOK_ORDER=%s\n" (paste -sd, "$wt/hook-order")
+    else
+      printf "HOOK_ORDER=<missing>\n"
+    end
+    printf "STDERR=%s\n" (cat "$root/stderr")
+  ' -- "$init_file" "$wt" "$root"
+  local rc=$?
+
+  rm -rf "$root"
+  return "$rc"
+}
+
 require_runtime_shell() {
   local shell_name="$1"
 
@@ -225,10 +290,38 @@ require_runtime_shell() {
   [[ "$output" == *'"cd new go run'* ]]
 }
 
+@test "bash output includes trust in subcommand completions" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'init trust help version'* ]]
+}
+
 @test "bash output uses git gtr list --porcelain for cd completion" {
   run cmd_init bash
   [ "$status" -eq 0 ]
   [[ "$output" == *"git gtr list --porcelain"* ]]
+}
+
+@test "generated wrappers resolve .gtrconfig from the git common dir" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"git rev-parse --git-common-dir"* ]]
+  [[ "$output" == *'printf '\''%s/.gtrconfig\n'\'''* ]]
+}
+
+@test "generated wrappers scope trust markers by repo root" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_current_trust_key"* ]]
+  [[ "$output" == *"hooks_repo_root"* ]]
+}
+
+@test "generated wrappers validate trust marker contents" {
+  run cmd_init bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_marker_matches_config"* ]]
+  [[ "$output" == *"hooks_are_trusted"* ]]
+  [[ "$output" == *'cat "$_gtr_trust_path"'* ]]
 }
 
 @test "zsh output includes cd completion" {
@@ -243,16 +336,88 @@ require_runtime_shell() {
   [[ "$output" == *"git gtr list --porcelain"* ]]
 }
 
+@test "zsh output validates trust marker contents" {
+  run cmd_init zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_canonical_config_path"* ]]
+  [[ "$output" == *"hooks_marker_matches_config"* ]]
+  [[ "$output" == *'cat "$_gtr_trust_path"'* ]]
+}
+
 @test "fish output includes cd subcommand completion" {
   run cmd_init fish
   [ "$status" -eq 0 ]
   [[ "$output" == *"-a cd -d"* ]]
 }
 
+@test "fish output includes trust subcommand completion" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"-a trust -d"* ]]
+}
+
 @test "fish output uses git gtr list --porcelain for cd completion" {
   run cmd_init fish
   [ "$status" -eq 0 ]
   [[ "$output" == *"git gtr list --porcelain"* ]]
+}
+
+@test "fish output validates trust marker contents" {
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hooks_canonical_config_path"* ]]
+  [[ "$output" == *"hooks_marker_matches_config"* ]]
+  [[ "$output" == *'cat "$_gtr_trust_path"'* ]]
+}
+
+@test "fish output strips linked-worktree git common dir suffix" {
+  require_runtime_shell fish
+
+  run cmd_init fish
+  [ "$status" -eq 0 ]
+
+  local pattern
+  pattern=$(printf '%s\n' "$output" | sed -n "s/.*string replace -r '\([^']*\)'.*/\1/p" | head -n 1)
+  [ "$pattern" = '/\.git$' ]
+
+  run fish -c 'string replace -r -- $argv[1] "" /tmp/repo/.git' -- "$pattern"
+  [ "$status" -eq 0 ]
+  [ "$output" = "/tmp/repo" ]
+}
+
+@test "fish generated postCd skips untrusted gtrconfig hooks without changing cwd" {
+  require_runtime_shell fish
+
+  run run_generated_fish_gtrconfig_post_cd_hooks untrusted
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"RC=0"* ]]
+  [[ "$output" == *"HOOK_PWD=<missing>"* ]]
+  [[ "$output" == *"HOOK_ORDER=<missing>"* ]]
+  [[ "$output" == *"STDERR=gtr: Untrusted .gtrconfig hooks skipped"* ]]
+
+  local pwd_line wt_line
+  pwd_line=$(printf '%s\n' "$output" | sed -n 's/^PWD=//p')
+  wt_line=$(printf '%s\n' "$output" | sed -n 's/^WT=//p')
+  [ "$pwd_line" = "$wt_line" ]
+}
+
+@test "fish generated postCd trusts multi-entry gtrconfig hooks without changing cwd" {
+  require_runtime_shell fish
+
+  run run_generated_fish_gtrconfig_post_cd_hooks trusted
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"RC=0"* ]]
+  [[ "$output" == *"HOOK_ORDER=second"* ]]
+  [[ "$output" == *"STDERR="* ]]
+
+  local pwd_line wt_line hook_pwd_line
+  pwd_line=$(printf '%s\n' "$output" | sed -n 's/^PWD=//p')
+  wt_line=$(printf '%s\n' "$output" | sed -n 's/^WT=//p')
+  hook_pwd_line=$(printf '%s\n' "$output" | sed -n 's/^HOOK_PWD=//p')
+  [ "$pwd_line" = "$wt_line" ]
+  [ "$hook_pwd_line" = "$wt_line" ]
 }
 
 # ── new --cd wrapper support ────────────────────────────────────────────────
@@ -770,6 +935,19 @@ require_runtime_shell() {
   [ "$status" -eq 0 ]
   stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.zsh")"
   [[ "$stamp" == *"version=2.0.0"* ]]
+}
+
+@test "cache invalidates when shell integration schema changes" {
+  GTR_INIT_CACHE_VERSION="1" run cmd_init bash
+  [ "$status" -eq 0 ]
+  local stamp
+  stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.bash")"
+  [[ "$stamp" == *"init=1"* ]]
+
+  GTR_INIT_CACHE_VERSION="2" run cmd_init bash
+  [ "$status" -eq 0 ]
+  stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.bash")"
+  [[ "$stamp" == *"init=2"* ]]
 }
 
 @test "cache uses --as func name in cache key" {

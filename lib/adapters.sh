@@ -150,7 +150,8 @@ EOF
 
 # Generic adapter functions (used when no explicit adapter file exists)
 # These will be overridden if an adapter file is sourced
-# Globals set by load_editor_adapter: GTR_EDITOR_CMD, GTR_EDITOR_CMD_NAME
+# Globals set by load_editor_adapter:
+#   GTR_EDITOR_CMD, GTR_EDITOR_CMD_NAME, GTR_EDITOR_CMD_ARGS
 editor_can_open() {
   command -v "$GTR_EDITOR_CMD_NAME" >/dev/null 2>&1
 }
@@ -166,12 +167,11 @@ editor_open() {
     target="$workspace"
   fi
 
-  # $GTR_EDITOR_CMD may contain arguments (e.g., "code --wait")
-  # Using eval here is necessary to handle multi-word commands properly
-  eval "$GTR_EDITOR_CMD \"\$target\""
+  _run_configured_command "$GTR_EDITOR_CMD_NAME" "${GTR_EDITOR_CMD_ARGS[@]}" "$target"
 }
 
-# Globals set by load_ai_adapter: GTR_AI_CMD, GTR_AI_CMD_NAME
+# Globals set by load_ai_adapter:
+#   GTR_AI_CMD, GTR_AI_CMD_NAME, GTR_AI_CMD_ARGS
 ai_can_start() {
   command -v "$GTR_AI_CMD_NAME" >/dev/null 2>&1
 }
@@ -179,9 +179,154 @@ ai_can_start() {
 ai_start() {
   local path="$1"
   shift
-  # $GTR_AI_CMD may contain arguments (e.g., "bunx @github/copilot@latest")
-  # Using eval here is necessary to handle multi-word commands properly
-  (cd "$path" && eval "$GTR_AI_CMD \"\$@\"")
+  (cd "$path" && _run_configured_command "$GTR_AI_CMD_NAME" "${GTR_AI_CMD_ARGS[@]}" "$@")
+}
+
+# Assign an array to a caller-provided variable name.
+# Bash 3.2 has no namerefs, so this uses a safely quoted eval assignment.
+_set_array_var() {
+  local var_name="$1"
+  shift
+
+  case "$var_name" in
+    [a-zA-Z_][a-zA-Z0-9_]*) ;;
+    *) return 1 ;;
+  esac
+
+  local assignment="${var_name}=("
+  local item
+  for item in "$@"; do
+    assignment="${assignment}$(printf '%q ' "$item")"
+  done
+  assignment="${assignment})"
+
+  eval "$assignment"
+}
+
+# Split a config-supplied command string without shell evaluation.
+# Usage: _parse_configured_command <out_array_name> <command_string>
+_parse_configured_command() {
+  local out_var="$1"
+  local command_string="$2"
+  local length="${#command_string}"
+  local i=0 char="" token="" state="normal" escaped=0 token_started=0
+  local parsed_tokens=()
+
+  while [ "$i" -lt "$length" ]; do
+    char="${command_string:$i:1}"
+
+    case "$state" in
+      normal)
+        if [ "$escaped" -eq 1 ]; then
+          token="${token}${char}"
+          token_started=1
+          escaped=0
+        else
+          case "$char" in
+            "\\")
+              escaped=1
+              token_started=1
+              ;;
+            " " | $'\t' | $'\n')
+              if [ "$token_started" -eq 1 ]; then
+                parsed_tokens+=("$token")
+                token=""
+                token_started=0
+              fi
+              ;;
+            "'")
+              state="single"
+              token_started=1
+              ;;
+            '"')
+              state="double"
+              token_started=1
+              ;;
+            *)
+              token="${token}${char}"
+              token_started=1
+              ;;
+          esac
+        fi
+        ;;
+      single)
+        if [ "$char" = "'" ]; then
+          state="normal"
+        else
+          token="${token}${char}"
+        fi
+        ;;
+      double)
+        if [ "$escaped" -eq 1 ]; then
+          token="${token}${char}"
+          token_started=1
+          escaped=0
+        else
+          case "$char" in
+            "\\")
+              escaped=1
+              token_started=1
+              ;;
+            '"')
+              state="normal"
+              ;;
+            *)
+              token="${token}${char}"
+              token_started=1
+              ;;
+          esac
+        fi
+        ;;
+    esac
+
+    i=$((i + 1))
+  done
+
+  [ "$escaped" -eq 0 ] || return 1
+  [ "$state" = "normal" ] || return 1
+
+  if [ "$token_started" -eq 1 ]; then
+    parsed_tokens+=("$token")
+  fi
+
+  [ "${#parsed_tokens[@]}" -gt 0 ] || return 1
+  _set_array_var "$out_var" "${parsed_tokens[@]}"
+}
+
+_configured_command_is_wrapper() {
+  local cmd_name="$1"
+  case "$cmd_name" in
+    sh | bash | zsh | dash | ksh | fish | env | eval | source | . | python | python3 | node | ruby | perl | php | lua | pwsh | powershell)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+_configured_command_is_safe() {
+  [ "$#" -gt 0 ] || return 1
+
+  local cmd_name="$1"
+  shift
+
+  case "$cmd_name" in
+    */* | *\\*)
+      return 1
+      ;;
+  esac
+
+  if _configured_command_is_wrapper "$cmd_name" && [ "$#" -gt 0 ]; then
+    return 1
+  fi
+
+  return 0
+}
+
+# Run a config-supplied command argv that has already been parsed and validated.
+# Usage: _run_configured_command <argv...>
+_run_configured_command() {
+  [ "$#" -gt 0 ] || return 1
+  "$@"
 }
 
 # Standard AI adapter builder — used by adapter files that follow the common pattern
@@ -295,14 +440,41 @@ resolve_workspace_file() {
 # Usage: _load_adapter <type> <name> <label> <builtin_list> <path_hint>
 _load_adapter() {
   local type="$1" name="$2" label="$3" builtin_list="$4" path_hint="$5"
-  local adapter_file="$GTR_DIR/adapters/${type}/${name}.sh"
+  local parsed_args=()
+  if ! _parse_configured_command parsed_args "$name" \
+    || ! _configured_command_is_safe "${parsed_args[@]}"; then
+    log_error "$label '$name' is not a safe executable command"
+    log_info "Use a PATH command name, optionally with flags (e.g., 'code --wait')"
+    return 1
+  fi
+
+  local adapter_selector="${parsed_args[0]}"
+  local cmd_args=("${parsed_args[@]:1}")
+
+  local adapter_file="$GTR_DIR/adapters/${type}/${adapter_selector}.sh"
 
   # 1. Try loading explicit adapter file (custom overrides like claude, nano)
-  if [ -f "$adapter_file" ]; then
-    # shellcheck disable=SC1090
-    . "$adapter_file"
-    return 0
-  fi
+  case "$adapter_selector" in
+    */* | *..* | *\\*) ;;
+    *)
+      if [ -f "$adapter_file" ]; then
+        if [ "$type" = "editor" ]; then
+          # shellcheck disable=SC2034 # Used by sourced override adapters.
+          GTR_EDITOR_CMD="$name"
+          GTR_EDITOR_CMD_NAME="$adapter_selector"
+          GTR_EDITOR_CMD_ARGS=("${cmd_args[@]}")
+        else
+          # shellcheck disable=SC2034 # Used by sourced override adapters.
+          GTR_AI_CMD="$name"
+          GTR_AI_CMD_NAME="$adapter_selector"
+          GTR_AI_CMD_ARGS=("${cmd_args[@]}")
+        fi
+        # shellcheck disable=SC1090
+        . "$adapter_file"
+        return 0
+      fi
+      ;;
+  esac
 
   # 2. Try registry lookup (declarative adapters)
   local registry entry
@@ -321,11 +493,9 @@ _load_adapter() {
     return 0
   fi
 
-  # 3. Generic fallback: check if command exists in PATH
-  # Extract first word (command name) from potentially multi-word string
-  local cmd_name="${name%% *}"
-
-  if ! command -v "$cmd_name" >/dev/null 2>&1; then
+  # 3. Generic fallback: command already validated and resolved in PATH
+  local cmd_name="$adapter_selector"
+  if ! type -P "$cmd_name" >/dev/null 2>&1; then
     log_error "$label '$name' not found"
     log_info "Built-in adapters: $builtin_list"
     log_info "Or use any $label command available in your PATH (e.g., $path_hint)"
@@ -335,11 +505,17 @@ _load_adapter() {
   # Set globals for generic adapter functions
   # Note: $name may contain arguments (e.g., "code --wait", "bunx @github/copilot@latest")
   if [ "$type" = "editor" ]; then
+    # shellcheck disable=SC2034 # Exposed for adapter state/introspection.
     GTR_EDITOR_CMD="$name"
     GTR_EDITOR_CMD_NAME="$cmd_name"
+    # shellcheck disable=SC2034 # Used by sourced override adapters.
+    GTR_EDITOR_CMD_ARGS=("${cmd_args[@]}")
   else
+    # shellcheck disable=SC2034 # Exposed for adapter state/introspection.
     GTR_AI_CMD="$name"
     GTR_AI_CMD_NAME="$cmd_name"
+    # shellcheck disable=SC2034 # Used by sourced override adapters.
+    GTR_AI_CMD_ARGS=("${cmd_args[@]}")
   fi
 }
 

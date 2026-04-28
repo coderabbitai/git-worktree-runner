@@ -68,6 +68,9 @@ Create a `.gtrconfig` file in your repository root to share configuration across
 > [!TIP]
 > See `templates/.gtrconfig.example` for a complete example with all available settings.
 
+> [!IMPORTANT]
+> Hooks and editor/AI defaults from `.gtrconfig` are executable command entries. They are ignored until you review them with `git gtr trust`; changing those entries requires re-approval.
+
 ---
 
 ## Worktree Settings
