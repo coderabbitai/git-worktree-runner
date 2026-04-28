@@ -182,14 +182,15 @@ end
 
 function __FUNC___hooks_current_content_hash
   set -l _gtr_config_file "$argv[1]"
-  set -l _gtr_hook_defs (git config -f "$_gtr_config_file" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null)
-  test $status -eq 0; or return 1
-  printf '%s\n' "$_gtr_hook_defs" | shasum -a 256 | cut -d' ' -f1
+  set -l _gtr_hook_defs (git config -f "$_gtr_config_file" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+  test $pipestatus[1] -eq 0; or return 1
+  test -n "$_gtr_hook_defs"; or return 1
+  printf '%s\n' "$_gtr_hook_defs"
 end
 
 function __FUNC___hooks_repo_root
   set -l _gtr_config_file "$argv[1]"
-  cd (dirname "$_gtr_config_file") 2>/dev/null; and pwd -P
+  command sh -c 'cd "$1" 2>/dev/null && pwd -P' sh (dirname "$_gtr_config_file")
 end
 
 function __FUNC___hooks_canonical_config_path
