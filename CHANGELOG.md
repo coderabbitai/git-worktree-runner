@@ -6,9 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-04-28
+
 ### Added
 
-- `git gtr trust` now covers `.gtrconfig` `defaults.editor` and `defaults.ai` entries as executable commands, preventing shared config from selecting editor or AI commands until reviewed.
+- `git gtr trust` now covers `.gtrconfig` hooks, `defaults.editor`, and `defaults.ai` entries as executable commands, preventing shared config from running hooks or selecting editor/AI commands until reviewed.
+
+### Fixed
+
+- Fish shell integration now resolves linked-worktree `.gtrconfig` files correctly and preserves the target worktree directory while checking trust.
+- Fish shell integration now computes trust hashes consistently with `git gtr trust` for multi-entry `.gtrconfig` files.
 
 ## [2.7.0] - 2026-04-27
 
