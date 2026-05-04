@@ -115,11 +115,15 @@ teardown() {
   records=$(list_worktree_records "$TEST_REPO")
   local repo_root
   repo_root=$(cd "$TEST_REPO" && pwd -P)
+  local normal_path detached_path locked_path
+  normal_path=$(cd "$TEST_WORKTREES_DIR/records-normal" && pwd -P)
+  detached_path=$(cd "$TEST_WORKTREES_DIR/records-detached" && pwd -P)
+  locked_path=$(cd "$TEST_WORKTREES_DIR/records-locked" && pwd -P)
 
-  [[ "$records" == *"1"$'\t'"$repo_root"$'\t'*$'\t'"ok"* ]]
-  [[ "$records" == *"0"$'\t'"$TEST_WORKTREES_DIR/records-normal"$'\t'"records-normal"$'\t'"ok"* ]]
-  [[ "$records" == *"0"$'\t'"$TEST_WORKTREES_DIR/records-detached"$'\t'"(detached)"$'\t'"detached"* ]]
-  [[ "$records" == *"0"$'\t'"$TEST_WORKTREES_DIR/records-locked"$'\t'"records-locked"$'\t'"locked"* ]]
+  [[ "$records" == *"is_main 1"$'\n'"path $repo_root"$'\n'*"status ok"* ]]
+  [[ "$records" == *"is_main 0"$'\n'"path $normal_path"$'\n'"branch records-normal"$'\n'"status ok"* ]]
+  [[ "$records" == *"is_main 0"$'\n'"path $detached_path"$'\n'"branch (detached)"$'\n'"status detached"* ]]
+  [[ "$records" == *"is_main 0"$'\n'"path $locked_path"$'\n'"branch records-locked"$'\n'"status locked"* ]]
 
   git -C "$TEST_REPO" worktree unlock "$TEST_WORKTREES_DIR/records-locked"
 }
