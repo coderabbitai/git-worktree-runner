@@ -76,6 +76,19 @@ teardown() {
   [ "$_ctx_branch" = "ctx-test" ]
 }
 
+@test "resolve_worktree preserves tab in externally registered worktree path" {
+  local tab_path="${TEST_REPO}-external"$'\t'"tab"
+  git -C "$TEST_REPO" worktree add "$tab_path" -b resolve-tab-path --quiet
+  local expected_path
+  expected_path=$(cd "$tab_path" && pwd -P)
+
+  resolve_worktree "resolve-tab-path" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+
+  [ "$_ctx_is_main" = "0" ]
+  [ "$_ctx_worktree_path" = "$expected_path" ]
+  [ "$_ctx_branch" = "resolve-tab-path" ]
+}
+
 @test "resolve_worktree returns 1 for unknown branch" {
   run resolve_worktree "nope" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
   [ "$status" -eq 1 ]

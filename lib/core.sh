@@ -348,9 +348,59 @@ EOF
   printf "%s" "$status"
 }
 
+_tsv_escape_field() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//$'\t'/\\\\t}
+  value=${value//$'\n'/\\\\n}
+  printf "%s" "$value"
+}
+
+_tsv_unescape_field() {
+  local value="$1" out="" char next
+
+  while [ -n "$value" ]; do
+    char="${value:0:1}"
+    value="${value:1}"
+
+    if [ "$char" = "\\" ]; then
+      if [ -z "$value" ]; then
+        out="${out}\\"
+        break
+      fi
+
+      next="${value:0:1}"
+      value="${value:1}"
+      case "$next" in
+        t)
+          out="${out}"$'\t'
+          ;;
+        n)
+          out="${out}"$'\n'
+          ;;
+        "\\")
+          out="${out}\\"
+          ;;
+        *)
+          out="${out}\\${next}"
+          ;;
+      esac
+    else
+      out="${out}${char}"
+    fi
+  done
+
+  printf "%s" "$out"
+}
+
+_print_resolved_target() {
+  local is_main="$1" path="$2" branch="$3"
+  printf "%s\t%s\t%s\n" "$is_main" "$(_tsv_escape_field "$path")" "$(_tsv_escape_field "$branch")"
+}
+
 # Resolve a worktree target from branch name or special ID '1' for main repo
 # Usage: resolve_target identifier repo_root base_dir prefix
-# Returns: tab-separated "is_main\tpath\tbranch" on success (is_main: 1 for main repo, 0 for worktrees)
+# Returns: tab-separated "is_main\tpath\tbranch" with escaped fields on success (is_main: 1 for main repo, 0 for worktrees)
 # Exit code: 0 on success, 1 if not found
 resolve_target() {
   local identifier="$1"
@@ -363,7 +413,7 @@ resolve_target() {
   if [ "$identifier" = "1" ]; then
     path="$repo_root"
     branch=$(get_current_branch "$repo_root")
-    printf "1\t%s\t%s\n" "$path" "$branch"
+    _print_resolved_target "1" "$path" "$branch"
     return 0
   fi
 
@@ -371,7 +421,7 @@ resolve_target() {
   # First check if it's the current branch in repo root (if not ID 1)
   branch=$(get_current_branch "$repo_root")
   if [ "$branch" = "$identifier" ]; then
-    printf "1\t%s\t%s\n" "$repo_root" "$identifier"
+    _print_resolved_target "1" "$repo_root" "$identifier"
     return 0
   fi
 
@@ -380,7 +430,7 @@ resolve_target() {
   path="$base_dir/${prefix}${sanitized_name}"
   if [ -d "$path" ]; then
     branch=$(current_branch "$path")
-    printf "0\t%s\t%s\n" "$path" "$branch"
+    _print_resolved_target "0" "$path" "$branch"
     return 0
   fi
 
@@ -390,7 +440,7 @@ resolve_target() {
       [ -d "$dir" ] || continue
       branch=$(current_branch "$dir")
       if [ "$branch" = "$identifier" ]; then
-        printf "0\t%s\t%s\n" "$dir" "$branch"
+        _print_resolved_target "0" "$dir" "$branch"
         return 0
       fi
     done
@@ -402,7 +452,7 @@ resolve_target() {
     case "$line" in
       "")
         if [ "$wt_branch" = "$identifier" ]; then
-          printf "%s\t%s\t%s\n" "$is_main" "$wt_path" "$wt_branch"
+          _print_resolved_target "$is_main" "$wt_path" "$wt_branch"
           return 0
         fi
         is_main=""
@@ -424,7 +474,7 @@ $(list_worktree_records "$repo_root")
 EOF
 
   if [ "$wt_branch" = "$identifier" ]; then
-    printf "%s\t%s\t%s\n" "$is_main" "$wt_path" "$wt_branch"
+    _print_resolved_target "$is_main" "$wt_path" "$wt_branch"
     return 0
   fi
 
@@ -436,9 +486,12 @@ EOF
 # Sets: _ctx_is_main, _ctx_worktree_path, _ctx_branch
 # Usage: unpack_target "$target_string"
 unpack_target() {
+  local escaped_path escaped_branch
   local IFS=$'\t'
   # shellcheck disable=SC2162
-  read _ctx_is_main _ctx_worktree_path _ctx_branch <<< "$1"
+  read _ctx_is_main escaped_path escaped_branch <<< "$1"
+  _ctx_worktree_path=$(_tsv_unescape_field "$escaped_path")
+  _ctx_branch=$(_tsv_unescape_field "$escaped_branch")
 }
 
 # Resolve an identifier to a worktree and set _ctx_* variables in one step
