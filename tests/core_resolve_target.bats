@@ -93,6 +93,37 @@ teardown() {
   [[ "$result" == "0"$'\t'*"-external"$'\t'"external-branch" ]]
 }
 
+@test "resolve_target finds nested externally-created worktree under base dir" {
+  mkdir -p "$TEST_WORKTREES_DIR/jsmith"
+  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature --quiet
+
+  local result
+  result=$(resolve_target "jsmith/my-feature" "$TEST_REPO" "$TEST_WORKTREES_DIR" "")
+  local expected_path
+  expected_path=$(cd "$TEST_WORKTREES_DIR/jsmith/my-feature" && pwd -P)
+
+  [[ "$result" == "0"$'\t'"$expected_path"$'\t'"jsmith/my-feature" ]]
+}
+
+@test "list_worktree_records reports normal detached and locked worktrees" {
+  create_test_worktree "records-normal"
+  git -C "$TEST_REPO" worktree add --detach "$TEST_WORKTREES_DIR/records-detached" HEAD --quiet
+  create_test_worktree "records-locked"
+  git -C "$TEST_REPO" worktree lock "$TEST_WORKTREES_DIR/records-locked" --reason "test lock"
+
+  local records
+  records=$(list_worktree_records "$TEST_REPO")
+  local repo_root
+  repo_root=$(cd "$TEST_REPO" && pwd -P)
+
+  [[ "$records" == *"1"$'\t'"$repo_root"$'\t'*$'\t'"ok"* ]]
+  [[ "$records" == *"0"$'\t'"$TEST_WORKTREES_DIR/records-normal"$'\t'"records-normal"$'\t'"ok"* ]]
+  [[ "$records" == *"0"$'\t'"$TEST_WORKTREES_DIR/records-detached"$'\t'"(detached)"$'\t'"detached"* ]]
+  [[ "$records" == *"0"$'\t'"$TEST_WORKTREES_DIR/records-locked"$'\t'"records-locked"$'\t'"locked"* ]]
+
+  git -C "$TEST_REPO" worktree unlock "$TEST_WORKTREES_DIR/records-locked"
+}
+
 # ── discover_repo_root from worktree ──────────────────────────────────────────
 
 @test "discover_repo_root returns main repo root when called from a worktree" {

@@ -72,6 +72,10 @@ _clean_should_skip() {
 _clean_merged() {
   local repo_root="$1" base_dir="$2" prefix="$3" yes_mode="$4" dry_run="$5" force="${6:-0}" active_worktree_path="${7:-}" target_ref="${8:-}"
 
+  # base_dir and prefix are kept for the helper contract. Merged cleanup uses
+  # Git's registry so nested registered worktrees are processed directly.
+  : "$base_dir" "$prefix"
+
   log_step "Checking for worktrees with merged PRs/MRs..."
 
   local provider
@@ -84,12 +88,14 @@ _clean_merged() {
   local removed=0 skipped=0
   local main_branch
   main_branch=$(current_branch "$repo_root")
+  local records
+  records=$(list_worktree_records "$repo_root")
 
-  for dir in "$base_dir/${prefix}"*; do
-    [ -d "$dir" ] || continue
+  local is_main dir branch _status
+  while IFS=$'\t' read -r is_main dir branch _status; do
+    [ -z "$dir" ] && continue
+    [ "$is_main" = "1" ] && continue
 
-    local branch
-    branch=$(current_branch "$dir") || true
     local branch_tip
     branch_tip=$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)
 
@@ -134,7 +140,9 @@ _clean_merged() {
         skipped=$((skipped + 1))
       fi
     fi
-  done
+  done <<EOF
+$records
+EOF
 
   echo ""
   if [ "$dry_run" -eq 1 ]; then

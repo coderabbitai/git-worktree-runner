@@ -25,6 +25,17 @@ teardown() {
   [[ "$output" == *"list-me"* ]]
 }
 
+@test "cmd_list shows nested externally-created worktree" {
+  mkdir -p "$TEST_WORKTREES_DIR/jsmith"
+  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature --quiet
+
+  run cmd_list
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"jsmith/my-feature"* ]]
+  [[ "$output" == *"$TEST_WORKTREES_DIR/jsmith/my-feature"* ]]
+  [[ "$output" != *"(detached)"*"$TEST_WORKTREES_DIR/jsmith"* ]]
+}
+
 @test "cmd_list --porcelain outputs TSV format" {
   create_test_worktree "porcelain-test"
   local output
@@ -43,6 +54,19 @@ teardown() {
   output=$(cmd_list --porcelain)
   # Worktree line should have: path<tab>branch<tab>status
   [[ "$output" == *"tsv-test"*$'\t'*"ok"* ]]
+}
+
+@test "cmd_list --porcelain includes nested externally-created worktree" {
+  mkdir -p "$TEST_WORKTREES_DIR/jsmith"
+  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature --quiet
+
+  local output
+  output=$(cmd_list --porcelain)
+
+  local expected_row="$TEST_WORKTREES_DIR/jsmith/my-feature"$'\t'"jsmith/my-feature"$'\t'"ok"
+  local bogus_parent="$TEST_WORKTREES_DIR/jsmith"$'\t'"(detached)"$'\t'"missing"
+  [[ "$output" == *"$expected_row"* ]]
+  [[ "$output" != *"$bogus_parent"* ]]
 }
 
 @test "cmd_list with no worktrees still works" {

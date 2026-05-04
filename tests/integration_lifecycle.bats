@@ -38,6 +38,18 @@ teardown() {
   [[ "$branches" == *"test-list"* ]]
 }
 
+@test "list_worktree_branches shows nested externally-created worktree" {
+  local base_dir="${TEST_REPO}-worktrees"
+  mkdir -p "$base_dir/jsmith"
+  git -C "$TEST_REPO" worktree add "$base_dir/jsmith/my-feature" -b jsmith/my-feature --quiet
+
+  local branches
+  branches=$(list_worktree_branches "$base_dir" "")
+
+  [[ "$branches" == *"jsmith/my-feature"* ]]
+  [[ "$branches" != *"(detached)"* ]]
+}
+
 @test "resolve_target finds worktree by branch name" {
   local default_branch
   default_branch=$(git rev-parse --abbrev-ref HEAD)

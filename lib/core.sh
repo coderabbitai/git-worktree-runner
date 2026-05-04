@@ -190,49 +190,118 @@ current_branch() {
   printf "%s" "$branch"
 }
 
+_worktree_record_status() {
+  local detached="$1" locked="$2" prunable="$3"
+
+  if [ "$locked" -eq 1 ]; then
+    printf "locked"
+  elif [ "$prunable" -eq 1 ]; then
+    printf "prunable"
+  elif [ "$detached" -eq 1 ]; then
+    printf "detached"
+  else
+    printf "ok"
+  fi
+}
+
+_emit_worktree_record() {
+  local repo_root="$1"
+  local wt_path="$2"
+  local wt_branch="$3"
+  local wt_detached="$4"
+  local wt_locked="$5"
+  local wt_prunable="$6"
+
+  [ -z "$wt_path" ] && return 0
+
+  local is_main=0 branch="$wt_branch" status
+  [ "$wt_path" = "$repo_root" ] && is_main=1
+  [ -z "$branch" ] && branch="(detached)"
+  status=$(_worktree_record_status "$wt_detached" "$wt_locked" "$wt_prunable")
+
+  printf "%s\t%s\t%s\t%s\n" "$is_main" "$wt_path" "$branch" "$status"
+}
+
+# List registered git worktrees for a repository.
+# Usage: list_worktree_records repo_root
+# Output: is_main<TAB>path<TAB>branch<TAB>status
+list_worktree_records() {
+  local repo_root="$1"
+  local repo_root_canonical
+  repo_root_canonical=$(canonicalize_path "$repo_root" || printf "%s" "$repo_root")
+
+  local porcelain_output
+
+  porcelain_output=$(git -C "$repo_root" worktree list --porcelain 2>/dev/null) || return 0
+
+  local wt_path="" wt_branch="" wt_detached=0 wt_locked=0 wt_prunable=0
+
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      "")
+        _emit_worktree_record "$repo_root_canonical" "$wt_path" "$wt_branch" "$wt_detached" "$wt_locked" "$wt_prunable"
+        wt_path=""
+        wt_branch=""
+        wt_detached=0
+        wt_locked=0
+        wt_prunable=0
+        ;;
+      "worktree "*)
+        if [ -n "$wt_path" ]; then
+          _emit_worktree_record "$repo_root_canonical" "$wt_path" "$wt_branch" "$wt_detached" "$wt_locked" "$wt_prunable"
+          wt_branch=""
+          wt_detached=0
+          wt_locked=0
+          wt_prunable=0
+        fi
+        wt_path="${line#worktree }"
+        ;;
+      "branch refs/heads/"*)
+        wt_branch="${line#branch refs/heads/}"
+        ;;
+      "branch "*)
+        wt_branch="${line#branch }"
+        ;;
+      detached)
+        wt_detached=1
+        ;;
+      locked*)
+        wt_locked=1
+        ;;
+      prunable*)
+        wt_prunable=1
+        ;;
+    esac
+  done <<EOF
+$porcelain_output
+EOF
+
+  _emit_worktree_record "$repo_root_canonical" "$wt_path" "$wt_branch" "$wt_detached" "$wt_locked" "$wt_prunable"
+}
+
 # Get the status of a worktree from git
 # Usage: worktree_status worktree_path
 # Returns: status (ok, detached, locked, prunable, or missing)
 worktree_status() {
   local target_path="$1"
-  local porcelain_output
-  local in_section=0
+  local target_path_canonical
+  target_path_canonical=$(canonicalize_path "$target_path" || printf "%s" "$target_path")
+
   local status="ok"
   local found=0
+  local repo_root
+  repo_root=$(_resolve_main_repo_root) || return 1
 
-  # Parse git worktree list --porcelain line by line
-  porcelain_output=$(git worktree list --porcelain 2>/dev/null)
-
-  while IFS= read -r line; do
-    # Check if this is the start of our target worktree
-    if [ "$line" = "worktree $target_path" ]; then
-      in_section=1
+  local is_main path branch record_status
+  while IFS=$'\t' read -r is_main path branch record_status; do
+    if [ "$path" = "$target_path" ] || [ "$path" = "$target_path_canonical" ]; then
       found=1
-      continue
-    fi
-
-    # If we're in the target section, check for status lines
-    if [ "$in_section" -eq 1 ]; then
-      # Empty line marks end of section
-      if [ -z "$line" ]; then
-        break
-      fi
-
-      # Check for status indicators (priority: locked > prunable > detached)
-      case "$line" in
-        locked*)
-          status="locked"
-          ;;
-        prunable*)
-          [ "$status" = "ok" ] && status="prunable"
-          ;;
-        detached)
-          [ "$status" = "ok" ] && status="detached"
-          ;;
-      esac
+      status="$record_status"
+      break
     fi
   done <<EOF
-$porcelain_output
+$(list_worktree_records "$repo_root")
 EOF
 
   # If worktree not found in git's list
@@ -292,22 +361,15 @@ resolve_target() {
   fi
 
   # Last resort: ask git for all worktrees (catches non-gtr-managed worktrees)
-  local wt_path wt_branch
-  while IFS= read -r line; do
-    case "$line" in
-      "worktree "*)  wt_path="${line#worktree }" ;;
-      "branch "*)
-        wt_branch="${line#branch refs/heads/}"
-        if [ "$wt_branch" = "$identifier" ]; then
-          local is_main=0
-          [ "$wt_path" = "$repo_root" ] && is_main=1
-          printf "%s\t%s\t%s\n" "$is_main" "$wt_path" "$wt_branch"
-          return 0
-        fi
-        ;;
-      "")  wt_path="" ; wt_branch="" ;;
-    esac
-  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+  local is_main wt_path wt_branch _wt_status
+  while IFS=$'\t' read -r is_main wt_path wt_branch _wt_status; do
+    if [ "$wt_branch" = "$identifier" ]; then
+      printf "%s\t%s\t%s\n" "$is_main" "$wt_path" "$wt_branch"
+      return 0
+    fi
+  done <<EOF
+$(list_worktree_records "$repo_root")
+EOF
 
   log_error "Worktree not found for branch: $identifier"
   return 1
@@ -549,13 +611,24 @@ resolve_repo_context() {
 list_worktree_branches() {
   local base_dir="$1"
   local prefix="$2"
+  local repo_root
+  repo_root=$(_resolve_main_repo_root) || return 0
 
-  [ ! -d "$base_dir" ] && return 0
+  # base_dir and prefix are kept for the public helper contract. Worktree
+  # discovery itself comes from Git's registry so nested registered worktrees
+  # are included and arbitrary parent directories are ignored.
+  : "$base_dir" "$prefix"
 
-  for dir in "$base_dir/${prefix}"*; do
-    [ -d "$dir" ] || continue
-    local branch
-    branch=$(current_branch "$dir")
-    [ -n "$branch" ] && echo "$branch"
-  done
+  local records
+  records=$(list_worktree_records "$repo_root")
+
+  local is_main path branch status
+  while IFS=$'\t' read -r is_main path branch status; do
+    [ "$is_main" = "1" ] && continue
+    [ -z "$branch" ] && continue
+    [ "$branch" = "(detached)" ] && continue
+    printf "%s\n" "$branch"
+  done <<EOF
+$records
+EOF
 }
