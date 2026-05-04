@@ -62,7 +62,7 @@ cmd_copy() {
   # Build target list for --all mode
   if [ "$all_mode" -eq 1 ]; then
     local all_branches
-    all_branches=$(list_worktree_branches "$base_dir" "$prefix")
+    all_branches=$(list_worktree_branches "$base_dir" "$prefix" "$repo_root")
     if [ -z "$all_branches" ]; then
       log_error "No worktrees found"
       exit 1

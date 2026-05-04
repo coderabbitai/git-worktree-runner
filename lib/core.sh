@@ -214,8 +214,11 @@ _emit_worktree_record() {
 
   [ -z "$wt_path" ] && return 0
 
-  local is_main=0 branch="$wt_branch" status
-  [ "$wt_path" = "$repo_root" ] && is_main=1
+  local is_main=0 branch="$wt_branch" status wt_path_canonical
+  wt_path_canonical=$(canonicalize_path "$wt_path" || printf "%s" "$wt_path")
+  if [ "$wt_path" = "$repo_root" ] || [ "$wt_path_canonical" = "$repo_root" ]; then
+    is_main=1
+  fi
   [ -z "$branch" ] && branch="(detached)"
   status=$(_worktree_record_status "$wt_detached" "$wt_locked" "$wt_prunable")
 
@@ -660,13 +663,15 @@ resolve_repo_context() {
 }
 
 # List all worktree branch names (excluding main repo)
-# Usage: list_worktree_branches base_dir prefix
+# Usage: list_worktree_branches base_dir prefix [repo_root]
 # Returns: newline-separated list of branch names
 list_worktree_branches() {
   local base_dir="$1"
   local prefix="$2"
-  local repo_root
-  repo_root=$(_resolve_main_repo_root) || return 0
+  local repo_root="${3:-}"
+  if [ -z "$repo_root" ]; then
+    repo_root=$(_resolve_main_repo_root) || return 0
+  fi
 
   # base_dir and prefix are kept for the public helper contract. Worktree
   # discovery itself comes from Git's registry so nested registered worktrees

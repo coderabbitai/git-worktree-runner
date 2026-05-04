@@ -50,6 +50,17 @@ teardown() {
   [[ "$branches" != *"(detached)"* ]]
 }
 
+@test "list_worktree_branches uses explicit repo root outside repo" {
+  local base_dir="${TEST_REPO}-worktrees"
+  create_worktree "$base_dir" "" "outside-context" "HEAD" "none" "1" "0" "" "" >/dev/null
+  cd /tmp || false
+
+  local branches
+  branches=$(list_worktree_branches "$base_dir" "" "$TEST_REPO")
+
+  [[ "$branches" == *"outside-context"* ]]
+}
+
 @test "resolve_target finds worktree by branch name" {
   local default_branch
   default_branch=$(git rev-parse --abbrev-ref HEAD)
