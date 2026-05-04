@@ -219,12 +219,15 @@ _emit_worktree_record() {
   [ -z "$branch" ] && branch="(detached)"
   status=$(_worktree_record_status "$wt_detached" "$wt_locked" "$wt_prunable")
 
-  printf "%s\t%s\t%s\t%s\n" "$is_main" "$wt_path" "$branch" "$status"
+  printf "is_main %s\n" "$is_main"
+  printf "path %s\n" "$wt_path"
+  printf "branch %s\n" "$branch"
+  printf "status %s\n\n" "$status"
 }
 
 # List registered git worktrees for a repository.
 # Usage: list_worktree_records repo_root
-# Output: is_main<TAB>path<TAB>branch<TAB>status
+# Output: blank-line-delimited records with is_main/path/branch/status fields
 list_worktree_records() {
   local repo_root="$1"
   local repo_root_canonical
@@ -293,16 +296,46 @@ worktree_status() {
   local repo_root
   repo_root=$(_resolve_main_repo_root) || return 1
 
-  local is_main path branch record_status
-  while IFS=$'\t' read -r is_main path branch record_status; do
-    if [ "$path" = "$target_path" ] || [ "$path" = "$target_path_canonical" ]; then
-      found=1
-      status="$record_status"
-      break
-    fi
+  local is_main="" path="" branch="" record_status="" line path_canonical
+  while IFS= read -r line; do
+    case "$line" in
+      "")
+        [ -z "$path" ] && continue
+        path_canonical=$(canonicalize_path "$path" || printf "%s" "$path")
+        if [ "$path" = "$target_path" ] || [ "$path_canonical" = "$target_path_canonical" ]; then
+          found=1
+          status="$record_status"
+          break
+        fi
+        is_main=""
+        path=""
+        branch=""
+        record_status=""
+        ;;
+      "is_main "*)
+        is_main="${line#is_main }"
+        ;;
+      "path "*)
+        path="${line#path }"
+        ;;
+      "branch "*)
+        branch="${line#branch }"
+        ;;
+      "status "*)
+        record_status="${line#status }"
+        ;;
+    esac
   done <<EOF
 $(list_worktree_records "$repo_root")
 EOF
+
+  if [ "$found" -eq 0 ] && [ -n "$path" ]; then
+    path_canonical=$(canonicalize_path "$path" || printf "%s" "$path")
+    if [ "$path" = "$target_path" ] || [ "$path_canonical" = "$target_path_canonical" ]; then
+      found=1
+      status="$record_status"
+    fi
+  fi
 
   # If worktree not found in git's list
   if [ "$found" -eq 0 ]; then
@@ -361,15 +394,36 @@ resolve_target() {
   fi
 
   # Last resort: ask git for all worktrees (catches non-gtr-managed worktrees)
-  local is_main wt_path wt_branch _wt_status
-  while IFS=$'\t' read -r is_main wt_path wt_branch _wt_status; do
-    if [ "$wt_branch" = "$identifier" ]; then
-      printf "%s\t%s\t%s\n" "$is_main" "$wt_path" "$wt_branch"
-      return 0
-    fi
+  local is_main="" wt_path="" wt_branch="" line
+  while IFS= read -r line; do
+    case "$line" in
+      "")
+        if [ "$wt_branch" = "$identifier" ]; then
+          printf "%s\t%s\t%s\n" "$is_main" "$wt_path" "$wt_branch"
+          return 0
+        fi
+        is_main=""
+        wt_path=""
+        wt_branch=""
+        ;;
+      "is_main "*)
+        is_main="${line#is_main }"
+        ;;
+      "path "*)
+        wt_path="${line#path }"
+        ;;
+      "branch "*)
+        wt_branch="${line#branch }"
+        ;;
+    esac
   done <<EOF
 $(list_worktree_records "$repo_root")
 EOF
+
+  if [ "$wt_branch" = "$identifier" ]; then
+    printf "%s\t%s\t%s\n" "$is_main" "$wt_path" "$wt_branch"
+    return 0
+  fi
 
   log_error "Worktree not found for branch: $identifier"
   return 1
@@ -622,13 +676,32 @@ list_worktree_branches() {
   local records
   records=$(list_worktree_records "$repo_root")
 
-  local is_main path branch status
-  while IFS=$'\t' read -r is_main path branch status; do
-    [ "$is_main" = "1" ] && continue
-    [ -z "$branch" ] && continue
-    [ "$branch" = "(detached)" ] && continue
-    printf "%s\n" "$branch"
+  local is_main="" path="" branch="" line
+  while IFS= read -r line; do
+    case "$line" in
+      "")
+        if [ "$is_main" != "1" ] && [ -n "$branch" ] && [ "$branch" != "(detached)" ]; then
+          printf "%s\n" "$branch"
+        fi
+        is_main=""
+        path=""
+        branch=""
+        ;;
+      "is_main "*)
+        is_main="${line#is_main }"
+        ;;
+      "path "*)
+        path="${line#path }"
+        ;;
+      "branch "*)
+        branch="${line#branch }"
+        ;;
+    esac
   done <<EOF
 $records
 EOF
+
+  if [ "$is_main" != "1" ] && [ -n "$branch" ] && [ "$branch" != "(detached)" ]; then
+    printf "%s\n" "$branch"
+  fi
 }

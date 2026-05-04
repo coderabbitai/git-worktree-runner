@@ -124,6 +124,16 @@ teardown() {
   git -C "$TEST_REPO" worktree unlock "$TEST_WORKTREES_DIR/records-locked"
 }
 
+@test "worktree_status handles registered path containing tab" {
+  local tab_path="$TEST_WORKTREES_DIR/with"$'\t'"tab"
+  git -C "$TEST_REPO" worktree add "$tab_path" -b tab-path --quiet
+
+  local status
+  status=$(worktree_status "$tab_path")
+
+  [ "$status" = "ok" ]
+}
+
 # ── discover_repo_root from worktree ──────────────────────────────────────────
 
 @test "discover_repo_root returns main repo root when called from a worktree" {

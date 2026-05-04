@@ -16,17 +16,45 @@ cmd_list() {
   # Machine-readable output (porcelain)
   if [ "$porcelain" -eq 1 ]; then
     # Output: path<tab>branch<tab>status
-    local is_main path branch status linked_rows=""
-    while IFS=$'\t' read -r is_main path branch status; do
-      [ -z "$path" ] && continue
+    local is_main="" path="" branch="" status="" linked_rows="" line
+    while IFS= read -r line; do
+      case "$line" in
+        "")
+          [ -z "$path" ] && continue
+          if [ "$is_main" = "1" ]; then
+            printf "%s\t%s\t%s\n" "$path" "$branch" "$status"
+          else
+            linked_rows="${linked_rows}${path}"$'\t'"${branch}"$'\t'"${status}"$'\n'
+          fi
+          is_main=""
+          path=""
+          branch=""
+          status=""
+          ;;
+        "is_main "*)
+          is_main="${line#is_main }"
+          ;;
+        "path "*)
+          path="${line#path }"
+          ;;
+        "branch "*)
+          branch="${line#branch }"
+          ;;
+        "status "*)
+          status="${line#status }"
+          ;;
+      esac
+    done <<EOF
+$records
+EOF
+
+    if [ -n "$path" ]; then
       if [ "$is_main" = "1" ]; then
         printf "%s\t%s\t%s\n" "$path" "$branch" "$status"
       else
         linked_rows="${linked_rows}${path}"$'\t'"${branch}"$'\t'"${status}"$'\n'
       fi
-    done <<EOF
-$records
-EOF
+    fi
 
     if [ -n "$linked_rows" ]; then
       printf "%s" "$linked_rows" | LC_ALL=C sort -t "$(printf '\t')" -k2,2 -k1,1
@@ -40,17 +68,45 @@ EOF
   printf "%-30s %s\n" "BRANCH" "PATH"
   printf "%-30s %s\n" "------" "----"
 
-  local is_main path branch status linked_rows=""
-  while IFS=$'\t' read -r is_main path branch status; do
-    [ -z "$path" ] && continue
+  local is_main="" path="" branch="" status="" linked_rows="" line
+  while IFS= read -r line; do
+    case "$line" in
+      "")
+        [ -z "$path" ] && continue
+        if [ "$is_main" = "1" ]; then
+          printf "%-30s %s\n" "$branch [main repo]" "$path"
+        else
+          linked_rows="${linked_rows}${branch}"$'\t'"${path}"$'\n'
+        fi
+        is_main=""
+        path=""
+        branch=""
+        status=""
+        ;;
+      "is_main "*)
+        is_main="${line#is_main }"
+        ;;
+      "path "*)
+        path="${line#path }"
+        ;;
+      "branch "*)
+        branch="${line#branch }"
+        ;;
+      "status "*)
+        status="${line#status }"
+        ;;
+    esac
+  done <<EOF
+$records
+EOF
+
+  if [ -n "$path" ]; then
     if [ "$is_main" = "1" ]; then
       printf "%-30s %s\n" "$branch [main repo]" "$path"
     else
       linked_rows="${linked_rows}${branch}"$'\t'"${path}"$'\n'
     fi
-  done <<EOF
-$records
-EOF
+  fi
 
   if [ -n "$linked_rows" ]; then
     printf "%s" "$linked_rows" | LC_ALL=C sort -t "$(printf '\t')" -k1,1 -k2,2 | while IFS=$'\t' read -r branch path; do
