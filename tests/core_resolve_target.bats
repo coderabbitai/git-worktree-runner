@@ -68,12 +68,33 @@ teardown() {
   [ "$_ctx_branch" = "main" ]
 }
 
+@test "resolved target escaping round-trips tabs newlines and backslashes" {
+  local value="/tmp/path"$'\t'"with"$'\n'"chars\\tail"
+  local escaped
+  escaped=$(_tsv_escape_field "$value")
+
+  [ "$(_tsv_unescape_field "$escaped")" = "$value" ]
+}
+
 @test "resolve_worktree sets context globals" {
   create_test_worktree "ctx-test"
   resolve_worktree "ctx-test" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
   [ "$_ctx_is_main" = "0" ]
   [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/ctx-test" ]
   [ "$_ctx_branch" = "ctx-test" ]
+}
+
+@test "resolve_worktree preserves tab in externally registered worktree path" {
+  local tab_path="${TEST_REPO}-external"$'\t'"tab"
+  git -C "$TEST_REPO" worktree add "$tab_path" -b resolve-tab-path --quiet
+  local expected_path
+  expected_path=$(cd "$tab_path" && pwd -P)
+
+  resolve_worktree "resolve-tab-path" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+
+  [ "$_ctx_is_main" = "0" ]
+  [ "$_ctx_worktree_path" = "$expected_path" ]
+  [ "$_ctx_branch" = "resolve-tab-path" ]
 }
 
 @test "resolve_worktree returns 1 for unknown branch" {
@@ -91,6 +112,76 @@ teardown() {
   result=$(resolve_target "external-branch" "$TEST_REPO" "$TEST_WORKTREES_DIR" "")
   # Assert: found with is_main=0, correct branch, path ends with expected suffix
   [[ "$result" == "0"$'\t'*"-external"$'\t'"external-branch" ]]
+}
+
+@test "resolve_target finds nested externally-created worktree under base dir" {
+  mkdir -p "$TEST_WORKTREES_DIR/jsmith"
+  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature --quiet
+
+  local result
+  result=$(resolve_target "jsmith/my-feature" "$TEST_REPO" "$TEST_WORKTREES_DIR" "")
+  local expected_path
+  expected_path=$(cd "$TEST_WORKTREES_DIR/jsmith/my-feature" && pwd -P)
+
+  [[ "$result" == "0"$'\t'"$expected_path"$'\t'"jsmith/my-feature" ]]
+}
+
+@test "list_worktree_records reports normal detached and locked worktrees" {
+  create_test_worktree "records-normal"
+  git -C "$TEST_REPO" worktree add --detach "$TEST_WORKTREES_DIR/records-detached" HEAD --quiet
+  create_test_worktree "records-locked"
+  git -C "$TEST_REPO" worktree lock "$TEST_WORKTREES_DIR/records-locked" --reason "test lock"
+
+  local records
+  records=$(list_worktree_records "$TEST_REPO")
+  local repo_root
+  repo_root=$(cd "$TEST_REPO" && pwd -P)
+  local normal_path detached_path locked_path
+  normal_path=$(cd "$TEST_WORKTREES_DIR/records-normal" && pwd -P)
+  detached_path=$(cd "$TEST_WORKTREES_DIR/records-detached" && pwd -P)
+  locked_path=$(cd "$TEST_WORKTREES_DIR/records-locked" && pwd -P)
+
+  [[ "$records" == *"is_main 1"$'\n'"path $repo_root"$'\n'*"status ok"* ]]
+  [[ "$records" == *"is_main 0"$'\n'"path $normal_path"$'\n'"branch records-normal"$'\n'"status ok"* ]]
+  [[ "$records" == *"is_main 0"$'\n'"path $detached_path"$'\n'"branch (detached)"$'\n'"status detached"* ]]
+  [[ "$records" == *"is_main 0"$'\n'"path $locked_path"$'\n'"branch records-locked"$'\n'"status locked"* ]]
+
+  git -C "$TEST_REPO" worktree unlock "$TEST_WORKTREES_DIR/records-locked"
+}
+
+@test "worktree_status handles registered path containing tab" {
+  local tab_path="$TEST_WORKTREES_DIR/with"$'\t'"tab"
+  git -C "$TEST_REPO" worktree add "$tab_path" -b tab-path --quiet
+
+  local status
+  status=$(worktree_status "$tab_path")
+
+  [ "$status" = "ok" ]
+}
+
+@test "list_worktree_records preserves registered path containing newline" {
+  if ! git -C "$TEST_REPO" worktree list --porcelain -z >/dev/null 2>&1; then
+    skip "git worktree list --porcelain -z is not available"
+  fi
+
+  local newline_path="${TEST_REPO}-external"$'\n'"newline"
+  git -C "$TEST_REPO" worktree add "$newline_path" -b newline-path --quiet
+  local expected_path
+  expected_path=$(cd "$newline_path" && pwd -P)
+
+  local records escaped_path
+  escaped_path=$(_tsv_escape_field "$expected_path")
+  records=$(list_worktree_records "$TEST_REPO")
+
+  [[ "$records" == *"path $escaped_path"$'\n'"branch newline-path"* ]]
+
+  local status
+  status=$(worktree_status "$expected_path")
+  [ "$status" = "ok" ]
+
+  resolve_worktree "newline-path" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$expected_path" ]
+  [ "$_ctx_branch" = "newline-path" ]
 }
 
 # ── discover_repo_root from worktree ──────────────────────────────────────────

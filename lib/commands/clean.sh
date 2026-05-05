@@ -72,6 +72,10 @@ _clean_should_skip() {
 _clean_merged() {
   local repo_root="$1" base_dir="$2" prefix="$3" yes_mode="$4" dry_run="$5" force="${6:-0}" active_worktree_path="${7:-}" target_ref="${8:-}"
 
+  # base_dir and prefix are kept for the helper contract. Merged cleanup uses
+  # Git's registry so nested registered worktrees are processed directly.
+  : "$base_dir" "$prefix"
+
   log_step "Checking for worktrees with merged PRs/MRs..."
 
   local provider
@@ -84,57 +88,77 @@ _clean_merged() {
   local removed=0 skipped=0
   local main_branch
   main_branch=$(current_branch "$repo_root")
+  local records
+  records=$(list_worktree_records "$repo_root")
 
-  for dir in "$base_dir/${prefix}"*; do
-    [ -d "$dir" ] || continue
+  local is_main="" dir="" branch="" line
+  while IFS= read -r line; do
+    case "$line" in
+      "")
+        if [ -n "$dir" ] && [ "$is_main" != "1" ]; then
+          local branch_tip
+          branch_tip=$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)
 
-    local branch
-    branch=$(current_branch "$dir") || true
-    local branch_tip
-    branch_tip=$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)
+          # Skip main repo branch silently (not counted)
+          [ "$branch" = "$main_branch" ] && continue
 
-    # Skip main repo branch silently (not counted)
-    [ "$branch" = "$main_branch" ] && continue
+          # Check if branch has a merged PR/MR
+          if check_branch_merged "$provider" "$branch" "$target_ref" "$branch_tip"; then
+            if _clean_should_skip "$dir" "$branch" "$force" "$active_worktree_path"; then
+              skipped=$((skipped + 1))
+              continue
+            fi
 
-    # Check if branch has a merged PR/MR
-    if check_branch_merged "$provider" "$branch" "$target_ref" "$branch_tip"; then
-      if _clean_should_skip "$dir" "$branch" "$force" "$active_worktree_path"; then
-        skipped=$((skipped + 1))
-        continue
-      fi
+            if [ "$dry_run" -eq 1 ]; then
+              log_info "[dry-run] Would remove: $branch ($dir)"
+              removed=$((removed + 1))
+            elif [ "$yes_mode" -eq 1 ] || prompt_yes_no "Remove worktree and delete branch '$branch'?"; then
+              log_step "Removing worktree: $branch"
 
-      if [ "$dry_run" -eq 1 ]; then
-        log_info "[dry-run] Would remove: $branch ($dir)"
-        removed=$((removed + 1))
-      elif [ "$yes_mode" -eq 1 ] || prompt_yes_no "Remove worktree and delete branch '$branch'?"; then
-        log_step "Removing worktree: $branch"
+              if ! run_hooks_in preRemove "$dir" \
+                REPO_ROOT="$repo_root" \
+                WORKTREE_PATH="$dir" \
+                BRANCH="$branch"; then
+                log_warn "Pre-remove hook failed for $branch, skipping"
+                skipped=$((skipped + 1))
+                continue
+              fi
 
-        if ! run_hooks_in preRemove "$dir" \
-          REPO_ROOT="$repo_root" \
-          WORKTREE_PATH="$dir" \
-          BRANCH="$branch"; then
-          log_warn "Pre-remove hook failed for $branch, skipping"
-          skipped=$((skipped + 1))
-          continue
-        fi
+              if remove_worktree "$dir" "$force"; then
+                git branch -d "$branch" 2>/dev/null || git branch -D "$branch" 2>/dev/null || true
+                removed=$((removed + 1))
 
-        if remove_worktree "$dir" "$force"; then
-          git branch -d "$branch" 2>/dev/null || git branch -D "$branch" 2>/dev/null || true
-          removed=$((removed + 1))
-
-          if ! run_hooks postRemove \
-            REPO_ROOT="$repo_root" \
-            WORKTREE_PATH="$dir" \
-            BRANCH="$branch"; then
-            log_warn "Post-remove hook failed for $branch"
+                if ! run_hooks postRemove \
+                  REPO_ROOT="$repo_root" \
+                  WORKTREE_PATH="$dir" \
+                  BRANCH="$branch"; then
+                  log_warn "Post-remove hook failed for $branch"
+                fi
+              fi
+            else
+              log_warn "Skipped: $branch (user declined)"
+              skipped=$((skipped + 1))
+            fi
           fi
         fi
-      else
-        log_warn "Skipped: $branch (user declined)"
-        skipped=$((skipped + 1))
-      fi
-    fi
-  done
+        is_main=""
+        dir=""
+        branch=""
+        ;;
+      "is_main "*)
+        is_main="${line#is_main }"
+        ;;
+      "path "*)
+        dir=$(_tsv_unescape_field "${line#path }")
+        ;;
+      "branch "*)
+        branch=$(_tsv_unescape_field "${line#branch }")
+        ;;
+    esac
+  done <<EOF
+$records
+
+EOF
 
   echo ""
   if [ "$dry_run" -eq 1 ]; then

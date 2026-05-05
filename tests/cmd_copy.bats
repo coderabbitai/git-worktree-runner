@@ -80,6 +80,17 @@ teardown() {
   [ -f "$TEST_WORKTREES_DIR/copy-target-2/.env" ]
 }
 
+@test "cmd_copy --all copies to nested registered worktree only" {
+  mkdir -p "$TEST_WORKTREES_DIR/jsmith"
+  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature --quiet
+
+  run cmd_copy --all -- ".env"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_WORKTREES_DIR/copy-target/.env" ]
+  [ -f "$TEST_WORKTREES_DIR/jsmith/my-feature/.env" ]
+  [ ! -e "$TEST_WORKTREES_DIR/jsmith/.env" ]
+}
+
 @test "cmd_copy --all copies configured includeDirs to all worktrees" {
   create_test_worktree "copy-target-2"
   mkdir -p "$TEST_REPO/.zed"

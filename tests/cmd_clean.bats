@@ -145,6 +145,28 @@ teardown() {
   [ ! -d "$TEST_WORKTREES_DIR/merged-force" ]
 }
 
+@test "cmd_clean --merged uses nested registered worktree path" {
+  mkdir -p "$TEST_WORKTREES_DIR/jsmith"
+  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature --quiet
+
+  _clean_detect_provider() { printf "github"; }
+  ensure_provider_cli() { return 0; }
+  check_branch_merged() {
+    [ "$2" = "jsmith/my-feature" ]
+  }
+  run_hooks_in() {
+    printf "preRemove:%s\n" "$2"
+    return 0
+  }
+  run_hooks() { return 0; }
+
+  run cmd_clean --merged --force --yes
+  [ "$status" -eq 0 ]
+  [ ! -d "$TEST_WORKTREES_DIR/jsmith/my-feature" ]
+  [[ "$output" == *"preRemove:$TEST_WORKTREES_DIR/jsmith/my-feature"* ]]
+  [ ! -e "$TEST_WORKTREES_DIR/jsmith/.git" ]
+}
+
 @test "cmd_clean --merged --to filters by target ref" {
   create_test_worktree "merged-to-main"
   create_test_worktree "merged-to-feature"

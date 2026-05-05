@@ -190,50 +190,159 @@ current_branch() {
   printf "%s" "$branch"
 }
 
+_worktree_record_status() {
+  local detached="$1" locked="$2" prunable="$3"
+
+  if [ "$locked" -eq 1 ]; then
+    printf "locked"
+  elif [ "$prunable" -eq 1 ]; then
+    printf "prunable"
+  elif [ "$detached" -eq 1 ]; then
+    printf "detached"
+  else
+    printf "ok"
+  fi
+}
+
+_emit_worktree_record() {
+  local repo_root="$1"
+  local wt_path="$2"
+  local wt_branch="$3"
+  local wt_detached="$4"
+  local wt_locked="$5"
+  local wt_prunable="$6"
+
+  [ -z "$wt_path" ] && return 0
+
+  local is_main=0 branch="$wt_branch" status wt_path_canonical
+  wt_path_canonical=$(canonicalize_path "$wt_path" || printf "%s" "$wt_path")
+  if [ "$wt_path" = "$repo_root" ] || [ "$wt_path_canonical" = "$repo_root" ]; then
+    is_main=1
+  fi
+  [ -z "$branch" ] && branch="(detached)"
+  status=$(_worktree_record_status "$wt_detached" "$wt_locked" "$wt_prunable")
+
+  printf "is_main %s\n" "$is_main"
+  printf "path %s\n" "$(_tsv_escape_field "$wt_path")"
+  printf "branch %s\n" "$(_tsv_escape_field "$branch")"
+  printf "status %s\n\n" "$status"
+}
+
+_parse_worktree_records() {
+  local repo_root_canonical="$1"
+  local delimiter="$2"
+  local wt_path="" wt_branch="" wt_detached=0 wt_locked=0 wt_prunable=0
+  local field
+
+  while IFS= read -r -d "$delimiter" field; do
+    case "$field" in
+      "")
+        _emit_worktree_record "$repo_root_canonical" "$wt_path" "$wt_branch" "$wt_detached" "$wt_locked" "$wt_prunable"
+        wt_path=""
+        wt_branch=""
+        wt_detached=0
+        wt_locked=0
+        wt_prunable=0
+        ;;
+      "worktree "*)
+        if [ -n "$wt_path" ]; then
+          _emit_worktree_record "$repo_root_canonical" "$wt_path" "$wt_branch" "$wt_detached" "$wt_locked" "$wt_prunable"
+          wt_branch=""
+          wt_detached=0
+          wt_locked=0
+          wt_prunable=0
+        fi
+        wt_path="${field#worktree }"
+        ;;
+      "branch refs/heads/"*)
+        wt_branch="${field#branch refs/heads/}"
+        ;;
+      "branch "*)
+        wt_branch="${field#branch }"
+        ;;
+      detached)
+        wt_detached=1
+        ;;
+      locked*)
+        wt_locked=1
+        ;;
+      prunable*)
+        wt_prunable=1
+        ;;
+    esac
+  done
+
+  _emit_worktree_record "$repo_root_canonical" "$wt_path" "$wt_branch" "$wt_detached" "$wt_locked" "$wt_prunable"
+}
+
+# List registered git worktrees for a repository.
+# Usage: list_worktree_records repo_root
+# Output: blank-line-delimited records with is_main/path/branch/status fields
+list_worktree_records() {
+  local repo_root="$1"
+  local repo_root_canonical
+  repo_root_canonical=$(canonicalize_path "$repo_root" || printf "%s" "$repo_root")
+
+  if git -C "$repo_root" worktree list --porcelain -z >/dev/null 2>&1; then
+    _parse_worktree_records "$repo_root_canonical" "" < <(git -C "$repo_root" worktree list --porcelain -z 2>/dev/null)
+  else
+    _parse_worktree_records "$repo_root_canonical" $'\n' < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+  fi
+}
+
 # Get the status of a worktree from git
 # Usage: worktree_status worktree_path
 # Returns: status (ok, detached, locked, prunable, or missing)
 worktree_status() {
   local target_path="$1"
-  local porcelain_output
-  local in_section=0
+  local target_path_canonical
+  target_path_canonical=$(canonicalize_path "$target_path" || printf "%s" "$target_path")
+
   local status="ok"
   local found=0
+  local repo_root
+  repo_root=$(_resolve_main_repo_root) || return 1
 
-  # Parse git worktree list --porcelain line by line
-  porcelain_output=$(git worktree list --porcelain 2>/dev/null)
-
+  local is_main="" path="" branch="" record_status="" line path_canonical
   while IFS= read -r line; do
-    # Check if this is the start of our target worktree
-    if [ "$line" = "worktree $target_path" ]; then
-      in_section=1
-      found=1
-      continue
-    fi
-
-    # If we're in the target section, check for status lines
-    if [ "$in_section" -eq 1 ]; then
-      # Empty line marks end of section
-      if [ -z "$line" ]; then
-        break
-      fi
-
-      # Check for status indicators (priority: locked > prunable > detached)
-      case "$line" in
-        locked*)
-          status="locked"
-          ;;
-        prunable*)
-          [ "$status" = "ok" ] && status="prunable"
-          ;;
-        detached)
-          [ "$status" = "ok" ] && status="detached"
-          ;;
-      esac
-    fi
+    case "$line" in
+      "")
+        [ -z "$path" ] && continue
+        path_canonical=$(canonicalize_path "$path" || printf "%s" "$path")
+        if [ "$path" = "$target_path" ] || [ "$path_canonical" = "$target_path_canonical" ]; then
+          found=1
+          status="$record_status"
+          break
+        fi
+        is_main=""
+        path=""
+        branch=""
+        record_status=""
+        ;;
+      "is_main "*)
+        is_main="${line#is_main }"
+        ;;
+      "path "*)
+        path=$(_tsv_unescape_field "${line#path }")
+        ;;
+      "branch "*)
+        branch=$(_tsv_unescape_field "${line#branch }")
+        ;;
+      "status "*)
+        record_status="${line#status }"
+        ;;
+    esac
   done <<EOF
-$porcelain_output
+$(list_worktree_records "$repo_root")
 EOF
+
+  if [ "$found" -eq 0 ] && [ -n "$path" ]; then
+    path_canonical=$(canonicalize_path "$path" || printf "%s" "$path")
+    if [ "$path" = "$target_path" ] || [ "$path_canonical" = "$target_path_canonical" ]; then
+      found=1
+      status="$record_status"
+    fi
+  fi
 
   # If worktree not found in git's list
   if [ "$found" -eq 0 ]; then
@@ -243,9 +352,59 @@ EOF
   printf "%s" "$status"
 }
 
+_tsv_escape_field() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//$'\t'/$'\\t'}
+  value=${value//$'\n'/$'\\n'}
+  printf "%s" "$value"
+}
+
+_tsv_unescape_field() {
+  local value="$1" out="" char next
+
+  while [ -n "$value" ]; do
+    char="${value:0:1}"
+    value="${value:1}"
+
+    if [ "$char" = "\\" ]; then
+      if [ -z "$value" ]; then
+        out="${out}\\"
+        break
+      fi
+
+      next="${value:0:1}"
+      value="${value:1}"
+      case "$next" in
+        t)
+          out="${out}"$'\t'
+          ;;
+        n)
+          out="${out}"$'\n'
+          ;;
+        "\\")
+          out="${out}\\"
+          ;;
+        *)
+          out="${out}\\${next}"
+          ;;
+      esac
+    else
+      out="${out}${char}"
+    fi
+  done
+
+  printf "%s" "$out"
+}
+
+_print_resolved_target() {
+  local is_main="$1" path="$2" branch="$3"
+  printf "%s\t%s\t%s\n" "$is_main" "$(_tsv_escape_field "$path")" "$(_tsv_escape_field "$branch")"
+}
+
 # Resolve a worktree target from branch name or special ID '1' for main repo
 # Usage: resolve_target identifier repo_root base_dir prefix
-# Returns: tab-separated "is_main\tpath\tbranch" on success (is_main: 1 for main repo, 0 for worktrees)
+# Returns: tab-separated "is_main\tpath\tbranch" with escaped fields on success (is_main: 1 for main repo, 0 for worktrees)
 # Exit code: 0 on success, 1 if not found
 resolve_target() {
   local identifier="$1"
@@ -258,7 +417,7 @@ resolve_target() {
   if [ "$identifier" = "1" ]; then
     path="$repo_root"
     branch=$(get_current_branch "$repo_root")
-    printf "1\t%s\t%s\n" "$path" "$branch"
+    _print_resolved_target "1" "$path" "$branch"
     return 0
   fi
 
@@ -266,7 +425,7 @@ resolve_target() {
   # First check if it's the current branch in repo root (if not ID 1)
   branch=$(get_current_branch "$repo_root")
   if [ "$branch" = "$identifier" ]; then
-    printf "1\t%s\t%s\n" "$repo_root" "$identifier"
+    _print_resolved_target "1" "$repo_root" "$identifier"
     return 0
   fi
 
@@ -275,7 +434,7 @@ resolve_target() {
   path="$base_dir/${prefix}${sanitized_name}"
   if [ -d "$path" ]; then
     branch=$(current_branch "$path")
-    printf "0\t%s\t%s\n" "$path" "$branch"
+    _print_resolved_target "0" "$path" "$branch"
     return 0
   fi
 
@@ -285,29 +444,43 @@ resolve_target() {
       [ -d "$dir" ] || continue
       branch=$(current_branch "$dir")
       if [ "$branch" = "$identifier" ]; then
-        printf "0\t%s\t%s\n" "$dir" "$branch"
+        _print_resolved_target "0" "$dir" "$branch"
         return 0
       fi
     done
   fi
 
   # Last resort: ask git for all worktrees (catches non-gtr-managed worktrees)
-  local wt_path wt_branch
+  local is_main="" wt_path="" wt_branch="" line
   while IFS= read -r line; do
     case "$line" in
-      "worktree "*)  wt_path="${line#worktree }" ;;
-      "branch "*)
-        wt_branch="${line#branch refs/heads/}"
+      "")
         if [ "$wt_branch" = "$identifier" ]; then
-          local is_main=0
-          [ "$wt_path" = "$repo_root" ] && is_main=1
-          printf "%s\t%s\t%s\n" "$is_main" "$wt_path" "$wt_branch"
+          _print_resolved_target "$is_main" "$wt_path" "$wt_branch"
           return 0
         fi
+        is_main=""
+        wt_path=""
+        wt_branch=""
         ;;
-      "")  wt_path="" ; wt_branch="" ;;
+      "is_main "*)
+        is_main="${line#is_main }"
+        ;;
+      "path "*)
+        wt_path=$(_tsv_unescape_field "${line#path }")
+        ;;
+      "branch "*)
+        wt_branch=$(_tsv_unescape_field "${line#branch }")
+        ;;
     esac
-  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+  done <<EOF
+$(list_worktree_records "$repo_root")
+EOF
+
+  if [ "$wt_branch" = "$identifier" ]; then
+    _print_resolved_target "$is_main" "$wt_path" "$wt_branch"
+    return 0
+  fi
 
   log_error "Worktree not found for branch: $identifier"
   return 1
@@ -317,9 +490,11 @@ resolve_target() {
 # Sets: _ctx_is_main, _ctx_worktree_path, _ctx_branch
 # Usage: unpack_target "$target_string"
 unpack_target() {
+  local escaped_path escaped_branch
   local IFS=$'\t'
-  # shellcheck disable=SC2162
-  read _ctx_is_main _ctx_worktree_path _ctx_branch <<< "$1"
+  read -r _ctx_is_main escaped_path escaped_branch <<< "$1"
+  _ctx_worktree_path=$(_tsv_unescape_field "$escaped_path")
+  _ctx_branch=$(_tsv_unescape_field "$escaped_branch")
 }
 
 # Resolve an identifier to a worktree and set _ctx_* variables in one step
@@ -544,18 +719,50 @@ resolve_repo_context() {
 }
 
 # List all worktree branch names (excluding main repo)
-# Usage: list_worktree_branches base_dir prefix
+# Usage: list_worktree_branches base_dir prefix [repo_root]
 # Returns: newline-separated list of branch names
 list_worktree_branches() {
   local base_dir="$1"
   local prefix="$2"
+  local repo_root="${3:-}"
+  if [ -z "$repo_root" ]; then
+    repo_root=$(_resolve_main_repo_root) || return 0
+  fi
 
-  [ ! -d "$base_dir" ] && return 0
+  # base_dir and prefix are kept for the public helper contract. Worktree
+  # discovery itself comes from Git's registry so nested registered worktrees
+  # are included and arbitrary parent directories are ignored.
+  : "$base_dir" "$prefix"
 
-  for dir in "$base_dir/${prefix}"*; do
-    [ -d "$dir" ] || continue
-    local branch
-    branch=$(current_branch "$dir")
-    [ -n "$branch" ] && echo "$branch"
-  done
+  local records
+  records=$(list_worktree_records "$repo_root")
+
+  local is_main="" path="" branch="" line
+  while IFS= read -r line; do
+    case "$line" in
+      "")
+        if [ "$is_main" != "1" ] && [ -n "$branch" ] && [ "$branch" != "(detached)" ]; then
+          printf "%s\n" "$branch"
+        fi
+        is_main=""
+        path=""
+        branch=""
+        ;;
+      "is_main "*)
+        is_main="${line#is_main }"
+        ;;
+      "path "*)
+        path=$(_tsv_unescape_field "${line#path }")
+        ;;
+      "branch "*)
+        branch=$(_tsv_unescape_field "${line#branch }")
+        ;;
+    esac
+  done <<EOF
+$records
+EOF
+
+  if [ "$is_main" != "1" ] && [ -n "$branch" ] && [ "$branch" != "(detached)" ]; then
+    printf "%s\n" "$branch"
+  fi
 }
