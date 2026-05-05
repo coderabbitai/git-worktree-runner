@@ -159,6 +159,31 @@ teardown() {
   [ "$status" = "ok" ]
 }
 
+@test "list_worktree_records preserves registered path containing newline" {
+  if ! git -C "$TEST_REPO" worktree list --porcelain -z >/dev/null 2>&1; then
+    skip "git worktree list --porcelain -z is not available"
+  fi
+
+  local newline_path="${TEST_REPO}-external"$'\n'"newline"
+  git -C "$TEST_REPO" worktree add "$newline_path" -b newline-path --quiet
+  local expected_path
+  expected_path=$(cd "$newline_path" && pwd -P)
+
+  local records escaped_path
+  escaped_path=$(_tsv_escape_field "$expected_path")
+  records=$(list_worktree_records "$TEST_REPO")
+
+  [[ "$records" == *"path $escaped_path"$'\n'"branch newline-path"* ]]
+
+  local status
+  status=$(worktree_status "$expected_path")
+  [ "$status" = "ok" ]
+
+  resolve_worktree "newline-path" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$expected_path" ]
+  [ "$_ctx_branch" = "newline-path" ]
+}
+
 # ── discover_repo_root from worktree ──────────────────────────────────────────
 
 @test "discover_repo_root returns main repo root when called from a worktree" {

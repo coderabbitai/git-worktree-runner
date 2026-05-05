@@ -223,28 +223,19 @@ _emit_worktree_record() {
   status=$(_worktree_record_status "$wt_detached" "$wt_locked" "$wt_prunable")
 
   printf "is_main %s\n" "$is_main"
-  printf "path %s\n" "$wt_path"
-  printf "branch %s\n" "$branch"
+  printf "path %s\n" "$(_tsv_escape_field "$wt_path")"
+  printf "branch %s\n" "$(_tsv_escape_field "$branch")"
   printf "status %s\n\n" "$status"
 }
 
-# List registered git worktrees for a repository.
-# Usage: list_worktree_records repo_root
-# Output: blank-line-delimited records with is_main/path/branch/status fields
-list_worktree_records() {
-  local repo_root="$1"
-  local repo_root_canonical
-  repo_root_canonical=$(canonicalize_path "$repo_root" || printf "%s" "$repo_root")
-
-  local porcelain_output
-
-  porcelain_output=$(git -C "$repo_root" worktree list --porcelain 2>/dev/null) || return 0
-
+_parse_worktree_records() {
+  local repo_root_canonical="$1"
+  local delimiter="$2"
   local wt_path="" wt_branch="" wt_detached=0 wt_locked=0 wt_prunable=0
+  local field
 
-  local line
-  while IFS= read -r line; do
-    case "$line" in
+  while IFS= read -r -d "$delimiter" field; do
+    case "$field" in
       "")
         _emit_worktree_record "$repo_root_canonical" "$wt_path" "$wt_branch" "$wt_detached" "$wt_locked" "$wt_prunable"
         wt_path=""
@@ -261,13 +252,13 @@ list_worktree_records() {
           wt_locked=0
           wt_prunable=0
         fi
-        wt_path="${line#worktree }"
+        wt_path="${field#worktree }"
         ;;
       "branch refs/heads/"*)
-        wt_branch="${line#branch refs/heads/}"
+        wt_branch="${field#branch refs/heads/}"
         ;;
       "branch "*)
-        wt_branch="${line#branch }"
+        wt_branch="${field#branch }"
         ;;
       detached)
         wt_detached=1
@@ -279,11 +270,24 @@ list_worktree_records() {
         wt_prunable=1
         ;;
     esac
-  done <<EOF
-$porcelain_output
-EOF
+  done
 
   _emit_worktree_record "$repo_root_canonical" "$wt_path" "$wt_branch" "$wt_detached" "$wt_locked" "$wt_prunable"
+}
+
+# List registered git worktrees for a repository.
+# Usage: list_worktree_records repo_root
+# Output: blank-line-delimited records with is_main/path/branch/status fields
+list_worktree_records() {
+  local repo_root="$1"
+  local repo_root_canonical
+  repo_root_canonical=$(canonicalize_path "$repo_root" || printf "%s" "$repo_root")
+
+  if git -C "$repo_root" worktree list --porcelain -z >/dev/null 2>&1; then
+    _parse_worktree_records "$repo_root_canonical" "" < <(git -C "$repo_root" worktree list --porcelain -z 2>/dev/null)
+  else
+    _parse_worktree_records "$repo_root_canonical" $'\n' < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+  fi
 }
 
 # Get the status of a worktree from git
@@ -319,10 +323,10 @@ worktree_status() {
         is_main="${line#is_main }"
         ;;
       "path "*)
-        path="${line#path }"
+        path=$(_tsv_unescape_field "${line#path }")
         ;;
       "branch "*)
-        branch="${line#branch }"
+        branch=$(_tsv_unescape_field "${line#branch }")
         ;;
       "status "*)
         record_status="${line#status }"
@@ -463,10 +467,10 @@ resolve_target() {
         is_main="${line#is_main }"
         ;;
       "path "*)
-        wt_path="${line#path }"
+        wt_path=$(_tsv_unescape_field "${line#path }")
         ;;
       "branch "*)
-        wt_branch="${line#branch }"
+        wt_branch=$(_tsv_unescape_field "${line#branch }")
         ;;
     esac
   done <<EOF
@@ -748,10 +752,10 @@ list_worktree_branches() {
         is_main="${line#is_main }"
         ;;
       "path "*)
-        path="${line#path }"
+        path=$(_tsv_unescape_field "${line#path }")
         ;;
       "branch "*)
-        branch="${line#branch }"
+        branch=$(_tsv_unescape_field "${line#branch }")
         ;;
     esac
   done <<EOF

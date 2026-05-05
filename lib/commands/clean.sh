@@ -149,10 +149,10 @@ _clean_merged() {
         is_main="${line#is_main }"
         ;;
       "path "*)
-        dir="${line#path }"
+        dir=$(_tsv_unescape_field "${line#path }")
         ;;
       "branch "*)
-        branch="${line#branch }"
+        branch=$(_tsv_unescape_field "${line#branch }")
         ;;
     esac
   done <<EOF

@@ -35,10 +35,10 @@ cmd_list() {
           is_main="${line#is_main }"
           ;;
         "path "*)
-          path="${line#path }"
+          path=$(_tsv_unescape_field "${line#path }")
           ;;
         "branch "*)
-          branch="${line#branch }"
+          branch=$(_tsv_unescape_field "${line#branch }")
           ;;
         "status "*)
           status="${line#status }"
@@ -87,10 +87,10 @@ EOF
         is_main="${line#is_main }"
         ;;
       "path "*)
-        path="${line#path }"
+        path=$(_tsv_unescape_field "${line#path }")
         ;;
       "branch "*)
-        branch="${line#branch }"
+        branch=$(_tsv_unescape_field "${line#branch }")
         ;;
       "status "*)
         status="${line#status }"
