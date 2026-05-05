@@ -68,6 +68,14 @@ teardown() {
   [ "$_ctx_branch" = "main" ]
 }
 
+@test "resolved target escaping round-trips tabs newlines and backslashes" {
+  local value="/tmp/path"$'\t'"with"$'\n'"chars\\tail"
+  local escaped
+  escaped=$(_tsv_escape_field "$value")
+
+  [ "$(_tsv_unescape_field "$escaped")" = "$value" ]
+}
+
 @test "resolve_worktree sets context globals" {
   create_test_worktree "ctx-test"
   resolve_worktree "ctx-test" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""

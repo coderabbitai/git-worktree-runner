@@ -351,8 +351,8 @@ EOF
 _tsv_escape_field() {
   local value="$1"
   value=${value//\\/\\\\}
-  value=${value//$'\t'/\\\\t}
-  value=${value//$'\n'/\\\\n}
+  value=${value//$'\t'/$'\\t'}
+  value=${value//$'\n'/$'\\n'}
   printf "%s" "$value"
 }
 
@@ -488,8 +488,7 @@ EOF
 unpack_target() {
   local escaped_path escaped_branch
   local IFS=$'\t'
-  # shellcheck disable=SC2162
-  read _ctx_is_main escaped_path escaped_branch <<< "$1"
+  read -r _ctx_is_main escaped_path escaped_branch <<< "$1"
   _ctx_worktree_path=$(_tsv_unescape_field "$escaped_path")
   _ctx_branch=$(_tsv_unescape_field "$escaped_branch")
 }
