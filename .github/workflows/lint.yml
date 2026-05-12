@@ -10,6 +10,7 @@ permissions: read-all
 
 jobs:
   shellcheck:
+    if: ${{ github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository }}
     name: ShellCheck
     runs-on: ubuntu-latest
     steps:
@@ -23,6 +24,7 @@ jobs:
           shellcheck bin/gtr bin/git-gtr lib/*.sh lib/commands/*.sh adapters/editor/*.sh adapters/ai/*.sh
 
   completions:
+    if: ${{ github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository }}
     name: Completions
     runs-on: ubuntu-latest
     steps:
@@ -32,6 +34,7 @@ jobs:
         run: ./scripts/generate-completions.sh --check
 
   test:
+    if: ${{ github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository }}
     name: Tests
     runs-on: ubuntu-latest
     steps:
