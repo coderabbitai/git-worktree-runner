@@ -311,6 +311,10 @@ Removes empty worktree directories and optionally removes worktrees whose
 PRs/MRs have been merged. Auto-detects GitHub (gh) or GitLab (glab) from
 the remote URL.
 
+Also detects registry entries that are locked but whose directories no
+longer exist (git worktree prune skips locked entries) and offers to
+unlock and prune them. Confirmed automatically with --force or --yes.
+
 Options:
   --merged            Also remove worktrees with merged PRs/MRs
   --to <ref>          Only remove worktrees for PRs/MRs merged into <ref>

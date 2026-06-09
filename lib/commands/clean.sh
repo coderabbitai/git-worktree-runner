@@ -67,6 +67,61 @@ _clean_should_skip() {
   return 1
 }
 
+# Recover registry entries that are locked but whose directories are gone
+# (e.g. an agent session crashed after its worktree directory was deleted).
+# `git worktree prune` skips locked entries by design, so they linger and
+# keep their branches checked out in a phantom worktree.
+# Usage: _clean_locked_phantoms repo_root yes_mode dry_run force
+_clean_locked_phantoms() {
+  local repo_root="$1" yes_mode="$2" dry_run="$3" force="${4:-0}"
+  local records
+  records=$(list_worktree_records "$repo_root")
+
+  local is_main="" dir="" wt_status="" line unlocked=0
+  while IFS= read -r line; do
+    case "$line" in
+      "")
+        if [ -n "$dir" ] && [ "$is_main" != "1" ] && [ "$wt_status" = "locked" ] && [ ! -e "$dir" ]; then
+          log_warn "Locked worktree entry with missing directory: $dir"
+          if [ "$dry_run" -eq 1 ]; then
+            log_info "[dry-run] Would unlock and prune: $dir"
+          elif [ "$force" -eq 1 ] || [ "$yes_mode" -eq 1 ] || \
+            prompt_yes_no "Unlock and prune '$dir'?"; then
+            if git -C "$repo_root" worktree unlock "$dir" 2>/dev/null; then
+              log_info "Unlocked missing worktree entry: $dir"
+              unlocked=$((unlocked + 1))
+            else
+              log_warn "Could not unlock worktree entry: $dir"
+            fi
+          else
+            log_info "Recover manually with: git worktree unlock '$dir' && git worktree prune"
+          fi
+        fi
+        is_main=""
+        dir=""
+        wt_status=""
+        ;;
+      "is_main "*)
+        is_main="${line#is_main }"
+        ;;
+      "path "*)
+        dir=$(_tsv_unescape_field "${line#path }")
+        ;;
+      "status "*)
+        wt_status="${line#status }"
+        ;;
+    esac
+  done <<EOF
+$records
+
+EOF
+
+  if [ "$unlocked" -gt 0 ]; then
+    git -C "$repo_root" worktree prune 2>/dev/null || true
+    log_info "Pruned $unlocked unlocked worktree entr$([ "$unlocked" -eq 1 ] && echo 'y' || echo 'ies')"
+  fi
+}
+
 # Remove worktrees whose PRs/MRs are merged (handles squash merges)
 # Usage: _clean_merged repo_root base_dir prefix yes_mode dry_run [force] [active_worktree_path] [target_ref]
 _clean_merged() {
@@ -205,6 +260,10 @@ cmd_clean() {
   if [ -n "$active_worktree_path" ]; then
     active_worktree_path=$(canonicalize_path "$active_worktree_path" || printf "%s" "$active_worktree_path")
   fi
+
+  # Locked entries with missing directories survive `git worktree prune`;
+  # offer to unlock and prune them (may live outside base_dir)
+  _clean_locked_phantoms "$repo_root" "$yes_mode" "$dry_run" "$force"
 
   if [ ! -d "$base_dir" ]; then
     log_info "No worktrees directory to clean"

@@ -343,6 +343,8 @@ git gtr clean --merged --force --yes           # Force-clean and auto-confirm
 
 **Note:** The `--merged` mode auto-detects your hosting provider (GitHub or GitLab) from the `origin` remote URL and requires the corresponding CLI tool (`gh` or `glab`) to be installed and authenticated. For self-hosted instances, set the provider explicitly: `git gtr config set gtr.provider gitlab`.
 
+**Note:** `clean` also detects registry entries that are locked but whose directories no longer exist (for example, a crashed agent session that deleted its worktree directory). `git worktree prune` skips locked entries by design, so these linger and keep their branches checked out. `clean` offers to unlock and prune them; `--force` or `--yes` confirms automatically.
+
 ### `git gtr trust`
 
 Review and approve executable commands defined in the repository's `.gtrconfig` file. Hooks and editor/AI defaults from `.gtrconfig` are **not used** until explicitly trusted — this prevents malicious contributors from injecting arbitrary shell commands via shared config files.
