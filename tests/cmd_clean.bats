@@ -123,10 +123,10 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "cmd_clean rejects --to without --merged" {
+@test "cmd_clean rejects --to without PR state filter" {
   run cmd_clean --to main
   [ "$status" -eq 1 ]
-  [[ "$output" == *"--to can only be used with --merged"* ]]
+  [[ "$output" == *"--to can only be used with --merged or --closed"* ]]
 }
 
 @test "cmd_clean --merged --force removes dirty merged worktrees" {
@@ -183,6 +183,43 @@ teardown() {
   [ "$status" -eq 0 ]
   [ ! -d "$TEST_WORKTREES_DIR/merged-to-main" ]
   [ -d "$TEST_WORKTREES_DIR/merged-to-feature" ]
+}
+
+@test "cmd_clean --closed --to removes closed worktrees" {
+  create_test_worktree "closed-to-main"
+  create_test_worktree "closed-to-feature"
+
+  _clean_detect_provider() { printf "github"; }
+  ensure_provider_cli() { return 0; }
+  check_branch_closed() {
+    [ "$3" = "main" ] && [ "$2" = "closed-to-main" ]
+  }
+  run_hooks_in() { return 0; }
+  run_hooks() { return 0; }
+
+  run cmd_clean --closed --to main --yes
+  [ "$status" -eq 0 ]
+  [ ! -d "$TEST_WORKTREES_DIR/closed-to-main" ]
+  [ -d "$TEST_WORKTREES_DIR/closed-to-feature" ]
+}
+
+@test "cmd_clean --merged --closed removes merged OR closed worktrees" {
+  create_test_worktree "merged-match"
+  create_test_worktree "closed-match"
+  create_test_worktree "open-match"
+
+  _clean_detect_provider() { printf "github"; }
+  ensure_provider_cli() { return 0; }
+  check_branch_merged() { [ "$2" = "merged-match" ]; }
+  check_branch_closed() { [ "$2" = "closed-match" ]; }
+  run_hooks_in() { return 0; }
+  run_hooks() { return 0; }
+
+  run cmd_clean --merged --closed --yes --force --to main
+  [ "$status" -eq 0 ]
+  [ ! -d "$TEST_WORKTREES_DIR/merged-match" ]
+  [ ! -d "$TEST_WORKTREES_DIR/closed-match" ]
+  [ -d "$TEST_WORKTREES_DIR/open-match" ]
 }
 
 @test "cmd_clean passes current branch HEAD to merged check" {

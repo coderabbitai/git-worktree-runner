@@ -112,7 +112,7 @@ echo "/.worktrees/" >> .gitignore
 
 ## Provider Settings
 
-The `clean --merged` command auto-detects your hosting provider from the `origin` remote URL (`github.com` → GitHub, `gitlab.com` → GitLab). For self-hosted instances, set the provider explicitly:
+The `clean --merged` and `clean --closed` commands auto-detect your hosting provider from the `origin` remote URL (`github.com` → GitHub, `gitlab.com` → GitLab). For self-hosted instances, set the provider explicitly:
 
 ```bash
 # Override auto-detected hosting provider (github or gitlab)

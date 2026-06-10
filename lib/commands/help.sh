@@ -308,8 +308,8 @@ git gtr clean - Remove stale worktrees
 Usage: git gtr clean [options]
 
 Removes empty worktree directories and optionally removes worktrees whose
-PRs/MRs have been merged. Auto-detects GitHub (gh) or GitLab (glab) from
-the remote URL.
+PRs/MRs have been merged or closed. Auto-detects GitHub (gh) or GitLab
+(glab) from the remote URL.
 
 Also detects registry entries that are locked but whose directories no
 longer exist (git worktree prune skips locked entries) and offers to
@@ -317,7 +317,8 @@ unlock and prune them. Confirmed automatically with --force or --yes.
 
 Options:
   --merged            Also remove worktrees with merged PRs/MRs
-  --to <ref>          Only remove worktrees for PRs/MRs merged into <ref>
+  --closed            Also remove worktrees with closed PRs/MRs
+  --to <ref>          Only remove worktrees for PRs/MRs targeting <ref>
   --yes, -y           Skip confirmation prompts
   --dry-run, -n       Show what would be removed without removing
   --force, -f         Force removal even if worktree has uncommitted changes or untracked files
@@ -325,10 +326,11 @@ Options:
 Examples:
   git gtr clean                                 # Clean empty directories
   git gtr clean --merged                        # Also clean merged PRs
-  git gtr clean --merged --to main              # Only clean PRs merged to main
-  git gtr clean --merged --dry-run              # Preview merged cleanup
+  git gtr clean --closed                        # Also clean closed PRs
+  git gtr clean --merged --closed --to main     # Clean merged or closed PRs targeting main
+  git gtr clean --merged --dry-run              # Preview PR cleanup
   git gtr clean --merged --yes                  # Auto-confirm everything
-  git gtr clean --merged --force                # Force-clean merged, ignoring local changes
+  git gtr clean --merged --force                # Force-clean, ignoring local changes
   git gtr clean --merged --force --yes          # Force-clean and auto-confirm
 EOF
 }
@@ -606,7 +608,8 @@ SETUP & MAINTENANCE:
   clean [options]
          Remove stale/prunable worktrees and empty directories
          --merged: also remove worktrees with merged PRs/MRs
-         --to <ref>: limit merged cleanup to PRs/MRs merged into <ref>
+         --closed: also remove worktrees with closed PRs/MRs
+         --to <ref>: limit PR cleanup to PRs/MRs targeting <ref>
                    Auto-detects GitHub (gh) or GitLab (glab) from remote URL
                    Override: git gtr config set gtr.provider gitlab
          --yes, -y: skip confirmation prompts

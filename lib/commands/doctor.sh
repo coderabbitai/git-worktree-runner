@@ -96,19 +96,19 @@ cmd_doctor() {
           if command -v gh >/dev/null 2>&1; then
             echo "[OK] GitHub CLI: $(gh --version 2>/dev/null | head -1)"
           else
-            echo "[!] GitHub CLI: not found (needed for: clean --merged)"
+            echo "[!] GitHub CLI: not found (needed for: clean --merged/--closed)"
           fi
           ;;
         gitlab)
           if command -v glab >/dev/null 2>&1; then
             echo "[OK] GitLab CLI: $(glab --version 2>/dev/null | head -1)"
           else
-            echo "[!] GitLab CLI: not found (needed for: clean --merged)"
+            echo "[!] GitLab CLI: not found (needed for: clean --merged/--closed)"
           fi
           ;;
       esac
     else
-      echo "[i] Provider: unknown (set gtr.provider for clean --merged)"
+      echo "[i] Provider: unknown (set gtr.provider for clean --merged/--closed)"
     fi
   fi
 

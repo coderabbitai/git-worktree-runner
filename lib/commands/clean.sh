@@ -28,7 +28,7 @@ _clean_detect_provider() {
   return 1
 }
 
-# Check if a worktree should be skipped during merged cleanup.
+# Check if a worktree should be skipped during PR/MR cleanup.
 # Returns 0 if should skip, 1 if should process.
 # Usage: _clean_should_skip <dir> <branch> [force] [active_worktree_path]
 _clean_should_skip() {
@@ -122,16 +122,42 @@ EOF
   fi
 }
 
-# Remove worktrees whose PRs/MRs are merged (handles squash merges)
-# Usage: _clean_merged repo_root base_dir prefix yes_mode dry_run [force] [active_worktree_path] [target_ref]
-_clean_merged() {
-  local repo_root="$1" base_dir="$2" prefix="$3" yes_mode="$4" dry_run="$5" force="${6:-0}" active_worktree_path="${7:-}" target_ref="${8:-}"
+# Check if a branch has any requested PR/MR cleanup state.
+# Returns 0 if matched, 1 if not.
+# Usage: _clean_branch_matches_pr_state provider branch target_ref branch_tip merged_mode closed_mode
+_clean_branch_matches_pr_state() {
+  local provider="$1" branch="$2" target_ref="$3" branch_tip="$4" merged_mode="$5" closed_mode="$6"
 
-  # base_dir and prefix are kept for the helper contract. Merged cleanup uses
+  if [ "$merged_mode" -eq 1 ] && check_branch_merged "$provider" "$branch" "$target_ref" "$branch_tip"; then
+    return 0
+  fi
+
+  if [ "$closed_mode" -eq 1 ] && check_branch_closed "$provider" "$branch" "$target_ref" "$branch_tip"; then
+    return 0
+  fi
+
+  return 1
+}
+
+# Remove worktrees whose PRs/MRs match requested cleanup states (handles squash merges)
+# Usage: _clean_prs repo_root base_dir prefix yes_mode dry_run [force] [active_worktree_path] [target_ref] [merged_mode] [closed_mode]
+_clean_prs() {
+  local repo_root="$1" base_dir="$2" prefix="$3" yes_mode="$4" dry_run="$5" force="${6:-0}" active_worktree_path="${7:-}" target_ref="${8:-}" merged_mode="${9:-0}" closed_mode="${10:-0}"
+
+  # base_dir and prefix are kept for the helper contract. PR/MR cleanup uses
   # Git's registry so nested registered worktrees are processed directly.
   : "$base_dir" "$prefix"
 
-  log_step "Checking for worktrees with merged PRs/MRs..."
+  local cleanup_label="matching"
+  if [ "$merged_mode" -eq 1 ] && [ "$closed_mode" -eq 1 ]; then
+    cleanup_label="merged or closed"
+  elif [ "$merged_mode" -eq 1 ]; then
+    cleanup_label="merged"
+  elif [ "$closed_mode" -eq 1 ]; then
+    cleanup_label="closed"
+  fi
+
+  log_step "Checking for worktrees with $cleanup_label PRs/MRs..."
 
   local provider
   provider=$(_clean_detect_provider) || exit 1
@@ -157,8 +183,8 @@ _clean_merged() {
           # Skip main repo branch silently (not counted)
           [ "$branch" = "$main_branch" ] && continue
 
-          # Check if branch has a merged PR/MR
-          if check_branch_merged "$provider" "$branch" "$target_ref" "$branch_tip"; then
+          # Check if branch has a PR/MR matching any requested state
+          if _clean_branch_matches_pr_state "$provider" "$branch" "$target_ref" "$branch_tip" "$merged_mode" "$closed_mode"; then
             if _clean_should_skip "$dir" "$branch" "$force" "$active_worktree_path"; then
               skipped=$((skipped + 1))
               continue
@@ -219,7 +245,7 @@ EOF
   if [ "$dry_run" -eq 1 ]; then
     log_info "Dry run complete. Would remove: $removed, Skipped: $skipped"
   else
-    log_info "Merged cleanup complete. Removed: $removed, Skipped: $skipped"
+    log_info "PR cleanup complete. Removed: $removed, Skipped: $skipped"
   fi
 }
 
@@ -227,6 +253,7 @@ EOF
 cmd_clean() {
   local _spec
   _spec="--merged
+--closed
 --to: value
 --yes|-y
 --dry-run|-n
@@ -234,14 +261,15 @@ cmd_clean() {
   parse_args "$_spec" "$@"
 
   local merged_mode="${_arg_merged:-0}"
+  local closed_mode="${_arg_closed:-0}"
   local target_ref="${_arg_to:-}"
   local yes_mode="${_arg_yes:-0}"
   local dry_run="${_arg_dry_run:-0}"
   local force="${_arg_force:-0}"
   local active_worktree_path=""
 
-  if [ -n "$target_ref" ] && [ "$merged_mode" -ne 1 ]; then
-    log_error "--to can only be used with --merged"
+  if [ -n "$target_ref" ] && [ "$merged_mode" -ne 1 ] && [ "$closed_mode" -ne 1 ]; then
+    log_error "--to can only be used with --merged or --closed"
     return 1
   fi
 
@@ -294,8 +322,8 @@ EOF
     log_info "Cleanup complete (no empty directories found)"
   fi
 
-  # --merged mode: remove worktrees with merged PRs/MRs (handles squash merges)
-  if [ "$merged_mode" -eq 1 ]; then
-    _clean_merged "$repo_root" "$base_dir" "$prefix" "$yes_mode" "$dry_run" "$force" "$active_worktree_path" "$target_ref"
+  # PR/MR cleanup mode: remove worktrees with matching PRs/MRs (handles squash merges)
+  if [ "$merged_mode" -eq 1 ] || [ "$closed_mode" -eq 1 ]; then
+    _clean_prs "$repo_root" "$base_dir" "$prefix" "$yes_mode" "$dry_run" "$force" "$active_worktree_path" "$target_ref" "$merged_mode" "$closed_mode"
   fi
 }

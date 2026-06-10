@@ -111,8 +111,8 @@ git gtr list
 # Remove when done
 git gtr rm my-feature
 
-# Or remove all worktrees with merged PRs/MRs (requires gh or glab CLI)
-git gtr clean --merged
+# Or remove all worktrees with merged or closed PRs/MRs (requires gh or glab CLI)
+git gtr clean --merged --closed
 ```
 
 ## Why gtr?
@@ -321,27 +321,29 @@ git gtr config list                                # List all gtr config
 
 ### `git gtr clean [options]`
 
-Remove worktrees: clean up empty directories, or remove those with merged PRs/MRs.
+Remove worktrees: clean up empty directories, or remove those with merged or closed PRs/MRs.
 
 ```bash
 git gtr clean                                  # Remove empty worktree directories and prune
 git gtr clean --merged                         # Remove worktrees for merged PRs/MRs
-git gtr clean --merged --to main               # Only remove worktrees merged to main
+git gtr clean --closed                         # Remove worktrees for closed PRs/MRs
+git gtr clean --merged --closed --to main      # Remove worktrees for merged or closed PRs/MRs targeting main
 git gtr clean --merged --dry-run               # Preview which worktrees would be removed
 git gtr clean --merged --yes                   # Remove without confirmation prompts
-git gtr clean --merged --force                 # Force-clean merged, ignoring local changes
+git gtr clean --merged --force                 # Force-clean PR cleanup, ignoring local changes
 git gtr clean --merged --force --yes           # Force-clean and auto-confirm
 ```
 
 **Options:**
 
 - `--merged`: Remove worktrees whose branches have merged PRs/MRs (also deletes the branch)
-- `--to <ref>`: Limit `--merged` cleanup to PRs/MRs merged into the given base ref
+- `--closed`: Remove worktrees whose branches have closed PRs/MRs (also deletes the branch)
+- `--to <ref>`: Limit PR/MR cleanup to PRs/MRs targeting the given base ref
 - `--dry-run`, `-n`: Preview changes without removing
 - `--yes`, `-y`: Non-interactive mode (skip confirmation prompts)
 - `--force`, `-f`: Force removal even if worktree has uncommitted changes or untracked files
 
-**Note:** The `--merged` mode auto-detects your hosting provider (GitHub or GitLab) from the `origin` remote URL and requires the corresponding CLI tool (`gh` or `glab`) to be installed and authenticated. For self-hosted instances, set the provider explicitly: `git gtr config set gtr.provider gitlab`.
+**Note:** The `--merged`/`--closed` mode auto-detects your hosting provider (GitHub or GitLab) from the `origin` remote URL and requires the corresponding CLI tool (`gh` or `glab`) to be installed and authenticated. For self-hosted instances, set the provider explicitly: `git gtr config set gtr.provider gitlab`.
 
 **Note:** `clean` also detects registry entries that are locked but whose directories no longer exist (for example, a crashed agent session that deleted its worktree directory). `git worktree prune` skips locked entries by design, so these linger and keep their branches checked out. `clean` offers to unlock and prune them; `--force` or `--yes` confirms automatically.
 

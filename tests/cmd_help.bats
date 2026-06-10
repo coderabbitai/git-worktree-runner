@@ -81,6 +81,7 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"git gtr clean"* ]]
   [[ "$output" == *"--merged"* ]]
+  [[ "$output" == *"--closed"* ]]
   [[ "$output" == *"--to <ref>"* ]]
 }
 
