@@ -126,6 +126,43 @@ normalize_target_ref() {
   esac
 }
 
+# Check whether GitLab MR JSON includes a source-head SHA matching branch_tip.
+# Uses jq when available; otherwise falls back to exact JSON key extraction to
+# keep GitLab cleanup usable on systems without jq.
+# Usage: _gitlab_mr_matches_tip <mr_json> <branch_tip>
+_gitlab_mr_matches_tip() {
+  local mr_result="$1"
+  local branch_tip="$2"
+  local mr_matches
+
+  if command -v jq >/dev/null 2>&1; then
+    mr_matches=$(printf "%s" "$mr_result" | jq --arg branch_tip "$branch_tip" 'map(select((.sha // "") == $branch_tip or (.head_sha // "") == $branch_tip or (.diff_refs.head_sha // "") == $branch_tip)) | length' 2>/dev/null || true)
+    [ "${mr_matches:-0}" -gt 0 ]
+    return
+  fi
+
+  local compact_result objects object sha_field diff_refs
+  compact_result=$(printf "%s" "$mr_result" | tr -d '[:space:]')
+  objects=$(printf "%s" "$compact_result" | sed 's/},{/}\
+{/g')
+
+  while IFS= read -r object; do
+    sha_field=$(printf "%s" "$object" | sed -n 's/^[^{]*{[^{}]*"sha":"\([^"]*\)".*/\1/p')
+    [ "$sha_field" = "$branch_tip" ] && return 0
+
+    diff_refs=$(printf "%s" "$object" | sed -n 's/.*"diff_refs":{\([^}]*\)}.*/\1/p')
+    case "$diff_refs" in
+      *"\"head_sha\":\"$branch_tip\""*)
+        return 0
+        ;;
+    esac
+  done <<EOF
+$objects
+EOF
+
+  return 1
+}
+
 # Check if a branch has a PR/MR with the requested state on the detected provider.
 # When branch_tip is provided, require the PR/MR to point at the same commit so
 # reused branch names do not match older PRs/MRs.
@@ -163,7 +200,7 @@ check_branch_pr_state() {
       [ "${pr_matches:-0}" -gt 0 ]
       ;;
     gitlab)
-      local mr_result compact_result
+      local mr_result
       local -a glab_args
       glab_args=(mr list --source-branch "$branch" "--$pr_state" --all --output json)
       if [ -n "$normalized_target_ref" ]; then
@@ -174,15 +211,8 @@ check_branch_pr_state() {
       [ -n "$mr_result" ] && [ "$mr_result" != "[]" ] && [ "$mr_result" != "null" ] || return 1
 
       if [ -n "$branch_tip" ]; then
-        compact_result=$(printf "%s" "$mr_result" | tr -d '[:space:]')
-        case "$compact_result" in
-          *"\"sha\":\"$branch_tip\""*|*"\"head_sha\":\"$branch_tip\""*)
-            return 0
-            ;;
-          *)
-            return 1
-            ;;
-        esac
+        _gitlab_mr_matches_tip "$mr_result" "$branch_tip"
+        return
       fi
 
       return 0

@@ -212,6 +212,27 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "check_branch_merged ignores unrelated GitLab nested head SHA fields" {
+  command -v jq >/dev/null 2>&1 || skip "jq is required for structural GitLab JSON validation"
+
+  glab() {
+    [ "$1" = "mr" ] || return 1
+    [ "$2" = "list" ] || return 1
+    [ "$3" = "--source-branch" ] || return 1
+    [ "$4" = "feature/test" ] || return 1
+    [ "$5" = "--merged" ] || return 1
+    [ "$6" = "--all" ] || return 1
+    [ "$7" = "--output" ] || return 1
+    [ "$8" = "json" ] || return 1
+    [ "${9}" = "--target-branch" ] || return 1
+    [ "${10}" = "main" ] || return 1
+    printf '[{"iid":1,"sha":"old123","metadata":{"head_sha":"abc123"}}]'
+  }
+
+  run check_branch_merged gitlab feature/test main abc123
+  [ "$status" -eq 1 ]
+}
+
 @test "check_branch_merged still accepts GitLab merged MR without branch tip" {
   glab() {
     [ "$1" = "mr" ] || return 1

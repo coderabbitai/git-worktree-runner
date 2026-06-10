@@ -238,18 +238,19 @@ teardown() {
   [ ! -d "$TEST_WORKTREES_DIR/merged-tip" ]
 }
 
-@test "cmd_clean does not log dirty skip for non-merged worktree" {
-  create_test_worktree "dirty-not-merged"
-  echo "dirty" > "$TEST_WORKTREES_DIR/dirty-not-merged/dirty.txt"
-  git -C "$TEST_WORKTREES_DIR/dirty-not-merged" add dirty.txt
+@test "cmd_clean skips dirty worktree before provider lookup" {
+  create_test_worktree "dirty-before-provider"
+  echo "dirty" > "$TEST_WORKTREES_DIR/dirty-before-provider/dirty.txt"
+  git -C "$TEST_WORKTREES_DIR/dirty-before-provider" add dirty.txt
 
   _clean_detect_provider() { printf "github"; }
   ensure_provider_cli() { return 0; }
-  check_branch_merged() { return 1; }
+  check_branch_merged() { printf "provider lookup should not run"; return 1; }
 
   run cmd_clean --merged --to main --yes
   [ "$status" -eq 0 ]
-  [[ "$output" != *"dirty-not-merged"* ]]
+  [[ "$output" == *"dirty-before-provider"* ]]
+  [[ "$output" != *"provider lookup should not run"* ]]
 }
 
 # ── Locked entries with missing directories (#180) ──────────────────────────

@@ -183,13 +183,13 @@ _clean_prs() {
           # Skip main repo branch silently (not counted)
           [ "$branch" = "$main_branch" ] && continue
 
+          if _clean_should_skip "$dir" "$branch" "$force" "$active_worktree_path"; then
+            skipped=$((skipped + 1))
+            continue
+          fi
+
           # Check if branch has a PR/MR matching any requested state
           if _clean_branch_matches_pr_state "$provider" "$branch" "$target_ref" "$branch_tip" "$merged_mode" "$closed_mode"; then
-            if _clean_should_skip "$dir" "$branch" "$force" "$active_worktree_path"; then
-              skipped=$((skipped + 1))
-              continue
-            fi
-
             if [ "$dry_run" -eq 1 ]; then
               log_info "[dry-run] Would remove: $branch ($dir)"
               removed=$((removed + 1))
