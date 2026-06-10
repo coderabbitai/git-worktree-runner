@@ -141,7 +141,7 @@ _gitlab_mr_matches_tip() {
     return
   fi
 
-  local compact_result objects object sha_field diff_refs
+  local compact_result objects object sha_field head_sha_field diff_refs
   compact_result=$(printf "%s" "$mr_result" | tr -d '[:space:]')
   objects=$(printf "%s" "$compact_result" | sed 's/},{/}\
 {/g')
@@ -149,6 +149,9 @@ _gitlab_mr_matches_tip() {
   while IFS= read -r object; do
     sha_field=$(printf "%s" "$object" | sed -n 's/^[^{]*{[^{}]*"sha":"\([^"]*\)".*/\1/p')
     [ "$sha_field" = "$branch_tip" ] && return 0
+
+    head_sha_field=$(printf "%s" "$object" | sed -n 's/^[^{]*{[^{}]*"head_sha":"\([^"]*\)".*/\1/p')
+    [ "$head_sha_field" = "$branch_tip" ] && return 0
 
     diff_refs=$(printf "%s" "$object" | sed -n 's/.*"diff_refs":{\([^}]*\)}.*/\1/p')
     case "$diff_refs" in

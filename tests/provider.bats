@@ -193,6 +193,34 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "check_branch_merged accepts GitLab top-level head SHA without jq" {
+  local mock_bin old_path
+  mock_bin=$(mktemp -d)
+  ln -s "$(command -v sed)" "$mock_bin/sed"
+  ln -s "$(command -v tr)" "$mock_bin/tr"
+  old_path="$PATH"
+  PATH="$mock_bin"
+
+  glab() {
+    [ "$1" = "mr" ] || return 1
+    [ "$2" = "list" ] || return 1
+    [ "$3" = "--source-branch" ] || return 1
+    [ "$4" = "feature/test" ] || return 1
+    [ "$5" = "--merged" ] || return 1
+    [ "$6" = "--all" ] || return 1
+    [ "$7" = "--output" ] || return 1
+    [ "$8" = "json" ] || return 1
+    [ "${9}" = "--target-branch" ] || return 1
+    [ "${10}" = "main" ] || return 1
+    printf '[{"iid":1,"head_sha":"abc123"}]'
+  }
+
+  run check_branch_merged gitlab feature/test main abc123
+  PATH="$old_path"
+  rm -rf "$mock_bin"
+  [ "$status" -eq 0 ]
+}
+
 @test "check_branch_merged accepts GitLab diff_refs head SHA matches" {
   glab() {
     [ "$1" = "mr" ] || return 1
