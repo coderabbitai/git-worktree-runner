@@ -6,22 +6,46 @@ on:
 
 permissions: read-all
 
+# mislav/bump-homebrew-formula-action rejects the HTTP 303 redirects GitHub
+# now serves for tarball URLs (mislav/bump-homebrew-formula-action#340), so
+# the formula is bumped directly via the tap's contents API instead.
 jobs:
   homebrew:
     name: Bump Homebrew formula
     runs-on: ubuntu-latest
     if: ${{ !github.event.release.prerelease }}
     steps:
-      - uses: mislav/bump-homebrew-formula-action@56a283fa15557e9abaa4bdb63b8212abc68e655c # v3
-        with:
-          formula-name: git-gtr
-          formula-path: Formula/git-gtr.rb
-          homebrew-tap: coderabbitai/homebrew-tap
-          tag-name: ${{ github.event.release.tag_name }}
-          create-pullrequest: false
-          commit-message: |
-            {{formulaName}} {{version}}
-
-            Automated update from https://github.com/coderabbitai/git-worktree-runner
+      - name: Bump Formula/git-gtr.rb in coderabbitai/homebrew-tap
         env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          version="${TAG_NAME#v}"
+          url="https://github.com/coderabbitai/git-worktree-runner/archive/refs/tags/${TAG_NAME}.tar.gz"
+
+          curl -fsSL --retry 3 "$url" -o release.tar.gz
+          sha256=$(sha256sum release.tar.gz | awk '{print $1}')
+
+          gh api repos/coderabbitai/homebrew-tap/contents/Formula/git-gtr.rb > formula.json
+          blob_sha=$(jq -r '.sha' formula.json)
+          jq -r '.content' formula.json | base64 -d > git-gtr.rb
+
+          if grep -qF "  url \"${url}\"" git-gtr.rb; then
+            echo "Formula already at ${TAG_NAME}; nothing to do."
+            exit 0
+          fi
+
+          sed -i "s|^  url \".*\"$|  url \"${url}\"|" git-gtr.rb
+          sed -i "s|^  sha256 \".*\"$|  sha256 \"${sha256}\"|" git-gtr.rb
+
+          grep -qF "  url \"${url}\"" git-gtr.rb
+          grep -qF "  sha256 \"${sha256}\"" git-gtr.rb
+
+          message="$(printf 'git-gtr %s\n\nAutomated update from https://github.com/coderabbitai/git-worktree-runner' "$version")"
+
+          gh api --method PUT repos/coderabbitai/homebrew-tap/contents/Formula/git-gtr.rb \
+            -f message="$message" \
+            -f content="$(base64 -w0 git-gtr.rb)" \
+            -f sha="$blob_sha"
