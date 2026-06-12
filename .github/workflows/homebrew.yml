@@ -3,6 +3,12 @@ name: Update Homebrew Formula
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag-name:
+        description: Release tag to bump the formula to (e.g. v2.8.0)
+        required: true
+        type: string
 
 permissions: read-all
 
@@ -18,7 +24,7 @@ jobs:
       - name: Bump Formula/git-gtr.rb in coderabbitai/homebrew-tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          TAG_NAME: ${{ github.event.release.tag_name }}
+          TAG_NAME: ${{ github.event.release.tag_name || inputs.tag-name }}
         run: |
           set -euo pipefail
 
