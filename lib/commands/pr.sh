@@ -4,7 +4,7 @@
 # Creates a worktree for a GitHub pull request, similar to gh pr checkout.
 # shellcheck disable=SC2154  # _arg_* _pa_* set by parse_args, _ctx_* set by resolve_*
 
-declare _ctx_pr_number _ctx_pr_head_ref
+declare _ctx_pr_number _ctx_pr_head_ref _ctx_pr_head_owner _ctx_pr_head_repo _ctx_pr_url
 
 _pr_resolve() {
   local selector="$1" repo_arg="$2"
@@ -16,13 +16,15 @@ _pr_resolve() {
   fi
 
   local output
+  local json_fields="number,headRefName,headRepositoryOwner,headRepository,url"
+  local template='{{.number}}{{"\t"}}{{.headRefName}}{{"\t"}}{{.headRepositoryOwner.login}}{{"\t"}}{{.headRepository.name}}{{"\t"}}{{.url}}'
   if [ -n "$repo_arg" ]; then
-    output=$(gh pr view "$selector" --repo "$repo_arg" --json number,headRefName --template '{{.number}}{{"\t"}}{{.headRefName}}' 2>/dev/null) || {
+    output=$(gh pr view "$selector" --repo "$repo_arg" --json "$json_fields" --template "$template" 2>/dev/null) || {
       log_error "Could not resolve pull request: $selector"
       return 1
     }
   else
-    output=$(gh pr view "$selector" --json number,headRefName --template '{{.number}}{{"\t"}}{{.headRefName}}' 2>/dev/null) || {
+    output=$(gh pr view "$selector" --json "$json_fields" --template "$template" 2>/dev/null) || {
       log_error "Could not resolve pull request: $selector"
       return 1
     }
@@ -30,7 +32,7 @@ _pr_resolve() {
 
   local old_ifs="$IFS"
   IFS="$(printf '\t')"
-  read -r _ctx_pr_number _ctx_pr_head_ref <<EOF
+  read -r _ctx_pr_number _ctx_pr_head_ref _ctx_pr_head_owner _ctx_pr_head_repo _ctx_pr_url <<EOF
 $output
 EOF
   IFS="$old_ifs"
@@ -39,6 +41,37 @@ EOF
     log_error "Could not read pull request number from gh output"
     return 1
   fi
+}
+
+_pr_head_repo_url() {
+  local pr_url="$1" head_owner="$2" head_repo="$3"
+
+  [ -z "$pr_url" ] && return 1
+  [ -z "$head_owner" ] && return 1
+  [ -z "$head_repo" ] && return 1
+
+  case "$head_owner" in
+    "<no value>"|"null") return 1 ;;
+  esac
+  case "$head_repo" in
+    "<no value>"|"null") return 1 ;;
+  esac
+
+  local host_url="$pr_url"
+  host_url="${host_url%%/pull/*}"
+  host_url="${host_url%/*/*}"
+  printf "%s/%s/%s.git" "$host_url" "$head_owner" "$head_repo"
+}
+
+_pr_configure_branch_for_gh() {
+  local branch_name="$1" head_ref="$2" head_repo_url="$3"
+
+  [ -z "$head_ref" ] && return 0
+  [ -z "$head_repo_url" ] && return 0
+
+  git config "branch.$branch_name.remote" "$head_repo_url"
+  git config "branch.$branch_name.pushRemote" "$head_repo_url"
+  git config "branch.$branch_name.merge" "refs/heads/$head_ref"
 }
 
 _pr_branch_is_checked_out() {
@@ -113,8 +146,14 @@ cmd_pr() {
 
   _pr_resolve "$selector" "$repo_arg" || exit 1
   local pr_number="$_ctx_pr_number" pr_head_ref="$_ctx_pr_head_ref"
+  local pr_head_owner="$_ctx_pr_head_owner" pr_head_repo="$_ctx_pr_head_repo" pr_url="$_ctx_pr_url"
+  local head_repo_url
+  head_repo_url=$(_pr_head_repo_url "$pr_url" "$pr_head_owner" "$pr_head_repo") || head_repo_url=""
   if [ -z "$branch_name" ]; then
-    branch_name="pr/$pr_number"
+    branch_name="$pr_head_ref"
+    if [ -z "$branch_name" ]; then
+      branch_name="pr/$pr_number"
+    fi
   fi
 
   local folder_name
@@ -140,14 +179,17 @@ cmd_pr() {
 
   local track_mode="none"
   if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+    local branch_oid fetch_oid
+    branch_oid=$(git rev-parse --verify "refs/heads/$branch_name^{commit}" 2>/dev/null) || branch_oid=""
+    fetch_oid=$(git rev-parse --verify "FETCH_HEAD^{commit}" 2>/dev/null) || fetch_oid=""
+    if [ -z "$branch_oid" ] || [ "$branch_oid" != "$fetch_oid" ]; then
+      log_error "Local branch $branch_name already exists and differs from pull request #$pr_number"
+      log_info "Use --branch <name> to choose a different local branch name"
+      exit 1
+    fi
     track_mode="local"
     if _pr_branch_is_checked_out "$branch_name"; then
       log_warn "Local branch $branch_name is already checked out; using it without resetting"
-    else
-      git branch -f "$branch_name" FETCH_HEAD >/dev/null || {
-        log_error "Could not update local branch $branch_name"
-        exit 1
-      }
     fi
   fi
 
@@ -161,6 +203,8 @@ cmd_pr() {
   if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "FETCH_HEAD" "$track_mode" "1" "$force" "$custom_name" "$folder_override" "$remote"); then
     exit 1
   fi
+
+  _pr_configure_branch_for_gh "$branch_name" "$pr_head_ref" "$head_repo_url"
 
   if [ "$skip_copy" -eq 0 ]; then
     _post_create_copy "$repo_root" "$worktree_path"

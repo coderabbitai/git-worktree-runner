@@ -48,11 +48,11 @@ git gtr pr - Create a worktree for a GitHub pull request
 Usage: git gtr pr <number|url|branch> [options]
 
 Creates a worktree from a GitHub pull request, similar to gh pr checkout.
-The default local branch is pr/<number> to avoid fork branch name collisions.
-Requires GitHub CLI (gh) for PR lookup.
+The default local branch is the PR head branch so GitHub CLI can infer the PR
+from inside the worktree. Requires GitHub CLI (gh) for PR lookup.
 
 Options:
-  -b, --branch <name>  Local branch name to use (default: pr/<number>)
+  -b, --branch <name>  Local branch name to use (default: PR head branch)
   -R, --repo <repo>    Select GitHub repository for gh pr view
   --remote <name>      Remote used to fetch refs/pull/<number>/head
   --no-copy            Skip file copying (gtr.copy.include patterns)
@@ -66,7 +66,7 @@ Options:
   -a, --ai             Start AI tool after creation
 
 Examples:
-  git gtr pr 123                         # Branch pr/123, folder pr-123
+  git gtr pr 123                         # Branch/folder from PR head branch
   git gtr pr 123 --branch review/fix     # Custom local branch
   git gtr pr https://github.com/OWNER/REPO/pull/123 --folder review
   gtr pr 123 --cd                        # With shell integration
@@ -562,7 +562,7 @@ CORE COMMANDS (daily workflow):
 
   pr <number|url|branch> [options]
          Create a worktree from a GitHub pull request (requires gh)
-         -b, --branch <name>: local branch name (default: pr/<number>)
+         -b, --branch <name>: local branch name (default: PR head branch)
          -R, --repo <repo>: repository for gh pr view
          --remote <name>: remote used to fetch refs/pull/<number>/head
          --no-copy: skip file copying

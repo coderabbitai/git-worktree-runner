@@ -190,10 +190,10 @@ git gtr new my-feature --name descriptive-variant                               
 ### `git gtr pr <number|url|branch> [options]`
 
 Create a worktree from a GitHub pull request. Requires GitHub CLI (`gh`) for PR lookup.
-The default local branch is `pr/<number>` to avoid fork branch name collisions.
+The default local branch is the PR head branch so GitHub CLI can infer the PR from inside the worktree.
 
 ```bash
-git gtr pr 123                         # Branch pr/123, folder pr-123
+git gtr pr 123                         # Branch/folder from PR head branch
 git gtr pr 123 --branch review/fix     # Custom local branch
 git gtr pr 123 --folder review         # Custom folder name
 gtr pr 123 --cd                        # Create and cd with shell integration
@@ -201,7 +201,7 @@ gtr pr 123 --cd                        # Create and cd with shell integration
 
 **Options:**
 
-- `--branch <name>`, `-b`: Local branch name to use (default: `pr/<number>`)
+- `--branch <name>`, `-b`: Local branch name to use (default: PR head branch)
 - `--repo <repo>`, `-R`: Repository for `gh pr view`
 - `--remote <name>`: Remote used to fetch `refs/pull/<number>/head`
 - `--no-copy`: Skip file copying

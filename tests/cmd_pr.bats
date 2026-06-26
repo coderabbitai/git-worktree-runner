@@ -16,7 +16,7 @@ setup() {
   TEST_MOCK_BIN=$(mktemp -d)
   cat > "$TEST_MOCK_BIN/gh" <<'SCRIPT'
 #!/usr/bin/env bash
-printf '123\tfeature/from-pr\n'
+printf '123\tfeature/from-pr\tocto\texample\thttps://github.com/base/example/pull/123\n'
 SCRIPT
   chmod +x "$TEST_MOCK_BIN/gh"
   export PATH="$TEST_MOCK_BIN:$PATH"
@@ -30,9 +30,11 @@ teardown() {
 @test "cmd_pr creates worktree from GitHub pull request ref" {
   cmd_pr 123 --no-copy --no-hooks --yes
 
-  [ -d "$TEST_WORKTREES_DIR/pr-123" ]
-  [ "$(git -C "$TEST_WORKTREES_DIR/pr-123" rev-parse HEAD)" = "$TEST_PR_SHA" ]
-  [ "$(git -C "$TEST_WORKTREES_DIR/pr-123" branch --show-current)" = "pr/123" ]
+  [ -d "$TEST_WORKTREES_DIR/feature-from-pr" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" branch --show-current)" = "feature/from-pr" ]
+  [ "$(git config branch.feature/from-pr.remote)" = "https://github.com/octo/example.git" ]
+  [ "$(git config branch.feature/from-pr.merge)" = "refs/heads/feature/from-pr" ]
 }
 
 @test "cmd_pr supports custom local branch and folder" {
@@ -41,6 +43,17 @@ teardown() {
   [ -d "$TEST_WORKTREES_DIR/review-123" ]
   [ "$(git -C "$TEST_WORKTREES_DIR/review-123" rev-parse HEAD)" = "$TEST_PR_SHA" ]
   [ "$(git -C "$TEST_WORKTREES_DIR/review-123" branch --show-current)" = "review/pr-123" ]
+  [ "$(git config branch.review/pr-123.merge)" = "refs/heads/feature/from-pr" ]
+}
+
+@test "cmd_pr rejects existing local branch at a different commit" {
+  git branch feature/from-pr HEAD~1
+
+  run cmd_pr 123 --no-copy --no-hooks --yes
+
+  [ "$status" -eq 1 ]
+  [ ! -d "$TEST_WORKTREES_DIR/feature-from-pr" ]
+  [ "$(git rev-parse feature/from-pr)" != "$TEST_PR_SHA" ]
 }
 
 @test "cmd_pr rejects missing selector in non-interactive mode" {
