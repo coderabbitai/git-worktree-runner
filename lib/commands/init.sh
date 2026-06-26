@@ -334,21 +334,21 @@ __FUNC__() {
       dir="$(command git gtr go "$@")" || return $?
     fi
     __FUNC___run_post_cd_hooks "$dir"
-  elif [ "$#" -gt 0 ] && [ "$1" = "new" ]; then
-    local -a _gtr_original_args=("$@") _gtr_new_args=()
-    local _gtr_arg _gtr_new_cd=0 _gtr_before_paths _gtr_after_paths
+  elif [ "$#" -gt 0 ] && { [ "$1" = "new" ] || [ "$1" = "pr" ]; }; then
+    local -a _gtr_original_args=("$@") _gtr_command_args=()
+    local _gtr_command="$1" _gtr_arg _gtr_cd=0 _gtr_before_paths _gtr_after_paths
     local _gtr_path _gtr_new_dir="" _gtr_new_count=0 _gtr_status
     shift
     for _gtr_arg in "$@"; do
       if [ "$_gtr_arg" = "--cd" ]; then
-        _gtr_new_cd=1
+        _gtr_cd=1
       else
-        _gtr_new_args+=("$_gtr_arg")
+        _gtr_command_args+=("$_gtr_arg")
       fi
     done
-    if [ "$_gtr_new_cd" -eq 1 ]; then
+    if [ "$_gtr_cd" -eq 1 ]; then
       _gtr_before_paths="$(command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')"
-      command git gtr new "${_gtr_new_args[@]}"
+      command git gtr "$_gtr_command" "${_gtr_command_args[@]}"
       _gtr_status=$?
       [ "$_gtr_status" -ne 0 ] && return "$_gtr_status"
       _gtr_after_paths="$(command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')"
@@ -392,13 +392,13 @@ ___FUNC___completion() {
 
   if [ "$COMP_CWORD" -eq 1 ]; then
     # First argument: cd + all git-gtr subcommands
-    COMPREPLY=($(compgen -W "cd new go run copy editor ai rm mv rename ls list clean doctor adapter config completion init trust help version" -- "$cur"))
+    COMPREPLY=($(compgen -W "cd new pr go run copy editor ai rm mv rename ls list clean doctor adapter config completion init trust help version" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "cd" ] && [ "$COMP_CWORD" -eq 2 ]; then
     # Worktree names for cd
     local worktrees
     worktrees="1 $(git gtr list --porcelain 2>/dev/null | cut -f2 | tr '\n' ' ')"
     COMPREPLY=($(compgen -W "$worktrees" -- "$cur"))
-  elif [ "${COMP_WORDS[1]}" = "new" ] && [[ "$cur" == -* ]]; then
+  elif { [ "${COMP_WORDS[1]}" = "new" ] || [ "${COMP_WORDS[1]}" = "pr" ]; } && [[ "$cur" == -* ]]; then
     if type _git_gtr &>/dev/null; then
       ___FUNC___delegate_completion
     fi
@@ -520,23 +520,23 @@ __FUNC__() {
       dir="$(command git gtr go "$@")" || return $?
     fi
     __FUNC___run_post_cd_hooks "$dir"
-  elif [ "$#" -gt 0 ] && [ "$1" = "new" ]; then
-    local -a _gtr_original_args _gtr_new_args
-    local _gtr_arg _gtr_new_cd=0 _gtr_before_paths _gtr_after_paths
+  elif [ "$#" -gt 0 ] && { [ "$1" = "new" ] || [ "$1" = "pr" ]; }; then
+    local -a _gtr_original_args _gtr_command_args
+    local _gtr_command="$1" _gtr_arg _gtr_cd=0 _gtr_before_paths _gtr_after_paths
     local _gtr_path _gtr_new_dir="" _gtr_new_count=0 _gtr_status
     _gtr_original_args=("$@")
-    _gtr_new_args=()
+    _gtr_command_args=()
     shift
     for _gtr_arg in "$@"; do
       if [ "$_gtr_arg" = "--cd" ]; then
-        _gtr_new_cd=1
+        _gtr_cd=1
       else
-        _gtr_new_args+=("$_gtr_arg")
+        _gtr_command_args+=("$_gtr_arg")
       fi
     done
-    if [ "$_gtr_new_cd" -eq 1 ]; then
+    if [ "$_gtr_cd" -eq 1 ]; then
       _gtr_before_paths="$(command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')"
-      command git gtr new "${_gtr_new_args[@]}"
+      command git gtr "$_gtr_command" "${_gtr_command_args[@]}"
       _gtr_status=$?
       [ "$_gtr_status" -ne 0 ] && return "$_gtr_status"
       _gtr_after_paths="$(command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')"
@@ -584,7 +584,7 @@ ___FUNC___completion() {
     _git-gtr
   fi
 
-  if [[ "${words[2]}" == "new" && "$current_word" == -* ]]; then
+  if [[ "${words[2]}" == (new|pr) && "$current_word" == -* ]]; then
     compadd -- --cd
   fi
 
@@ -712,19 +712,20 @@ function __FUNC__
       or return $status
     end
     __FUNC___run_post_cd_hooks "$dir"
-  else if test (count $argv) -gt 0; and test "$argv[1]" = "new"
-    set -l _gtr_new_cd 0
-    set -l _gtr_new_args
+  else if test (count $argv) -gt 0; and contains -- "$argv[1]" new pr
+    set -l _gtr_command "$argv[1]"
+    set -l _gtr_cd 0
+    set -l _gtr_command_args
     for _gtr_arg in $argv[2..-1]
       if test "$_gtr_arg" = "--cd"
-        set _gtr_new_cd 1
+        set _gtr_cd 1
       else
-        set -a _gtr_new_args "$_gtr_arg"
+        set -a _gtr_command_args "$_gtr_arg"
       end
     end
-    if test "$_gtr_new_cd" = "1"
+    if test "$_gtr_cd" = "1"
       set -l _gtr_before_paths (command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
-      command git gtr new $_gtr_new_args
+      command git gtr $_gtr_command $_gtr_command_args
       set -l _gtr_status $status
       test $_gtr_status -ne 0; and return $_gtr_status
       set -l _gtr_after_paths (command git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
@@ -768,6 +769,7 @@ end
 # Subcommands (cd + all git gtr commands)
 complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a cd -d 'Change directory to worktree'
 complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a new -d 'Create a new worktree'
+complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a pr -d 'Create a pull request worktree'
 complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a go -d 'Navigate to worktree'
 complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a run -d 'Execute command in worktree'
 complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a copy -d 'Copy files between worktrees'
@@ -790,6 +792,6 @@ complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a help -d 'Show help'
 
 # Worktree name completions for cd
 complete -f -c __FUNC__ -n '___FUNC___using_subcommand cd' -a '(echo 1; git gtr list --porcelain 2>/dev/null | cut -f2)'
-complete -f -c __FUNC__ -n '___FUNC___using_subcommand new' -l cd -d 'Create and cd into the new worktree'
+complete -f -c __FUNC__ -n '___FUNC___using_subcommand new pr' -l cd -d 'Create and cd into the new worktree'
 FISH
 }

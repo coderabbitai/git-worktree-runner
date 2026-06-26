@@ -25,7 +25,7 @@ _git_gtr() {
 
   # If we're completing the first argument after 'git gtr'
   if [ "$cword" -eq 2 ]; then
-    COMPREPLY=($(compgen -W "new go run copy editor ai rm mv rename ls list clean doctor adapter config completion init trust help version" -- "$cur"))
+    COMPREPLY=($(compgen -W "new pr go run copy editor ai rm mv rename ls list clean doctor adapter config completion init trust help version" -- "$cur"))
     return 0
   fi
 
@@ -102,6 +102,11 @@ _git_gtr() {
         COMPREPLY=($(compgen -W "--from --from-current --remote --track --no-copy --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
       elif [ "$prev" = "--track" ]; then
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
+      fi
+      ;;
+    pr)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--branch -b --repo -R --remote --no-copy --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
       fi
       ;;
     completion)

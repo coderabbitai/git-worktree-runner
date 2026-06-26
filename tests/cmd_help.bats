@@ -40,6 +40,13 @@ teardown() {
   [[ "$output" != *"QUICK START"* ]]
 }
 
+@test "cmd_help pr shows pull request help" {
+  run cmd_help pr
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"git gtr pr"* ]]
+  [[ "$output" == *"--branch"* ]]
+}
+
 @test "cmd_help editor shows editor help" {
   run cmd_help editor
   [ "$status" -eq 0 ]
@@ -92,10 +99,11 @@ teardown() {
   [[ "$output" == *"--dry-run"* ]]
 }
 
-@test "cmd_help init mentions gtr new --cd" {
+@test "cmd_help init mentions create-and-cd commands" {
   run cmd_help init
   [ "$status" -eq 0 ]
   [[ "$output" == *"gtr new my-feature --cd"* ]]
+  [[ "$output" == *"gtr pr 123 --cd"* ]]
 }
 
 # ── Alias mapping ────────────────────────────────────────────────────────────

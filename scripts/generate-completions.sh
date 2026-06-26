@@ -115,7 +115,7 @@ _git_gtr() {
 
   # If we're completing the first argument after 'git gtr'
   if [ "$cword" -eq 2 ]; then
-    COMPREPLY=($(compgen -W "new go run copy editor ai rm mv rename ls list clean doctor adapter config completion init trust help version" -- "$cur"))
+    COMPREPLY=($(compgen -W "new pr go run copy editor ai rm mv rename ls list clean doctor adapter config completion init trust help version" -- "$cur"))
     return 0
   fi
 
@@ -196,6 +196,11 @@ MIDDLE1
         COMPREPLY=($(compgen -W "--from --from-current --remote --track --no-copy --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
       elif [ "$prev" = "--track" ]; then
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
+      fi
+      ;;
+    pr)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--branch -b --repo -R --remote --no-copy --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
       fi
       ;;
     completion)
@@ -288,6 +293,7 @@ _git-gtr() {
   local -a commands
   commands=(
     'new:Create a new worktree'
+    'pr:Create a pull request worktree'
     'go:Navigate to worktree'
     'run:Execute command in worktree'
     'copy:Copy files between worktrees'
@@ -325,6 +331,28 @@ _git-gtr() {
       '--track[Track mode]:mode:(auto remote local none)' \
       '--no-copy[Skip file copying]' \
       '--no-fetch[Skip git fetch]' \
+      '--no-hooks[Skip post-create hooks]' \
+      '--force[Allow same branch in multiple worktrees]' \
+      '--name[Custom folder name suffix]:name:' \
+      '--folder[Custom folder name (replaces default)]:folder:' \
+      '--yes[Non-interactive mode]' \
+      '--editor[Open in editor after creation]' \
+      '-e[Open in editor after creation]' \
+      '--ai[Start AI tool after creation]' \
+      '-a[Start AI tool after creation]'
+    return
+  fi
+
+  # Early handler for `pr` command
+  if (( CURRENT >= 4 )) && [[ $words[3] == pr ]]; then
+    _arguments \
+      '1:pull request:' \
+      '--branch[Local branch name]:branch:' \
+      '-b[Local branch name]:branch:' \
+      '--repo[GitHub repository]:repo:' \
+      '-R[GitHub repository]:repo:' \
+      '--remote[Remote used to fetch PR ref]:remote:' \
+      '--no-copy[Skip file copying]' \
       '--no-hooks[Skip post-create hooks]' \
       '--force[Allow same branch in multiple worktrees]' \
       '--name[Custom folder name suffix]:name:' \
@@ -514,6 +542,7 @@ end
 
 # Commands
 complete -f -c git -n '__fish_git_gtr_needs_command' -a new -d 'Create a new worktree'
+complete -f -c git -n '__fish_git_gtr_needs_command' -a pr -d 'Create a pull request worktree'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a go -d 'Navigate to worktree'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a run -d 'Execute command in worktree'
 complete -f -c git -n '__fish_git_gtr_needs_command' -a rm -d 'Remove worktree(s)'
@@ -551,6 +580,19 @@ complete -c git -n '__fish_git_gtr_using_command new' -l folder -d 'Custom folde
 complete -c git -n '__fish_git_gtr_using_command new' -l yes -d 'Non-interactive mode'
 complete -c git -n '__fish_git_gtr_using_command new' -s e -l editor -d 'Open in editor after creation'
 complete -c git -n '__fish_git_gtr_using_command new' -s a -l ai -d 'Start AI tool after creation'
+
+# Pull request command options
+complete -c git -n '__fish_git_gtr_using_command pr' -s b -l branch -d 'Local branch name' -r
+complete -c git -n '__fish_git_gtr_using_command pr' -s R -l repo -d 'GitHub repository' -r
+complete -c git -n '__fish_git_gtr_using_command pr' -l remote -d 'Remote used to fetch PR ref' -r
+complete -c git -n '__fish_git_gtr_using_command pr' -l no-copy -d 'Skip file copying'
+complete -c git -n '__fish_git_gtr_using_command pr' -l no-hooks -d 'Skip post-create hooks'
+complete -c git -n '__fish_git_gtr_using_command pr' -l force -d 'Allow same branch in multiple worktrees'
+complete -c git -n '__fish_git_gtr_using_command pr' -l name -d 'Custom folder name suffix' -r
+complete -c git -n '__fish_git_gtr_using_command pr' -l folder -d 'Custom folder name (replaces default)' -r
+complete -c git -n '__fish_git_gtr_using_command pr' -l yes -d 'Non-interactive mode'
+complete -c git -n '__fish_git_gtr_using_command pr' -s e -l editor -d 'Open in editor after creation'
+complete -c git -n '__fish_git_gtr_using_command pr' -s a -l ai -d 'Start AI tool after creation'
 
 # Remove command options
 complete -c git -n '__fish_git_gtr_using_command rm' -l delete-branch -d 'Delete branch'

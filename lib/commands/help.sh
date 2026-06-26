@@ -41,6 +41,38 @@ Examples:
 EOF
 }
 
+_help_pr() {
+  cat <<'EOF'
+git gtr pr - Create a worktree for a GitHub pull request
+
+Usage: git gtr pr <number|url|branch> [options]
+
+Creates a worktree from a GitHub pull request, similar to gh pr checkout.
+The default local branch is pr/<number> to avoid fork branch name collisions.
+Requires GitHub CLI (gh) for PR lookup.
+
+Options:
+  -b, --branch <name>  Local branch name to use (default: pr/<number>)
+  -R, --repo <repo>    Select GitHub repository for gh pr view
+  --remote <name>      Remote used to fetch refs/pull/<number>/head
+  --no-copy            Skip file copying (gtr.copy.include patterns)
+  --no-hooks           Skip post-create hooks
+  --force              Allow same branch in multiple worktrees
+                       (requires --name or --folder to distinguish worktrees)
+  --name <suffix>      Custom folder name suffix (appended after branch name)
+  --folder <name>      Custom folder name (replaces default entirely)
+  --yes                Non-interactive mode (skip prompts)
+  -e, --editor         Open in editor after creation
+  -a, --ai             Start AI tool after creation
+
+Examples:
+  git gtr pr 123                         # Branch pr/123, folder pr-123
+  git gtr pr 123 --branch review/fix     # Custom local branch
+  git gtr pr https://github.com/OWNER/REPO/pull/123 --folder review
+  gtr pr 123 --cd                        # With shell integration
+EOF
+}
+
 _help_editor() {
   cat <<'EOF'
 git gtr editor - Open worktree in editor
@@ -367,8 +399,9 @@ git gtr init - Generate shell integration
 
 Usage: git gtr init <shell> [--as <name>]
 
-Generates shell functions for enhanced features like 'gtr cd <branch>'
-and 'gtr new <branch> --cd', which can change the current shell directory.
+Generates shell functions for enhanced features like 'gtr cd <branch>',
+'gtr new <branch> --cd', and 'gtr pr <number> --cd', which can change the
+current shell directory.
 Add to your shell configuration.
 
 Output is cached to ~/.cache/gtr/ for fast shell startup (~1ms vs ~60ms).
@@ -403,6 +436,7 @@ Setup (sources cached output directly for fast startup):
 
 After setup:
   gtr new my-feature --cd                        # create and cd into worktree
+  gtr pr 123 --cd                                # create PR worktree and cd
   gtr cd my-feature                             # cd to worktree
   gtr cd 1                                      # cd to main repo
   gtr cd                                        # interactive picker (requires fzf)
@@ -526,6 +560,20 @@ CORE COMMANDS (daily workflow):
          -e, --editor: open in editor after creation
          -a, --ai: start AI tool after creation
 
+  pr <number|url|branch> [options]
+         Create a worktree from a GitHub pull request (requires gh)
+         -b, --branch <name>: local branch name (default: pr/<number>)
+         -R, --repo <repo>: repository for gh pr view
+         --remote <name>: remote used to fetch refs/pull/<number>/head
+         --no-copy: skip file copying
+         --no-hooks: skip post-create hooks
+         --force: allow same branch in multiple worktrees (requires --name or --folder)
+         --name <suffix>: custom folder name suffix
+         --folder <name>: custom folder name
+         --yes: non-interactive mode
+         -e, --editor: open in editor after creation
+         -a, --ai: start AI tool after creation
+
   editor <branch> [--editor <name>]
          Open worktree in editor (uses gtr.editor.default or --editor)
          Special: use '1' to open repo root
@@ -626,7 +674,7 @@ SETUP & MAINTENANCE:
          Usage: eval "$(git gtr completion zsh)"
 
   init <shell> [--as <name>]
-         Generate shell integration for gtr cd and gtr new --cd (bash, zsh, fish)
+         Generate shell integration for gtr cd, gtr new --cd, and gtr pr --cd (bash, zsh, fish)
          --as <name>: custom function name (default: gtr)
          Output is cached for fast startup (refreshes when 'git gtr init' runs)
          See git gtr help init for recommended setup
@@ -646,6 +694,7 @@ WORKFLOW EXAMPLES:
 
   # Daily workflow
   git gtr new feature/user-auth               # Create worktree (folder: feature-user-auth)
+  git gtr pr 123                              # Create worktree for pull request #123
   git gtr editor feature/user-auth            # Open in editor
   git gtr ai feature/user-auth                # Start AI tool
 
@@ -655,6 +704,7 @@ WORKFLOW EXAMPLES:
 
   # Navigate to worktree directory
   gtr new hotfix --cd                          # Create and cd into worktree (with shell integration)
+  gtr pr 123 --cd                              # Create PR worktree and cd
   gtr cd                                    # Interactive picker (requires fzf)
   gtr cd feature/user-auth                  # With shell integration (git gtr init)
   cd "$(git gtr go feature/user-auth)"      # Without shell integration
@@ -706,7 +756,7 @@ CONFIGURATION OPTIONS:
   gtr.hook.postCreate      Post-create hooks (multi-valued)
   gtr.hook.preRemove       Pre-remove hooks (multi-valued, abort on failure)
   gtr.hook.postRemove      Post-remove hooks (multi-valued)
-  gtr.hook.postCd          Post-cd hooks (multi-valued, gtr cd / gtr new --cd only)
+  gtr.hook.postCd          Post-cd hooks (multi-valued, gtr cd / gtr new --cd / gtr pr --cd only)
   gtr.ui.color             Color output mode (auto, always, never; default: auto)
 
 ────────────────────────────────────────────────────────────────────────────────

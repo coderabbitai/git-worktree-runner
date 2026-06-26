@@ -29,6 +29,7 @@ _git-gtr() {
   local -a commands
   commands=(
     'new:Create a new worktree'
+    'pr:Create a pull request worktree'
     'go:Navigate to worktree'
     'run:Execute command in worktree'
     'copy:Copy files between worktrees'
@@ -66,6 +67,28 @@ _git-gtr() {
       '--track[Track mode]:mode:(auto remote local none)' \
       '--no-copy[Skip file copying]' \
       '--no-fetch[Skip git fetch]' \
+      '--no-hooks[Skip post-create hooks]' \
+      '--force[Allow same branch in multiple worktrees]' \
+      '--name[Custom folder name suffix]:name:' \
+      '--folder[Custom folder name (replaces default)]:folder:' \
+      '--yes[Non-interactive mode]' \
+      '--editor[Open in editor after creation]' \
+      '-e[Open in editor after creation]' \
+      '--ai[Start AI tool after creation]' \
+      '-a[Start AI tool after creation]'
+    return
+  fi
+
+  # Early handler for `pr` command
+  if (( CURRENT >= 4 )) && [[ $words[3] == pr ]]; then
+    _arguments \
+      '1:pull request:' \
+      '--branch[Local branch name]:branch:' \
+      '-b[Local branch name]:branch:' \
+      '--repo[GitHub repository]:repo:' \
+      '-R[GitHub repository]:repo:' \
+      '--remote[Remote used to fetch PR ref]:remote:' \
+      '--no-copy[Skip file copying]' \
       '--no-hooks[Skip post-create hooks]' \
       '--force[Allow same branch in multiple worktrees]' \
       '--name[Custom folder name suffix]:name:' \

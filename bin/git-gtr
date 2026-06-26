@@ -58,6 +58,9 @@ main() {
     new)
       cmd_create "$@"
       ;;
+    pr)
+      cmd_pr "$@"
+      ;;
     rm)
       cmd_remove "$@"
       ;;
