@@ -581,18 +581,118 @@ _worktree_add_tracked() {
     "$@" "$branch_name"
 }
 
+# Find the worktree that has a given ref checked out.
+# Parses `git worktree list --porcelain` and matches the branch name as given
+# or with a leading remote segment stripped (so "origin/foo" matches "foo").
+# Usage: _worktree_path_for_ref <ref>
+# Prints: worktree path on match, empty otherwise.
+_worktree_path_for_ref() {
+  local ref="$1"
+  [ -n "$ref" ] || return 0
+
+  local ref_short="${ref##*/}"
+  local line wt_path="" branch
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*)
+        wt_path="${line#worktree }"
+        ;;
+      "branch "*)
+        branch="${line#branch }"
+        branch="${branch#refs/heads/}"
+        if [ "$branch" = "$ref" ] || [ "$branch" = "$ref_short" ]; then
+          printf "%s" "$wt_path"
+          return 0
+        fi
+        ;;
+    esac
+  done < <(git worktree list --porcelain 2>/dev/null || true)
+  return 0
+}
+
+# Resolve which worktree's sparse-checkout config a new worktree should inherit.
+# Prefers the worktree holding from_ref, falling back to the current worktree.
+# Only prints a path if that worktree actually has sparse-checkout enabled.
+# Usage: _resolve_sparse_source <from_ref>
+# Prints: source worktree path if sparse-enabled, empty otherwise.
+_resolve_sparse_source() {
+  local from_ref="$1"
+  local src
+
+  src=$(_worktree_path_for_ref "$from_ref")
+  if [ -z "$src" ]; then
+    src=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  fi
+  [ -n "$src" ] || return 0
+
+  local enabled
+  enabled=$(git -C "$src" config --bool core.sparseCheckout 2>/dev/null || true)
+  [ "$enabled" = "true" ] || return 0
+
+  printf "%s" "$src"
+}
+
+# Replicate a source worktree's sparse-checkout config into a new worktree.
+# Handles both cone and non-cone modes. Materializes the cone from the index
+# (the new worktree should have been created with --no-checkout).
+# Usage: apply_inherited_sparse <new_worktree> <source_worktree>
+# Returns: 0 on success; 1 (with warning) if any git step fails.
+apply_inherited_sparse() {
+  local new_wt="$1" src_wt="$2"
+
+  local cone
+  cone=$(git -C "$src_wt" config --bool core.sparseCheckoutCone 2>/dev/null || true)
+
+  if [ "$cone" = "true" ]; then
+    local dirs=() dir
+    while IFS= read -r dir; do
+      [ -n "$dir" ] && dirs+=("$dir")
+    done < <(git -C "$src_wt" sparse-checkout list 2>/dev/null || true)
+
+    if ! git -C "$new_wt" sparse-checkout init --cone >/dev/null 2>&1; then
+      log_warn "Could not enable sparse-checkout in new worktree"
+      return 1
+    fi
+    if [ "${#dirs[@]}" -gt 0 ] && ! git -C "$new_wt" sparse-checkout set "${dirs[@]}" >/dev/null 2>&1; then
+      log_warn "Could not apply inherited sparse-checkout patterns"
+      return 1
+    fi
+  else
+    if ! git -C "$new_wt" sparse-checkout init >/dev/null 2>&1; then
+      log_warn "Could not enable sparse-checkout in new worktree"
+      return 1
+    fi
+    if ! git -C "$src_wt" sparse-checkout list 2>/dev/null \
+      | git -C "$new_wt" sparse-checkout set --stdin >/dev/null 2>&1; then
+      log_warn "Could not apply inherited sparse-checkout patterns"
+      return 1
+    fi
+  fi
+
+  # Materialize the working tree (worktree was created with --no-checkout).
+  if ! git -C "$new_wt" checkout >/dev/null 2>&1; then
+    log_warn "Could not check out files into the new sparse worktree"
+    return 1
+  fi
+
+  log_info "Inherited sparse-checkout from $src_wt"
+  return 0
+}
+
 # Create a new git worktree
-# Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override] [remote]
+# Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override] [remote] [no_checkout]
 # track_mode: auto, remote, local, or none
 # skip_fetch: 0 (default, fetch) or 1 (skip)
 # force: 0 (default, check branch) or 1 (allow same branch in multiple worktrees)
 # custom_name: optional custom name suffix (e.g., "backend" creates "feature-auth-backend")
 # folder_override: optional complete folder name override (replaces default naming)
+# no_checkout: 0 (default) or 1 (pass --no-checkout, e.g. for deferred sparse-checkout)
 create_worktree() {
   local base_dir="$1" prefix="$2" branch_name="$3" from_ref="$4"
   local track_mode="${5:-auto}" skip_fetch="${6:-0}" force="${7:-0}"
   local custom_name="${8:-}" folder_override="${9:-}"
   local remote="${10:-$(resolve_default_remote)}"
+  local no_checkout="${11:-0}"
 
   local sanitized_name
   sanitized_name=$(_resolve_folder_name "$branch_name" "$custom_name" "$folder_override") || return 1
@@ -600,6 +700,7 @@ create_worktree() {
   local worktree_path="$base_dir/${prefix}${sanitized_name}"
   local force_args=()
   [ "$force" -eq 1 ] && force_args=(--force)
+  [ "$no_checkout" -eq 1 ] && force_args+=(--no-checkout)
 
   if [ -d "$worktree_path" ]; then
     log_error "Worktree $sanitized_name already exists at $worktree_path"

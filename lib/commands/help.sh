@@ -23,6 +23,8 @@ Options:
   --no-copy           Skip file copying (gtr.copy.include patterns)
   --no-fetch          Skip git fetch before creating
   --no-hooks          Skip post-create hooks
+  --sparse            Inherit sparse-checkout from the base worktree
+  --no-sparse         Force a full checkout (override gtr.sparse.inherit)
   --force             Allow same branch in multiple worktrees
                       (requires --name or --folder to distinguish them)
   --name <suffix>     Custom folder name suffix (appended after branch name)

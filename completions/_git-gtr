@@ -67,6 +67,8 @@ _git-gtr() {
       '--no-copy[Skip file copying]' \
       '--no-fetch[Skip git fetch]' \
       '--no-hooks[Skip post-create hooks]' \
+      '--sparse[Inherit sparse-checkout from base worktree]' \
+      '--no-sparse[Force a full checkout]' \
       '--force[Allow same branch in multiple worktrees]' \
       '--name[Custom folder name suffix]:name:' \
       '--folder[Custom folder name (replaces default)]:folder:' \
@@ -187,7 +189,7 @@ _git-gtr() {
                 '--local[Use local git config]' \
                 '--global[Use global git config]' \
                 '--system[Use system git config]' \
-                '*:config key:(gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.defaultRemote gtr.provider gtr.ui.color)'
+                '*:config key:(gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.sparse.inherit gtr.defaultBranch gtr.defaultRemote gtr.provider gtr.ui.color)'
               ;;
             set|add|unset)
               # Write operations only support --local and --global
@@ -195,7 +197,7 @@ _git-gtr() {
               _arguments \
                 '--local[Use local git config]' \
                 '--global[Use global git config]' \
-                '*:config key:(gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.defaultBranch gtr.defaultRemote gtr.provider gtr.ui.color)'
+                '*:config key:(gtr.copy.include gtr.copy.exclude gtr.copy.includeDirs gtr.copy.excludeDirs gtr.hook.postCreate gtr.hook.preRemove gtr.hook.postRemove gtr.hook.postCd gtr.editor.default gtr.editor.workspace gtr.ai.default gtr.worktrees.dir gtr.worktrees.prefix gtr.sparse.inherit gtr.defaultBranch gtr.defaultRemote gtr.provider gtr.ui.color)'
               ;;
           esac
         fi

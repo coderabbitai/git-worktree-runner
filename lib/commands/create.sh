@@ -94,6 +94,8 @@ cmd_create() {
 --no-copy
 --no-fetch
 --no-hooks
+--sparse
+--no-sparse
 --yes
 --force
 --name: value
@@ -110,6 +112,8 @@ cmd_create() {
   local skip_copy="${_arg_no_copy:-0}"
   local skip_fetch="${_arg_no_fetch:-0}"
   local skip_hooks="${_arg_no_hooks:-0}"
+  local sparse_flag="${_arg_sparse:-0}"
+  local no_sparse_flag="${_arg_no_sparse:-0}"
   local yes_mode="${_arg_yes:-0}"
   local force="${_arg_force:-0}"
   local custom_name="${_arg_name:-}"
@@ -156,6 +160,27 @@ cmd_create() {
   # Determine from_ref with precedence: --from > --from-current > default
   from_ref=$(_create_resolve_from_ref "$from_ref" "$from_current" "$repo_root" "$remote")
 
+  # Decide whether to inherit sparse-checkout from the base worktree.
+  # Precedence: --no-sparse > --sparse > gtr.sparse.inherit (default on).
+  local sparse_inherit=0
+  if [ "$no_sparse_flag" -eq 1 ]; then
+    sparse_inherit=0
+  elif [ "$sparse_flag" -eq 1 ]; then
+    sparse_inherit=1
+  elif cfg_bool gtr.sparse.inherit true; then
+    sparse_inherit=1
+  fi
+
+  local sparse_source="" no_checkout=0
+  if [ "$sparse_inherit" -eq 1 ]; then
+    sparse_source=$(_resolve_sparse_source "$from_ref")
+    if [ -n "$sparse_source" ]; then
+      no_checkout=1
+    elif [ "$sparse_flag" -eq 1 ]; then
+      log_warn "No sparse-checkout source found for '$from_ref' — creating a full checkout"
+    fi
+  fi
+
   # Construct folder name for display
   local folder_name
   if [ -n "$folder_override" ]; then
@@ -172,8 +197,13 @@ cmd_create() {
 
   # Create the worktree
   local worktree_path
-  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name" "$folder_override" "$remote"); then
+  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name" "$folder_override" "$remote" "$no_checkout"); then
     exit 1
+  fi
+
+  # Inherit sparse-checkout before copying so copied files land in the narrowed tree
+  if [ -n "$sparse_source" ]; then
+    apply_inherited_sparse "$worktree_path" "$sparse_source" || log_warn "Sparse-checkout inheritance incomplete"
   fi
 
   # Copy files based on patterns

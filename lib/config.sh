@@ -107,6 +107,7 @@ _CFG_KEY_MAP=(
   "gtr.ai.default|defaults.ai"
   "gtr.worktrees.dir|worktrees.dir"
   "gtr.worktrees.prefix|worktrees.prefix"
+  "gtr.sparse.inherit|sparse.inherit"
   "gtr.defaultBranch|defaults.branch"
   "gtr.defaultRemote|defaults.remote"
   "gtr.provider|defaults.provider"

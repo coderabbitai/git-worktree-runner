@@ -390,6 +390,9 @@ git gtr config add gtr.copy.include "**/.env.example"
 # Run setup after creating worktrees
 git gtr config add gtr.hook.postCreate "npm install"
 
+# Inherit sparse-checkout from the base worktree (default: on; --no-sparse to opt out)
+git gtr config set gtr.sparse.inherit true
+
 # Re-source environment after gtr cd or gtr new --cd (runs in current shell)
 git gtr config add gtr.hook.postCd "source ./vars.sh"
 
