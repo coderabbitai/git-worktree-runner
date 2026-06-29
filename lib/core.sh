@@ -583,14 +583,17 @@ _worktree_add_tracked() {
 
 # Find the worktree that has a given ref checked out.
 # Parses `git worktree list --porcelain` and matches the branch name as given
-# or with a leading remote segment stripped (so "origin/foo" matches "foo").
+# or with a single leading remote segment stripped (so "origin/feature/auth"
+# matches the branch "feature/auth", preserving the path after the remote).
 # Usage: _worktree_path_for_ref <ref>
 # Prints: worktree path on match, empty otherwise.
 _worktree_path_for_ref() {
   local ref="$1"
   [ -n "$ref" ] || return 0
 
-  local ref_short="${ref##*/}"
+  # Strip only the first path segment (the remote name) so slash-separated
+  # branch names keep their prefix: "origin/feature/auth" -> "feature/auth".
+  local ref_no_remote="${ref#*/}"
   local line wt_path="" branch
   while IFS= read -r line; do
     case "$line" in
@@ -600,7 +603,7 @@ _worktree_path_for_ref() {
       "branch "*)
         branch="${line#branch }"
         branch="${branch#refs/heads/}"
-        if [ "$branch" = "$ref" ] || [ "$branch" = "$ref_short" ]; then
+        if [ "$branch" = "$ref" ] || [ "$branch" = "$ref_no_remote" ]; then
           printf "%s" "$wt_path"
           return 0
         fi
@@ -610,35 +613,79 @@ _worktree_path_for_ref() {
   return 0
 }
 
+# Test whether a worktree has sparse-checkout enabled.
+# Usage: _worktree_is_sparse <worktree_path>
+# Returns: 0 if sparse-checkout is on, 1 otherwise.
+_worktree_is_sparse() {
+  local wt="$1"
+  [ -n "$wt" ] || return 1
+  local enabled
+  enabled=$(git -C "$wt" config --bool core.sparseCheckout 2>/dev/null || true)
+  [ "$enabled" = "true" ]
+}
+
 # Resolve which worktree's sparse-checkout config a new worktree should inherit.
 # Prefers the worktree holding from_ref, falling back to the current worktree.
-# Only prints a path if that worktree actually has sparse-checkout enabled.
+# Only prints a path if the chosen worktree actually has sparse-checkout enabled;
+# a matching but non-sparse worktree does not short-circuit the fallback.
 # Usage: _resolve_sparse_source <from_ref>
 # Prints: source worktree path if sparse-enabled, empty otherwise.
 _resolve_sparse_source() {
   local from_ref="$1"
   local src
 
+  # Prefer the worktree holding from_ref, but only if it is sparse-enabled.
   src=$(_worktree_path_for_ref "$from_ref")
-  if [ -z "$src" ]; then
-    src=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$src" ] && _worktree_is_sparse "$src"; then
+    printf "%s" "$src"
+    return 0
   fi
-  [ -n "$src" ] || return 0
 
-  local enabled
-  enabled=$(git -C "$src" config --bool core.sparseCheckout 2>/dev/null || true)
-  [ "$enabled" = "true" ] || return 0
+  # Otherwise fall back to the current/top-level worktree if it is sparse.
+  src=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$src" ] && _worktree_is_sparse "$src"; then
+    printf "%s" "$src"
+    return 0
+  fi
 
-  printf "%s" "$src"
+  return 0
+}
+
+# Check whether the running git is new enough for `git sparse-checkout`
+# (introduced in Git 2.25).
+# Returns: 0 if supported, 1 otherwise.
+_git_supports_sparse_checkout() {
+  local version major minor
+  version=$(git --version 2>/dev/null | awk '{print $3}')
+  major="${version%%.*}"
+  minor="${version#*.}"
+  minor="${minor%%.*}"
+  [ -n "$major" ] || return 1
+  case "$major$minor" in
+    *[!0-9]* | "") return 1 ;;
+  esac
+  [ "$major" -gt 2 ] && return 0
+  [ "$major" -eq 2 ] && [ "$minor" -ge 25 ] && return 0
+  return 1
 }
 
 # Replicate a source worktree's sparse-checkout config into a new worktree.
 # Handles both cone and non-cone modes. Materializes the cone from the index
 # (the new worktree should have been created with --no-checkout).
+# Requires Git 2.25+ (`git sparse-checkout`); on older clients it falls back to
+# a full checkout so the new worktree is still populated.
 # Usage: apply_inherited_sparse <new_worktree> <source_worktree>
-# Returns: 0 on success; 1 (with warning) if any git step fails.
+# Returns: 0 on success; 1 (with warning) if unsupported or any git step fails.
 apply_inherited_sparse() {
   local new_wt="$1" src_wt="$2"
+
+  # `git sparse-checkout` needs Git 2.25+. On older clients, materialize the
+  # worktree with a normal checkout rather than leaving it unpopulated.
+  if ! _git_supports_sparse_checkout; then
+    log_warn "git sparse-checkout requires Git 2.25+; creating a full checkout instead"
+    git -C "$new_wt" checkout >/dev/null 2>&1 || true
+    return 1
+  fi
 
   local cone
   cone=$(git -C "$src_wt" config --bool core.sparseCheckoutCone 2>/dev/null || true)
@@ -658,7 +705,9 @@ apply_inherited_sparse() {
       return 1
     fi
   else
-    if ! git -C "$new_wt" sparse-checkout init >/dev/null 2>&1; then
+    # Modern git defaults `init` to cone mode, so request --no-cone explicitly
+    # to preserve the source's raw (non-cone) patterns.
+    if ! git -C "$new_wt" sparse-checkout init --no-cone >/dev/null 2>&1; then
       log_warn "Could not enable sparse-checkout in new worktree"
       return 1
     fi

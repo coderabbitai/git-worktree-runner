@@ -201,9 +201,19 @@ cmd_create() {
     exit 1
   fi
 
-  # Inherit sparse-checkout before copying so copied files land in the narrowed tree
+  # Inherit sparse-checkout before copying so copied files land in the narrowed tree.
+  # The worktree was created with --no-checkout, so a failed inheritance would leave
+  # it empty: fall back to a full checkout (and hard-fail if even that does not work)
+  # before the copy/hooks/success path continues.
   if [ -n "$sparse_source" ]; then
-    apply_inherited_sparse "$worktree_path" "$sparse_source" || log_warn "Sparse-checkout inheritance incomplete"
+    if ! apply_inherited_sparse "$worktree_path" "$sparse_source"; then
+      log_warn "Sparse-checkout inheritance failed — falling back to a full checkout"
+      git -C "$worktree_path" sparse-checkout disable >/dev/null 2>&1 || true
+      if ! git -C "$worktree_path" checkout >/dev/null 2>&1; then
+        log_error "Could not populate worktree at $worktree_path"
+        exit 1
+      fi
+    fi
   fi
 
   # Copy files based on patterns
