@@ -968,7 +968,7 @@ require_runtime_shell() {
   local _gtr_init="$XDG_CACHE_HOME/gtr/init-gtr.bash"
   printf '%s\n%s\n' '# gtr-cache: version=test init=5 func=gtr shell=bash' old-cache > "$_gtr_init"
 
-  [[ -f "$_gtr_init" ]] && head -n 1 "$_gtr_init" | grep -q ' init=6 ' || cmd_init bash >/dev/null || true
+  cmd_init bash >/dev/null
 
   local stamp
   stamp="$(head -1 "$_gtr_init")"

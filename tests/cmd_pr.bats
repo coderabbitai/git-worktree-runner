@@ -48,6 +48,12 @@ teardown() {
   [ "$(git config branch.review/pr-123.merge)" = "refs/heads/feature/from-pr" ]
 }
 
+@test "cmd_pr reuses ssh remote matching resolved PR base repository" {
+  git remote add upstream git@github.com:base/example.git
+
+  [ "$(_pr_remote_for_url https://github.com/base/example.git)" = "upstream" ]
+}
+
 @test "cmd_pr fetches the resolved PR base repository by default" {
   local other_remote other_sha
   other_remote="$TEST_OTHER_REMOTE_ROOT/other.git"
@@ -110,9 +116,17 @@ SCRIPT
 }
 
 @test "cmd_pr requires GitHub CLI" {
-  rm "$TEST_MOCK_BIN/gh"
+  local old_path no_gh_bin tool
+  old_path="$PATH"
+  no_gh_bin=$(mktemp -d)
+  for tool in bash git basename dirname grep sed mktemp cat rm; do
+    ln -s "$(command -v "$tool")" "$no_gh_bin/$tool"
+  done
 
-  run cmd_pr 123 --remote origin --no-copy --no-hooks --yes
+  PATH="$no_gh_bin" run cmd_pr 123 --remote origin --no-copy --no-hooks --yes
+  PATH="$old_path"
+  rm -rf "$no_gh_bin"
 
   [ "$status" -eq 1 ]
+  [[ "$output" == *"gh is required"* ]]
 }

@@ -15,20 +15,32 @@ _pr_resolve() {
     return 1
   fi
 
-  local output
+  local output gh_stderr err_file
   local json_fields="number,headRefName,headRepositoryOwner,headRepository,url"
   local template='{{.number}}{{"\t"}}{{.headRefName}}{{"\t"}}{{.headRepositoryOwner.login}}{{"\t"}}{{.headRepository.name}}{{"\t"}}{{.url}}'
+  err_file=$(mktemp "${TMPDIR:-/tmp}/gtr-gh.XXXXXX") || {
+    log_error "Could not create temporary file for gh output"
+    return 1
+  }
+
   if [ -n "$repo_arg" ]; then
-    output=$(gh pr view "$selector" --repo "$repo_arg" --json "$json_fields" --template "$template" 2>/dev/null) || {
+    output=$(gh pr view "$selector" --repo "$repo_arg" --json "$json_fields" --template "$template" 2>"$err_file") || {
+      gh_stderr=$(cat "$err_file" 2>/dev/null || true)
+      rm -f "$err_file"
       log_error "Could not resolve pull request: $selector"
+      [ -n "$gh_stderr" ] && log_info "$gh_stderr"
       return 1
     }
   else
-    output=$(gh pr view "$selector" --json "$json_fields" --template "$template" 2>/dev/null) || {
+    output=$(gh pr view "$selector" --json "$json_fields" --template "$template" 2>"$err_file") || {
+      gh_stderr=$(cat "$err_file" 2>/dev/null || true)
+      rm -f "$err_file"
       log_error "Could not resolve pull request: $selector"
+      [ -n "$gh_stderr" ] && log_info "$gh_stderr"
       return 1
     }
   fi
+  rm -f "$err_file"
 
   local old_ifs="$IFS"
   IFS="$(printf '\t')"
@@ -85,6 +97,18 @@ _pr_normalize_repo_url() {
   local repo_url="$1"
   repo_url="${repo_url%/}"
   repo_url="${repo_url%.git}"
+
+  case "$repo_url" in
+    git@*:*)
+      repo_url="${repo_url#git@}"
+      repo_url="${repo_url/:/\/}"
+      ;;
+    *://*)
+      repo_url="${repo_url#*://}"
+      repo_url="${repo_url#*@}"
+      ;;
+  esac
+
   printf "%s" "$repo_url"
 }
 
