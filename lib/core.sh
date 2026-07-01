@@ -534,7 +534,13 @@ _resolve_folder_name() {
   if [ -n "$folder_override" ]; then
     sanitized_name=$(sanitize_branch_name "$folder_override")
   elif [ -n "$custom_name" ]; then
-    sanitized_name="$(sanitize_branch_name "$branch_name")-${custom_name}"
+    local sanitized_custom
+    sanitized_custom=$(sanitize_branch_name "$custom_name")
+    if [ -z "$sanitized_custom" ] || [ "$sanitized_custom" = "." ] || [ "$sanitized_custom" = ".." ]; then
+      log_error "Invalid --name value: $custom_name"
+      return 1
+    fi
+    sanitized_name="$(sanitize_branch_name "$branch_name")-${sanitized_custom}"
   else
     sanitized_name=$(sanitize_branch_name "$branch_name")
   fi

@@ -287,7 +287,7 @@ require_runtime_shell() {
 @test "bash output includes cd in subcommand completions" {
   run cmd_init bash
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"cd new go run'* ]]
+  [[ "$output" == *'"cd new pr go run'* ]]
 }
 
 @test "bash output includes trust in subcommand completions" {
@@ -420,32 +420,32 @@ require_runtime_shell() {
   [ "$hook_pwd_line" = "$wt_line" ]
 }
 
-# ── new --cd wrapper support ────────────────────────────────────────────────
+# ── new/pr --cd wrapper support ─────────────────────────────────────────────
 
-@test "bash output intercepts new --cd and strips flag before delegating" {
+@test "bash output intercepts new/pr --cd and strips flag before delegating" {
   run cmd_init bash
   [ "$status" -eq 0 ]
-  [[ "$output" == *'[ "$1" = "new" ]'* ]]
+  [[ "$output" == *'[ "$1" = "new" ] || [ "$1" = "pr" ]'* ]]
   [[ "$output" == *'if [ "$_gtr_arg" = "--cd" ]'* ]]
-  [[ "$output" == *'command git gtr new "${_gtr_new_args[@]}"'* ]]
+  [[ "$output" == *'command git gtr "$_gtr_command" "${_gtr_command_args[@]}"'* ]]
   [[ "$output" == *'command git gtr "${_gtr_original_args[@]}"'* ]]
 }
 
-@test "zsh output intercepts new --cd and strips flag before delegating" {
+@test "zsh output intercepts new/pr --cd and strips flag before delegating" {
   run cmd_init zsh
   [ "$status" -eq 0 ]
-  [[ "$output" == *'[ "$1" = "new" ]'* ]]
+  [[ "$output" == *'[ "$1" = "new" ] || [ "$1" = "pr" ]'* ]]
   [[ "$output" == *'if [ "$_gtr_arg" = "--cd" ]'* ]]
-  [[ "$output" == *'command git gtr new "${_gtr_new_args[@]}"'* ]]
+  [[ "$output" == *'command git gtr "$_gtr_command" "${_gtr_command_args[@]}"'* ]]
   [[ "$output" == *'command git gtr "${_gtr_original_args[@]}"'* ]]
 }
 
-@test "fish output intercepts new --cd and strips flag before delegating" {
+@test "fish output intercepts new/pr --cd and strips flag before delegating" {
   run cmd_init fish
   [ "$status" -eq 0 ]
-  [[ "$output" == *'test "$argv[1]" = "new"'* ]]
+  [[ "$output" == *'contains -- "$argv[1]" new pr'* ]]
   [[ "$output" == *'test "$_gtr_arg" = "--cd"'* ]]
-  [[ "$output" == *'command git gtr new $_gtr_new_args'* ]]
+  [[ "$output" == *'command git gtr $_gtr_command $_gtr_command_args'* ]]
 }
 
 @test "bash output uses worktree diff to locate the new directory for --cd" {
@@ -948,6 +948,31 @@ require_runtime_shell() {
   [ "$status" -eq 0 ]
   stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.bash")"
   [[ "$stamp" == *"init=2"* ]]
+}
+
+@test "cache invalidates old default shell integration schema" {
+  mkdir -p "$XDG_CACHE_HOME/gtr"
+  printf '%s\n%s\n' '# gtr-cache: version=test init=5 func=gtr shell=bash' old-cache > "$XDG_CACHE_HOME/gtr/init-gtr.bash"
+
+  run cmd_init bash
+
+  [ "$status" -eq 0 ]
+  [ "$output" != "old-cache" ]
+  local stamp
+  stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.bash")"
+  [[ "$stamp" == *"init=6"* ]]
+}
+
+@test "documented bash setup regenerates old schema cache" {
+  mkdir -p "$XDG_CACHE_HOME/gtr"
+  local _gtr_init="$XDG_CACHE_HOME/gtr/init-gtr.bash"
+  printf '%s\n%s\n' '# gtr-cache: version=test init=5 func=gtr shell=bash' old-cache > "$_gtr_init"
+
+  [[ -f "$_gtr_init" ]] && head -n 1 "$_gtr_init" | grep -q ' init=6 ' || cmd_init bash >/dev/null || true
+
+  local stamp
+  stamp="$(head -1 "$_gtr_init")"
+  [[ "$stamp" == *"init=6"* ]]
 }
 
 @test "cache uses --as func name in cache key" {

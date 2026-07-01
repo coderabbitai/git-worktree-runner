@@ -203,7 +203,7 @@ gtr pr 123 --cd                        # Create and cd with shell integration
 
 - `--branch <name>`, `-b`: Local branch name to use (default: PR head branch)
 - `--repo <repo>`, `-R`: Repository for `gh pr view`
-- `--remote <name>`: Remote used to fetch `refs/pull/<number>/head`
+- `--remote <name>`: Override remote/repository used to fetch `refs/pull/<number>/head`
 - `--no-copy`: Skip file copying
 - `--no-hooks`: Skip post-create hooks
 - `--force`: Allow same branch in multiple worktrees (**requires --name or --folder**)
@@ -247,17 +247,17 @@ cd "$(git gtr go 1)"             # Navigate to main repo
 ```bash
 # Bash (add to ~/.bashrc)
 _gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.bash"
-[[ -f "$_gtr_init" ]] || eval "$(git gtr init bash)" || true
+[[ -f "$_gtr_init" ]] && head -n 1 "$_gtr_init" | grep -q ' init=6 ' || eval "$(git gtr init bash)" || true
 source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
 
 # Zsh (add to ~/.zshrc)
 _gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.zsh"
-[[ -f "$_gtr_init" ]] || eval "$(git gtr init zsh)" || true
+[[ -f "$_gtr_init" ]] && head -n 1 "$_gtr_init" | grep -q ' init=6 ' || eval "$(git gtr init zsh)" || true
 source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
 
 # Fish (add to ~/.config/fish/config.fish)
 set -l _gtr_init (test -n "$XDG_CACHE_HOME" && echo $XDG_CACHE_HOME || echo $HOME/.cache)/gtr/init-gtr.fish
-test -f "$_gtr_init"; or git gtr init fish >/dev/null 2>&1
+test -f "$_gtr_init"; and head -n 1 "$_gtr_init" | string match -q '* init=6 *'; or git gtr init fish >/dev/null 2>&1
 source "$_gtr_init" 2>/dev/null
 
 # Then navigate with:

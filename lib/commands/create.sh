@@ -158,13 +158,7 @@ cmd_create() {
 
   # Construct folder name for display
   local folder_name
-  if [ -n "$folder_override" ]; then
-    folder_name=$(sanitize_branch_name "$folder_override")
-  elif [ -n "$custom_name" ]; then
-    folder_name="$(sanitize_branch_name "$branch_name")-${custom_name}"
-  else
-    folder_name=$(sanitize_branch_name "$branch_name")
-  fi
+  folder_name=$(_resolve_folder_name "$branch_name" "$custom_name" "$folder_override") || exit 1
 
   log_step "Creating worktree: $folder_name"
   echo "Location: $base_dir/${prefix}${folder_name}"

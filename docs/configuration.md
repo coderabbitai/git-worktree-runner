@@ -302,7 +302,7 @@ git gtr config add gtr.hook.preRemove "npm run cleanup"
 # Post-remove hooks
 git gtr config add gtr.hook.postRemove "echo 'Cleaned up!'"
 
-# Post-cd hooks (run after gtr cd or gtr new --cd, in current shell)
+# Post-cd hooks (run after gtr cd, gtr new --cd, or gtr pr --cd, in current shell)
 git gtr config add gtr.hook.postCd "source ./vars.sh"
 ```
 
@@ -313,11 +313,11 @@ git gtr config add gtr.hook.postCd "source ./vars.sh"
 | `postCreate` | After worktree creation          | Setup, install dependencies                 |
 | `preRemove`  | Before worktree deletion         | Cleanup requiring directory access          |
 | `postRemove` | After worktree deletion          | Notifications, logging                      |
-| `postCd`     | After `gtr cd` or `gtr new --cd` changes directory | Re-source environment, update shell context |
+| `postCd`     | After `gtr cd`, `gtr new --cd`, or `gtr pr --cd` changes directory | Re-source environment, update shell context |
 
 > **Note:** Pre-remove hooks abort removal on failure. Use `--force` to skip failed hooks.
 >
-> **Note:** `postCd` hooks run in the **current shell** (not a subshell) so they can modify environment variables. They only run via shell integration (`gtr cd`, `gtr new --cd`), not raw `git gtr` commands or `git gtr go`. Failures warn but don't undo the directory change.
+> **Note:** `postCd` hooks run in the **current shell** (not a subshell) so they can modify environment variables. They only run via shell integration (`gtr cd`, `gtr new --cd`, `gtr pr --cd`), not raw `git gtr` commands or `git gtr go`. Failures warn but don't undo the directory change.
 
 **Environment variables available in hooks:**
 

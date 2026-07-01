@@ -43,6 +43,24 @@ EOF
   fi
 }
 
+_pr_url_with_git_suffix() {
+  local repo_url="$1"
+  case "$repo_url" in
+    *.git) printf "%s" "$repo_url" ;;
+    *) printf "%s.git" "$repo_url" ;;
+  esac
+}
+
+_pr_base_repo_url() {
+  local pr_url="$1"
+
+  [ -z "$pr_url" ] && return 1
+  case "$pr_url" in
+    */pull/*) _pr_url_with_git_suffix "${pr_url%%/pull/*}" ;;
+    *) return 1 ;;
+  esac
+}
+
 _pr_head_repo_url() {
   local pr_url="$1" head_owner="$2" head_repo="$3"
 
@@ -60,18 +78,78 @@ _pr_head_repo_url() {
   local host_url="$pr_url"
   host_url="${host_url%%/pull/*}"
   host_url="${host_url%/*/*}"
-  printf "%s/%s/%s.git" "$host_url" "$head_owner" "$head_repo"
+  _pr_url_with_git_suffix "$host_url/$head_owner/$head_repo"
+}
+
+_pr_normalize_repo_url() {
+  local repo_url="$1"
+  repo_url="${repo_url%/}"
+  repo_url="${repo_url%.git}"
+  printf "%s" "$repo_url"
+}
+
+_pr_remote_for_url() {
+  local repo_url="$1"
+  local wanted
+  wanted=$(_pr_normalize_repo_url "$repo_url")
+
+  local remote_name remote_url remote_norm
+  while IFS= read -r remote_name; do
+    [ -z "$remote_name" ] && continue
+    remote_url=$(git remote get-url "$remote_name" 2>/dev/null) || continue
+    remote_norm=$(_pr_normalize_repo_url "$remote_url")
+    if [ "$remote_norm" = "$wanted" ]; then
+      printf "%s" "$remote_name"
+      return 0
+    fi
+  done <<EOF
+$(git remote 2>/dev/null)
+EOF
+
+  return 1
+}
+
+_pr_configure_base_remote_for_gh() {
+  local pr_number="$1" base_repo_url="$2"
+
+  [ -z "$base_repo_url" ] && return 0
+
+  local remote_name
+  remote_name=$(_pr_remote_for_url "$base_repo_url") || remote_name=""
+
+  if [ -z "$remote_name" ]; then
+    local candidate="gtr-pr-$pr_number-base" suffix=1
+    remote_name="$candidate"
+    while git remote get-url "$remote_name" >/dev/null 2>&1; do
+      remote_name="$candidate-$suffix"
+      suffix=$((suffix + 1))
+    done
+    git remote add "$remote_name" "$base_repo_url" || return 1
+  fi
+
+  git config "remote.$remote_name.gh-resolved" base
+}
+
+_pr_config_set() {
+  local branch_name="$1" key="$2" value="$3" preserve_existing="$4"
+  local config_key="branch.$branch_name.$key"
+
+  if [ "$preserve_existing" -eq 1 ] && git config --get "$config_key" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  git config "$config_key" "$value"
 }
 
 _pr_configure_branch_for_gh() {
-  local branch_name="$1" head_ref="$2" head_repo_url="$3"
+  local branch_name="$1" head_ref="$2" head_repo_url="$3" preserve_existing="${4:-0}"
 
   [ -z "$head_ref" ] && return 0
   [ -z "$head_repo_url" ] && return 0
 
-  git config "branch.$branch_name.remote" "$head_repo_url"
-  git config "branch.$branch_name.pushRemote" "$head_repo_url"
-  git config "branch.$branch_name.merge" "refs/heads/$head_ref"
+  _pr_config_set "$branch_name" remote "$head_repo_url" "$preserve_existing" || return 1
+  _pr_config_set "$branch_name" pushRemote "$head_repo_url" "$preserve_existing" || return 1
+  _pr_config_set "$branch_name" merge "refs/heads/$head_ref" "$preserve_existing" || return 1
 }
 
 _pr_branch_is_checked_out() {
@@ -107,7 +185,8 @@ cmd_pr() {
   local selector="${_pa_positional[0]:-}"
   local branch_name="${_arg_branch:-}"
   local repo_arg="${_arg_repo:-}"
-  local remote="${_arg_remote:-$(resolve_default_remote)}"
+  local remote_arg="${_arg_remote:-}"
+  local remote="${remote_arg:-$(resolve_default_remote)}"
   local skip_copy="${_arg_no_copy:-0}"
   local skip_hooks="${_arg_no_hooks:-0}"
   local yes_mode="${_arg_yes:-0}"
@@ -147,8 +226,13 @@ cmd_pr() {
   _pr_resolve "$selector" "$repo_arg" || exit 1
   local pr_number="$_ctx_pr_number" pr_head_ref="$_ctx_pr_head_ref"
   local pr_head_owner="$_ctx_pr_head_owner" pr_head_repo="$_ctx_pr_head_repo" pr_url="$_ctx_pr_url"
-  local head_repo_url
+  local head_repo_url base_repo_url fetch_source
   head_repo_url=$(_pr_head_repo_url "$pr_url" "$pr_head_owner" "$pr_head_repo") || head_repo_url=""
+  base_repo_url=$(_pr_base_repo_url "$pr_url") || base_repo_url=""
+  fetch_source="$remote"
+  if [ -z "$remote_arg" ] && [ -n "$base_repo_url" ]; then
+    fetch_source="$base_repo_url"
+  fi
   if [ -z "$branch_name" ]; then
     branch_name="$pr_head_ref"
     if [ -z "$branch_name" ]; then
@@ -157,13 +241,7 @@ cmd_pr() {
   fi
 
   local folder_name
-  if [ -n "$folder_override" ]; then
-    folder_name=$(sanitize_branch_name "$folder_override")
-  elif [ -n "$custom_name" ]; then
-    folder_name="$(sanitize_branch_name "$branch_name")-${custom_name}"
-  else
-    folder_name=$(sanitize_branch_name "$branch_name")
-  fi
+  folder_name=$(_resolve_folder_name "$branch_name" "$custom_name" "$folder_override") || exit 1
 
   local expected_worktree_path="$base_dir/${prefix}${folder_name}"
   if [ -d "$expected_worktree_path" ]; then
@@ -172,13 +250,14 @@ cmd_pr() {
   fi
 
   log_step "Fetching pull request #$pr_number..."
-  if ! git fetch "$remote" "refs/pull/$pr_number/head"; then
-    log_error "Could not fetch pull request #$pr_number from $remote"
+  if ! git fetch "$fetch_source" "refs/pull/$pr_number/head"; then
+    log_error "Could not fetch pull request #$pr_number from $fetch_source"
     exit 1
   fi
 
-  local track_mode="none"
+  local track_mode="none" branch_preexisted=0
   if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+    branch_preexisted=1
     local branch_oid fetch_oid
     branch_oid=$(git rev-parse --verify "refs/heads/$branch_name^{commit}" 2>/dev/null) || branch_oid=""
     fetch_oid=$(git rev-parse --verify "FETCH_HEAD^{commit}" 2>/dev/null) || fetch_oid=""
@@ -204,7 +283,12 @@ cmd_pr() {
     exit 1
   fi
 
-  _pr_configure_branch_for_gh "$branch_name" "$pr_head_ref" "$head_repo_url"
+  if ! _pr_configure_base_remote_for_gh "$pr_number" "$base_repo_url"; then
+    log_warn "Could not configure base repository metadata for gh pr view"
+  fi
+  if ! _pr_configure_branch_for_gh "$branch_name" "$pr_head_ref" "$head_repo_url" "$branch_preexisted"; then
+    log_warn "Could not configure branch metadata for gh pr view"
+  fi
 
   if [ "$skip_copy" -eq 0 ]; then
     _post_create_copy "$repo_root" "$worktree_path"

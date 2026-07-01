@@ -26,6 +26,17 @@ teardown() {
   [ "$result" = "feature-auth-backend" ]
 }
 
+@test "_resolve_folder_name sanitizes custom name" {
+  local result
+  result=$(_resolve_folder_name "feature/auth" "../backend/api")
+  [ "$result" = "feature-auth-..-backend-api" ]
+}
+
+@test "_resolve_folder_name rejects empty custom name result" {
+  run _resolve_folder_name "feature/auth" "/"
+  [ "$status" -eq 1 ]
+}
+
 @test "_resolve_folder_name uses folder override" {
   local result
   result=$(_resolve_folder_name "feature/auth" "" "my-folder")

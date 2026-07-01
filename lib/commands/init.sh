@@ -68,7 +68,7 @@ cmd_init() {
   # Generate output (cached to ~/.cache/gtr/, auto-invalidates on shell integration changes)
   local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gtr"
   local cache_file="$cache_dir/init-${func_name}.${shell}"
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-5}"
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-6}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # Return cached output if version matches
