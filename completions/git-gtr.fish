@@ -66,7 +66,7 @@ complete -c git -n '__fish_git_gtr_using_command new' -l track -d 'Track mode' -
 complete -c git -n '__fish_git_gtr_using_command new' -l no-copy -d 'Skip file copying'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-fetch -d 'Skip git fetch'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-hooks -d 'Skip post-create hooks'
-complete -c git -n '__fish_git_gtr_using_command new' -l sparse -d 'Inherit sparse-checkout from base worktree'
+complete -c git -n '__fish_git_gtr_using_command new' -l sparse -d 'Inherit sparse-checkout from base worktree (Git 2.36+)'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-sparse -d 'Force a full checkout'
 complete -c git -n '__fish_git_gtr_using_command new' -l force -d 'Allow same branch in multiple worktrees'
 complete -c git -n '__fish_git_gtr_using_command new' -l name -d 'Custom folder name suffix' -r

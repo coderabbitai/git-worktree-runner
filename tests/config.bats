@@ -79,6 +79,15 @@ teardown() {
   ! _cfg_is_known_key "gtr.nonexistent"
 }
 
+# ── Boolean values ───────────────────────────────────────────────────────────
+
+@test "cfg_bool uses Git boolean parsing for nonzero integers" {
+  setup_integration_repo
+  git -C "$TEST_REPO" config gtr.sparse.inherit 2
+
+  cfg_bool gtr.sparse.inherit false
+}
+
 # ── cfg_list deduplication ───────────────────────────────────────────────────
 
 @test "_cfg_list_add_entry adds entry to result" {

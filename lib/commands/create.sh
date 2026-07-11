@@ -171,14 +171,27 @@ cmd_create() {
     sparse_inherit=1
   fi
 
-  local sparse_source="" no_checkout=0
+  local sparse_source="" no_checkout=0 native_sparse_supported=0
+  _git_supports_sparse_inheritance && native_sparse_supported=1
   if [ "$sparse_inherit" -eq 1 ]; then
-    sparse_source=$(_resolve_sparse_source "$from_ref")
-    if [ -n "$sparse_source" ]; then
-      no_checkout=1
+    if [ "$native_sparse_supported" -eq 1 ]; then
+      sparse_source=$(_resolve_sparse_source "$from_ref")
     elif [ "$sparse_flag" -eq 1 ]; then
+      log_warn "Sparse-checkout inheritance requires Git 2.36+ — creating a full checkout"
+    fi
+    if [ -z "$sparse_source" ] && [ "$sparse_flag" -eq 1 ] && [ "$native_sparse_supported" -eq 1 ]; then
       log_warn "No sparse-checkout source found for '$from_ref' — creating a full checkout"
     fi
+  fi
+
+  # Git 2.36+ copies the caller's sparse settings during worktree add. Defer
+  # checkout only when a sparse caller must produce a full checkout; ordinary
+  # dense creation keeps the existing one-step path.
+  local current_worktree
+  current_worktree=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -z "$sparse_source" ] && [ "$native_sparse_supported" -eq 1 ] \
+    && _worktree_sparse_enabled "$current_worktree"; then
+    no_checkout=1
   fi
 
   # Construct folder name for display
@@ -197,23 +210,25 @@ cmd_create() {
 
   # Create the worktree
   local worktree_path
-  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name" "$folder_override" "$remote" "$no_checkout"); then
+  # Only `git worktree add` uses sparse_source as its context; fetch and branch
+  # resolution retain the caller's repository configuration.
+  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$from_ref" "$track_mode" "$skip_fetch" "$force" "$custom_name" "$folder_override" "$remote" "$no_checkout" "$sparse_source"); then
     exit 1
   fi
 
-  # Inherit sparse-checkout before copying so copied files land in the narrowed tree.
-  # The worktree was created with --no-checkout, so a failed inheritance would leave
-  # it empty: fall back to a full checkout (and hard-fail if even that does not work)
-  # before the copy/hooks/success path continues.
   if [ -n "$sparse_source" ]; then
-    if ! apply_inherited_sparse "$worktree_path" "$sparse_source"; then
-      log_warn "Sparse-checkout inheritance failed — falling back to a full checkout"
-      git -C "$worktree_path" sparse-checkout disable >/dev/null 2>&1 || true
-      if ! git -C "$worktree_path" checkout >/dev/null 2>&1; then
+    if _worktree_is_sparse "$worktree_path"; then
+      log_info "Inherited sparse-checkout from $sparse_source"
+    else
+      log_warn "Sparse-checkout inheritance was not applied — falling back to a full checkout"
+      if ! _ensure_full_checkout "$worktree_path" 1; then
         log_error "Could not populate worktree at $worktree_path"
         exit 1
       fi
     fi
+  elif [ "$no_checkout" -eq 1 ] && ! _ensure_full_checkout "$worktree_path" 1; then
+    log_error "Could not populate full worktree at $worktree_path"
+    exit 1
   fi
 
   # Copy files based on patterns

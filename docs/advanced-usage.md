@@ -222,12 +222,13 @@ git gtr new big-refactor --from my-app --no-sparse
 
 **How it works:**
 
-- gtr inspects the worktree holding the base ref (`--from`, falling back to the current worktree). If it has sparse-checkout enabled, the new worktree is created with `--no-checkout` and the same cone (or pattern set) is applied — the full tree is never written to disk.
+- On Git 2.36+, gtr inspects the worktree holding the base ref (`--from`, falling back to the current worktree). If it has valid sparse-checkout settings, gtr creates the new worktree from that source so Git copies its patterns and per-worktree config before checkout — the full tree is never written to disk.
+- Git 2.17–2.35 keeps the existing full-checkout behavior. An explicit `--sparse` request prints a warning that inheritance requires Git 2.36+.
 - Controlled by `gtr.sparse.inherit` (default on). Use `--sparse` / `--no-sparse` to override per command.
 - Full-checkout repositories are unaffected — they always get a full checkout.
 
 > [!NOTE]
-> Sparse-checkout is per-worktree, not per-branch. Inheriting "from `my-app`" copies the live sparse settings of the `my-app` worktree, not anything stored on the branch itself.
+> Sparse-checkout is per-worktree, not per-branch. Inheriting "from `my-app`" copies the live sparse settings and worktree-specific Git config of the `my-app` worktree, not anything stored on the branch itself. If the same branch is checked out more than once, gtr prefers the current matching worktree; otherwise it warns and creates a full checkout rather than choosing arbitrarily.
 
 ---
 

@@ -119,7 +119,7 @@ If the worktree you branch from uses [sparse-checkout](https://git-scm.com/docs/
 gtr.sparse.inherit = true
 ```
 
-When enabled, `git gtr new` looks at the worktree holding the base ref (the `--from` target, falling back to the current worktree). If that worktree has sparse-checkout on, the new worktree is created with `--no-checkout` and the same cone (or pattern set) is applied — so the full tree is never materialized. Full-checkout repositories are unaffected.
+On Git 2.36+, `git gtr new` looks at the worktree holding the base ref (the `--from` target, falling back to the current worktree). If that worktree has valid sparse-checkout settings, gtr runs worktree creation from that source so Git copies its patterns and per-worktree config before checkout. The full tree is never materialized. Git 2.17–2.35 retains full-checkout behavior; explicit `--sparse` requests print a version warning.
 
 Per-command overrides:
 
@@ -132,7 +132,7 @@ git gtr new feature-xyz --from my-app --no-sparse
 ```
 
 > [!NOTE]
-> Sparse-checkout is stored per-worktree, not per-branch. "Inherit from `my-app`" means inherit the live sparse settings of the `my-app` *worktree*.
+> Sparse-checkout is stored per-worktree, not per-branch. "Inherit from `my-app`" means inherit the live sparse settings and worktree-specific Git config of the `my-app` *worktree*. Ambiguous duplicate-branch worktrees fall back to a full checkout instead of choosing a source arbitrarily.
 
 ---
 

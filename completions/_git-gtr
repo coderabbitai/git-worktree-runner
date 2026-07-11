@@ -67,7 +67,7 @@ _git-gtr() {
       '--no-copy[Skip file copying]' \
       '--no-fetch[Skip git fetch]' \
       '--no-hooks[Skip post-create hooks]' \
-      '--sparse[Inherit sparse-checkout from base worktree]' \
+      '--sparse[Inherit sparse-checkout from base worktree (Git 2.36+)]' \
       '--no-sparse[Force a full checkout]' \
       '--force[Allow same branch in multiple worktrees]' \
       '--name[Custom folder name suffix]:name:' \
