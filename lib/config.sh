@@ -217,10 +217,8 @@ _cfg_read_bool() {
 # Returns: 0 for true, 1 for false.
 cfg_bool() {
   local key="$1" default="${2:-false}" source candidate value status
-  local file_key config_file
+  local file_key="" config_file=""
   local args=()
-  file_key=$(cfg_map_to_file_key "$key")
-  config_file=$(_gtrconfig_path)
 
   for source in worktree local file global system; do
     candidate="$key"
@@ -228,7 +226,10 @@ cfg_bool() {
       worktree) args=(--worktree) ;;
       local) args=(--local) ;;
       file)
-        [ -n "$file_key" ] && [ -f "$config_file" ] || continue
+        file_key=$(cfg_map_to_file_key "$key")
+        [ -n "$file_key" ] || continue
+        config_file=$(_gtrconfig_path)
+        [ -f "$config_file" ] || continue
         candidate="$file_key"
         args=(-f "$config_file")
         ;;

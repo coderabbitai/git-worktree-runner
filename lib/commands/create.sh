@@ -162,17 +162,17 @@ cmd_create() {
 
   # Decide whether to inherit sparse-checkout from the base worktree.
   # Precedence: --no-sparse > --sparse > gtr.sparse.inherit (default on).
-  local sparse_inherit=0
+  local sparse_inherit=0 native_sparse_supported=0
+  _git_supports_sparse_inheritance && native_sparse_supported=1
   if [ "$no_sparse_flag" -eq 1 ]; then
     sparse_inherit=0
   elif [ "$sparse_flag" -eq 1 ]; then
     sparse_inherit=1
-  elif cfg_bool gtr.sparse.inherit true; then
+  elif [ "$native_sparse_supported" -eq 1 ] && cfg_bool gtr.sparse.inherit true; then
     sparse_inherit=1
   fi
 
-  local sparse_source="" no_checkout=0 native_sparse_supported=0
-  _git_supports_sparse_inheritance && native_sparse_supported=1
+  local sparse_source="" no_checkout=0
   if [ "$sparse_inherit" -eq 1 ]; then
     if [ "$native_sparse_supported" -eq 1 ]; then
       sparse_source=$(_resolve_sparse_source "$from_ref")
@@ -187,11 +187,12 @@ cmd_create() {
   # Git 2.36+ copies the caller's sparse settings during worktree add. Defer
   # checkout only when a sparse caller must produce a full checkout; ordinary
   # dense creation keeps the existing one-step path.
-  local current_worktree
-  current_worktree=$(git rev-parse --show-toplevel 2>/dev/null || true)
-  if [ -z "$sparse_source" ] && [ "$native_sparse_supported" -eq 1 ] \
-    && _worktree_sparse_enabled "$current_worktree"; then
-    no_checkout=1
+  local current_worktree=""
+  if [ -z "$sparse_source" ] && [ "$native_sparse_supported" -eq 1 ]; then
+    current_worktree=$(git rev-parse --show-toplevel 2>/dev/null || true)
+    if _worktree_sparse_enabled "$current_worktree"; then
+      no_checkout=1
+    fi
   fi
 
   # Construct folder name for display

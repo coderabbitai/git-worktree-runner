@@ -585,13 +585,14 @@ _worktree_add_tracked() {
 }
 
 # Normalize a remote-tracking ref only when its prefix names a configured remote.
-# Usage: _remote_branch_for_ref <ref>
+# Usage: _remote_branch_for_ref <ref> [repo_root]
 # Prints: local branch portion for a configured remote ref, empty otherwise.
 _remote_branch_for_ref() {
-  local ref="$1" repo_root remote default_remote matched_remote=""
-  repo_root=$(_resolve_main_repo_root) || return 0
+  local ref="$1" repo_root="${2:-}" remote default_remote matched_remote=""
+  [ -n "$repo_root" ] || repo_root=$(_resolve_main_repo_root) || return 0
   case "$ref" in
     refs/remotes/*) ref="${ref#refs/remotes/}" ;;
+    remotes/*) ref="${ref#remotes/}" ;;
   esac
 
   # The configured/default remote remains meaningful before the first fetch,
@@ -620,51 +621,48 @@ _remote_branch_for_ref() {
 # Usage: _worktree_path_for_ref <ref>
 # Prints: worktree path on match, empty otherwise.
 _worktree_path_for_ref() {
-  local ref="$1" exact_ref remote_branch repo_root current_path records resolved_ref
-  local exact_blocks_remote=0
+  local ref="$1" repo_root current_path records resolved_ref branch_candidate
   [ -n "$ref" ] || return 0
   repo_root=$(_resolve_main_repo_root) || return 0
   current_path=$(git rev-parse --show-toplevel 2>/dev/null || true)
   [ -n "$current_path" ] && current_path=$(canonicalize_path "$current_path" || printf "%s" "$current_path")
 
-  exact_ref="$ref"
-  case "$exact_ref" in
-    refs/heads/*) exact_ref="${exact_ref#refs/heads/}" ;;
-  esac
-  case "$ref" in
-    refs/heads/*|refs/tags/*) exact_blocks_remote=1 ;;
-  esac
-  if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$exact_ref" \
-    || git -C "$repo_root" show-ref --verify --quiet "refs/tags/$exact_ref"; then
-    exact_blocks_remote=1
-  fi
+  # Let Git apply its own revision precedence and namespace shorthand rules.
+  # Tags and other non-branch refs deliberately have no owning worktree.
   resolved_ref=$(git -C "$repo_root" rev-parse --verify --symbolic-full-name "$ref" 2>/dev/null || true)
   case "$resolved_ref" in
-    refs/remotes/*|"") ;;
-    refs/*) exact_blocks_remote=1 ;;
+    refs/heads/*)
+      branch_candidate="${resolved_ref#refs/heads/}"
+      ;;
+    refs/remotes/*)
+      branch_candidate=$(_remote_branch_for_ref "$resolved_ref" "$repo_root")
+      ;;
+    refs/*)
+      return 0
+      ;;
+    "")
+      # A commit-ish that resolves without a symbolic ref (for example a tag
+      # collision, SHA, or revision expression) has no unique owning worktree.
+      if git -C "$repo_root" rev-parse --verify "${ref}^{commit}" >/dev/null 2>&1; then
+        return 0
+      fi
+      # Preserve configured-remote matching before the first fetch, when the
+      # remote-tracking ref does not exist yet.
+      branch_candidate=$(_remote_branch_for_ref "$ref" "$repo_root")
+      ;;
   esac
-  if [ "$exact_blocks_remote" -eq 0 ]; then
-    remote_branch=$(_remote_branch_for_ref "$ref")
-  else
-    remote_branch=""
-  fi
+  [ -n "$branch_candidate" ] || return 0
   records=$(list_worktree_records "$repo_root")
 
   local path="" branch="" line
-  local exact_path="" exact_current="" exact_count=0
-  local remote_path="" remote_current="" remote_count=0
+  local matched_path="" matched_current="" matched_count=0
   while IFS= read -r line; do
     case "$line" in
       "")
-        if [ -n "$path" ] && [ "$branch" = "$exact_ref" ]; then
-          exact_count=$((exact_count + 1))
-          [ -z "$exact_path" ] && exact_path="$path"
-          [ -n "$current_path" ] && [ "$path" = "$current_path" ] && exact_current="$path"
-        fi
-        if [ -n "$path" ] && [ -n "$remote_branch" ] && [ "$branch" = "$remote_branch" ]; then
-          remote_count=$((remote_count + 1))
-          [ -z "$remote_path" ] && remote_path="$path"
-          [ -n "$current_path" ] && [ "$path" = "$current_path" ] && remote_current="$path"
+        if [ -n "$path" ] && [ "$branch" = "$branch_candidate" ]; then
+          matched_count=$((matched_count + 1))
+          [ -z "$matched_path" ] && matched_path="$path"
+          [ -n "$current_path" ] && [ "$path" = "$current_path" ] && matched_current="$path"
         fi
         path=""
         branch=""
@@ -677,25 +675,12 @@ $records
 
 EOF
 
-  local selected_path selected_current selected_count selected_branch
-  if [ "$exact_count" -gt 0 ]; then
-    selected_path="$exact_path"
-    selected_current="$exact_current"
-    selected_count="$exact_count"
-    selected_branch="$exact_ref"
-  else
-    selected_path="$remote_path"
-    selected_current="$remote_current"
-    selected_count="$remote_count"
-    selected_branch="$remote_branch"
-  fi
-
-  if [ -n "$selected_current" ]; then
-    printf "%s" "$selected_current"
-  elif [ "$selected_count" -eq 1 ]; then
-    printf "%s" "$selected_path"
-  elif [ "$selected_count" -gt 1 ]; then
-    log_warn "Multiple worktrees use branch '$selected_branch'; sparse-checkout source is ambiguous"
+  if [ -n "$matched_current" ]; then
+    printf "%s" "$matched_current"
+  elif [ "$matched_count" -eq 1 ]; then
+    printf "%s" "$matched_path"
+  elif [ "$matched_count" -gt 1 ]; then
+    log_warn "Multiple worktrees use branch '$branch_candidate'; sparse-checkout source is ambiguous"
     return 2
   fi
   return 0
@@ -770,7 +755,9 @@ _resolve_sparse_source() {
 _git_version_at_least() {
   local required_major="$1" required_minor="$2"
   local version major minor
-  version=$(git --version 2>/dev/null | awk '{print $3}')
+  version=$(git --version 2>/dev/null) || return 1
+  version="${version#git version }"
+  version="${version%% *}"
   major="${version%%.*}"
   minor="${version#*.}"
   minor="${minor%%.*}"

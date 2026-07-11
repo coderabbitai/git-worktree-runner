@@ -53,14 +53,43 @@ make_sparse_worktree() {
 
 @test "_worktree_path_for_ref finds the worktree holding a branch" {
   make_sparse_worktree "$TEST_WORKTREES_DIR/base" base apps/web packages
+  git -C "$TEST_REPO" tag base
+
   result=$(_worktree_path_for_ref base)
-  [ "$result" = "$TEST_WORKTREES_DIR/base" ]
+  [ -z "$result" ]
+
+  for ref in heads/base refs/heads/base; do
+    result=$(_worktree_path_for_ref "$ref")
+    [ "$result" = "$TEST_WORKTREES_DIR/base" ]
+  done
 }
 
 @test "_worktree_path_for_ref matches remote-prefixed refs by short name" {
   make_sparse_worktree "$TEST_WORKTREES_DIR/base" base apps/web
   result=$(_worktree_path_for_ref origin/base)
   [ "$result" = "$TEST_WORKTREES_DIR/base" ]
+
+  git -C "$TEST_REPO" update-ref refs/remotes/origin/base HEAD
+  for ref in remotes/origin/base refs/remotes/origin/base; do
+    result=$(_worktree_path_for_ref "$ref")
+    [ "$result" = "$TEST_WORKTREES_DIR/base" ]
+  done
+
+  make_sparse_worktree "$TEST_WORKTREES_DIR/literal-remote" remotes/origin/base docs
+  result=$(_worktree_path_for_ref remotes/origin/base)
+  [ -z "$result" ]
+  result=$(_worktree_path_for_ref refs/remotes/origin/base)
+  [ "$result" = "$TEST_WORKTREES_DIR/base" ]
+}
+
+@test "_worktree_path_for_ref follows Git namespace shorthand resolution" {
+  make_sparse_worktree "$TEST_WORKTREES_DIR/heads-literal" heads/only apps/web
+  make_sparse_worktree "$TEST_WORKTREES_DIR/tags-literal" tags/only docs
+
+  result=$(_worktree_path_for_ref heads/only)
+  [ "$result" = "$TEST_WORKTREES_DIR/heads-literal" ]
+  result=$(_worktree_path_for_ref tags/only)
+  [ "$result" = "$TEST_WORKTREES_DIR/tags-literal" ]
 }
 
 @test "_worktree_path_for_ref preserves slash branch path after remote name" {
@@ -161,6 +190,43 @@ make_sparse_worktree() {
   [ -d "$wt/packages" ]
   [ ! -d "$wt/apps/api" ]
   [ ! -d "$wt/docs" ]
+}
+
+@test "cmd_create uses a shorthand base ref's sparse worktree" {
+  source_gtr_commands
+  git -C "$TEST_REPO" sparse-checkout init --cone >/dev/null
+  git -C "$TEST_REPO" sparse-checkout set apps/api >/dev/null
+  make_sparse_worktree "$TEST_WORKTREES_DIR/base source" base docs
+  git -C "$TEST_WORKTREES_DIR/base source" commit --allow-empty -m "advance base" --quiet
+
+  run cmd_create feat-heads --from heads/base --yes --no-fetch --no-hooks --no-copy
+  [ "$status" -eq 0 ]
+
+  wt="$TEST_WORKTREES_DIR/feat-heads"
+  [ "$(git -C "$wt" rev-parse HEAD)" = "$(git -C "$TEST_WORKTREES_DIR/base source" rev-parse HEAD)" ]
+  [ "$(git -C "$wt" sparse-checkout list)" = "docs" ]
+  [ -d "$wt/docs" ]
+  [ ! -d "$wt/apps/api" ]
+  [[ "$output" == *"Inherited sparse-checkout from $TEST_WORKTREES_DIR/base source"* ]]
+}
+
+@test "cmd_create keeps tag start points separate from same-named branch settings" {
+  source_gtr_commands
+  git -C "$TEST_REPO" sparse-checkout init --cone >/dev/null
+  git -C "$TEST_REPO" sparse-checkout set apps/api >/dev/null
+  make_sparse_worktree "$TEST_WORKTREES_DIR/base" base docs
+  git -C "$TEST_WORKTREES_DIR/base" commit --allow-empty -m "advance base" --quiet
+  git -C "$TEST_REPO" tag base HEAD
+
+  run cmd_create feat-tag --from base --yes --no-fetch --no-hooks --no-copy
+  [ "$status" -eq 0 ]
+
+  wt="$TEST_WORKTREES_DIR/feat-tag"
+  [ "$(git -C "$wt" rev-parse HEAD)" = "$(git -C "$TEST_REPO" rev-parse 'refs/tags/base^{commit}')" ]
+  [ "$(git -C "$wt" sparse-checkout list)" = "apps/api" ]
+  [ -d "$wt/apps/api" ]
+  [ ! -d "$wt/docs" ]
+  [[ "$output" == *"Inherited sparse-checkout from $TEST_REPO"* ]]
 }
 
 @test "cmd_create inherits a dash-prefixed cone directory" {
@@ -372,6 +438,32 @@ make_sparse_worktree() {
   [ -d "$wt/apps/api" ]
   [ -d "$wt/docs" ]
   [ "$(git -C "$wt" config --bool core.sparseCheckout 2>/dev/null || echo false)" != "true" ]
+}
+
+@test "cmd_create skips sparse config lookup when Git cannot inherit" {
+  source_gtr_commands
+  make_sparse_worktree "$TEST_WORKTREES_DIR/base" base apps/web
+  _git_supports_sparse_inheritance() { return 1; }
+  cfg_bool() {
+    printf "unexpected cfg_bool call\n" >&2
+    return 1
+  }
+
+  run cmd_create feat-old-default --from base --yes --no-fetch --no-hooks --no-copy
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"unexpected cfg_bool call"* ]]
+  [ -d "$TEST_WORKTREES_DIR/feat-old-default/apps/api" ]
+}
+
+@test "_git_version_at_least parses vendor-suffixed versions" {
+  git() {
+    [ "$1" = "--version" ] || return 1
+    printf "git version 2.36.6 (Vendor Git-1)\n"
+  }
+
+  _git_version_at_least 2 36
+  run _git_version_at_least 2 37
+  [ "$status" -eq 1 ]
 }
 
 @test "cmd_create with non-sparse base produces a full checkout" {
