@@ -195,7 +195,8 @@ cfg_get_all() {
 }
 
 # Read one config source with Git's native boolean parser.
-# Returns 0 with true/false output, 1 when absent, 2 when present but invalid.
+# Returns 0 with true/false output, 1 when absent, 2 when present but invalid,
+# and 3 when the installed Git does not recognize a requested config option.
 _cfg_read_bool() {
   local key="$1" value status
   shift
@@ -206,6 +207,7 @@ _cfg_read_bool() {
     status=$?
   fi
   [ "$status" -eq 1 ] && return 1
+  [ "$status" -eq 129 ] && return 3
   return 2
 }
 
@@ -238,6 +240,7 @@ cfg_bool() {
       return
     else
       status=$?
+      [ "$source" = "worktree" ] && [ "$status" -eq 3 ] && continue
       [ "$status" -eq 2 ] && return 1
     fi
   done
