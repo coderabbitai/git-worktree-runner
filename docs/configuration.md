@@ -268,7 +268,9 @@ git gtr config add gtr.copy.includeDirs "packages/*/generated"
 
 Directory include patterns are relative to the repository root. Literal paths
 are checked directly, `*` and `?` match within the pattern's explicit depth,
-and `**` enables recursive matching when a full-tree search is intentional.
+and `**` enables recursive matching when a full-tree search is intentional. For
+backward compatibility, a bare basename that has no root-level match falls back
+to a recursive search. Prefer an explicit nested path to avoid that scan.
 
 ```bash
 # Exclude specific nested directories (supports glob patterns)

@@ -346,7 +346,7 @@ teardown() {
 @test "literal directory patterns do not invoke find" {
   _test_tmpdir=$(mktemp -d)
   local src="$_test_tmpdir/src" find_log="$_test_tmpdir/find.log"
-  mkdir -p "$src/build/generated"
+  mkdir -p "$src/build/generated" "$src/node_modules"
 
   find() {
     printf 'called\n' >> "$find_log"
@@ -354,10 +354,61 @@ teardown() {
   }
 
   local resolved
-  resolved=$(_resolve_directory_patterns "$src" $'build/generated\nmissing')
+  resolved=$(_resolve_directory_patterns "$src" $'build/generated\nnode_modules\nbuild/missing')
 
-  [ "$resolved" = "./build/generated" ]
+  [ "$resolved" = $'./build/generated\n./node_modules' ]
   [ ! -e "$find_log" ]
+}
+
+@test "missing basename retains recursive matching" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src"
+  mkdir -p "$src/packages/a/vendor"
+
+  local resolved
+  resolved=$(_resolve_directory_patterns "$src" "vendor")
+
+  [ "$resolved" = "./packages/a/vendor" ]
+}
+
+@test "copy_directories copies nested basename after root miss" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/packages/a/vendor" "$dst"
+  echo "nested" > "$src/packages/a/vendor/marker"
+
+  copy_directories "$src" "$dst" "vendor" ""
+
+  [ -f "$dst/packages/a/vendor/marker" ]
+}
+
+@test "missing basename patterns share one recursive scan" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" find_log="$_test_tmpdir/find.log"
+  mkdir -p "$src/packages/a/vendor" "$src/packages/b/cache"
+
+  find() {
+    printf 'called\n' >> "$find_log"
+    command find "$@"
+  }
+
+  local resolved
+  resolved=$(_resolve_directory_patterns "$src" $'vendor\ncache')
+
+  [ "$(wc -l < "$find_log" | tr -d ' ')" -eq 1 ]
+  [ "$(printf '%s\n' "$resolved" | grep -c '^./packages/a/vendor$')" -eq 1 ]
+  [ "$(printf '%s\n' "$resolved" | grep -c '^./packages/b/cache$')" -eq 1 ]
+}
+
+@test "missing basename glob retains recursive matching" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src"
+  mkdir -p "$src/packages/a/vendor-cache"
+
+  local resolved
+  resolved=$(_resolve_directory_patterns "$src" "vendor-*")
+
+  [ "$resolved" = "./packages/a/vendor-cache" ]
 }
 
 @test "single-star directory patterns are bounded to their explicit depth" {

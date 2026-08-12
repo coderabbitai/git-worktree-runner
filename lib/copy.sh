@@ -450,8 +450,9 @@ _directory_pattern_depth() {
 }
 
 # Resolve directory patterns once relative to a source root.
-# Literal paths use a direct filesystem check. Single-star glob patterns are
-# bounded to their explicit component depth; only ** patterns recurse freely.
+# Literal paths use a direct filesystem check. Missing bare basenames retain
+# the legacy recursive fallback, batched into one scan. Single-star path globs
+# are bounded to their explicit component depth; only ** patterns recurse.
 # Usage: _resolve_directory_patterns <src_root> <dir_patterns>
 _resolve_directory_patterns() {
   local src_root="$1"
@@ -461,6 +462,9 @@ _resolve_directory_patterns() {
   cd "$src_root" || return 1
 
   local pattern
+  local bounded_max_depth=0
+  local -a bounded_expr=()
+  local -a recursive_expr=()
   while IFS= read -r pattern; do
     [ -z "$pattern" ] && continue
 
@@ -474,18 +478,36 @@ _resolve_directory_patterns() {
       *[\*\?\[]*)
         case "$pattern" in
           *'**'*)
-            find_results=$(find . -type d -path "./$pattern" 2>/dev/null || true)
+            [ "${#recursive_expr[@]}" -gt 0 ] && recursive_expr+=("-o")
+            recursive_expr+=("-path" "./$pattern")
             ;;
-          *)
+          */*)
             local max_depth
             max_depth=$(_directory_pattern_depth "$pattern")
-            find_results=$(find . -maxdepth "$max_depth" -type d -path "./$pattern" 2>/dev/null || true)
+            [ "$max_depth" -gt "$bounded_max_depth" ] && bounded_max_depth="$max_depth"
+            [ "${#bounded_expr[@]}" -gt 0 ] && bounded_expr+=("-o")
+            bounded_expr+=("-path" "./$pattern")
+            ;;
+          *)
+            find_results=$(find . -maxdepth 1 -type d -name "$pattern" 2>/dev/null || true)
+            if [ -z "$find_results" ]; then
+              [ "${#recursive_expr[@]}" -gt 0 ] && recursive_expr+=("-o")
+              recursive_expr+=("-name" "$pattern")
+            fi
             ;;
         esac
         ;;
       *)
         if [ -d "$pattern" ]; then
           find_results="./$pattern"
+        else
+          case "$pattern" in
+            */*) ;;
+            *)
+              [ "${#recursive_expr[@]}" -gt 0 ] && recursive_expr+=("-o")
+              recursive_expr+=("-name" "$pattern")
+              ;;
+          esac
         fi
         ;;
     esac
@@ -494,6 +516,14 @@ _resolve_directory_patterns() {
   done <<EOF
 $dir_patterns
 EOF
+
+  if [ "${#bounded_expr[@]}" -gt 0 ]; then
+    find . -maxdepth "$bounded_max_depth" -type d \( "${bounded_expr[@]}" \) 2>/dev/null || true
+  fi
+
+  if [ "${#recursive_expr[@]}" -gt 0 ]; then
+    find . -type d \( "${recursive_expr[@]}" \) 2>/dev/null || true
+  fi
 
   cd "$old_pwd" || return 1
 }
