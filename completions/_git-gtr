@@ -74,6 +74,7 @@ _git-gtr() {
       '--name[Custom folder name suffix]:name:' \
       '--folder[Custom folder name (replaces default)]:folder:' \
       '--yes[Non-interactive mode]' \
+      '--porcelain[Machine-readable output]' \
       '--editor[Open in editor after creation]' \
       '-e[Open in editor after creation]' \
       '--ai[Start AI tool after creation]' \

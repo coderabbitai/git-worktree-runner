@@ -23,6 +23,9 @@ Run after core or adapter changes; all manual (no automated tests).
 # New branch creation
 ./bin/gtr new brand-new-feature      # creates branch + worktree
 
+# Machine-readable creation (stdout: path, branch, hook_status records)
+./bin/gtr new agent-feature --from HEAD --no-fetch --porcelain
+
 # Force multiple worktrees same branch
 ./bin/gtr new test-feature --force --name backend   # test-feature-backend
 
@@ -87,6 +90,7 @@ echo "DEBUG worktree_path=$worktree_path" >&2  # variable inspection
 - All commands exit 0 (except intentional failures) and produce expected side-effects.
 - No unquoted path errors; spaces handled.
 - Hooks run only once per creation/removal.
+- `new --porcelain` emits only stable records on stdout; progress and hook output use stderr.
 - `list --porcelain` stable for scripting.
 
 ## When Adding Features

@@ -17,6 +17,7 @@
 - [Features](#features)
 - [Requirements](#requirements)
 - [Commands](#commands)
+- [AI Agent Usage](#ai-agent-usage)
 - [Configuration](#configuration)
 - [Shell Completions](#shell-completions-optional)
 - [Platform Support](#platform-support)
@@ -169,6 +170,7 @@ git gtr new feature/auth                                                        
 git gtr new feature/implement-user-authentication-with-oauth2-integration --folder auth  # Custom folder name
 git gtr new feature-auth --name backend --force                                          # Same branch, custom name
 git gtr new my-feature --name descriptive-variant                                        # Optional: custom name without --force
+git gtr new agent-task --porcelain                                                       # Stable output for automation
 ```
 
 **Options:**
@@ -186,6 +188,12 @@ git gtr new my-feature --name descriptive-variant                               
 - `--editor`, `-e`: Open in editor after creation
 - `--ai`, `-a`: Start AI tool after creation
 - `--yes`: Non-interactive mode
+- `--porcelain`: Emit stable `key<TAB>value` records (implies `--yes`; incompatible with `--editor` and `--ai`)
+
+`--porcelain` writes exactly three records to stdout: `path`, `branch`, and
+`hook_status`. Progress messages and hook output are written to stderr. See
+[AI agent usage](docs/agent-usage.md) for the format and recommended safety
+boundaries.
 
 ### `git gtr pr <number|url|branch> [options]`
 
@@ -495,6 +503,15 @@ git gtr completion fish > ~/.config/fish/completions/git-gtr.fish
 Requires Git 2.17+ and Bash 3.2+.
 
 > For troubleshooting, platform-specific notes, and architecture details, see [docs/troubleshooting.md](docs/troubleshooting.md)
+
+## AI Agent Usage
+
+Shell-capable coding agents can use `git gtr` directly; a separate MCP server is
+not required. Use `git gtr new <branch> --porcelain` to create a worktree and
+reliably capture its path, then run the agent inside that directory.
+
+See [docs/agent-usage.md](docs/agent-usage.md) for a copy-paste `AGENTS.md`
+policy, output contract, and safe lifecycle examples.
 
 ## Advanced Usage
 

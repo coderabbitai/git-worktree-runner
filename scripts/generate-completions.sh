@@ -193,7 +193,7 @@ MIDDLE1
     new)
       # Complete flags
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--from --from-current --remote --track --no-copy --no-fetch --no-hooks --sparse --no-sparse --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
+        COMPREPLY=($(compgen -W "--from --from-current --remote --track --no-copy --no-fetch --no-hooks --sparse --no-sparse --force --name --folder --yes --porcelain --editor -e --ai -a" -- "$cur"))
       elif [ "$prev" = "--track" ]; then
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
       fi
@@ -338,6 +338,7 @@ _git-gtr() {
       '--name[Custom folder name suffix]:name:' \
       '--folder[Custom folder name (replaces default)]:folder:' \
       '--yes[Non-interactive mode]' \
+      '--porcelain[Machine-readable output]' \
       '--editor[Open in editor after creation]' \
       '-e[Open in editor after creation]' \
       '--ai[Start AI tool after creation]' \
@@ -582,6 +583,7 @@ complete -c git -n '__fish_git_gtr_using_command new' -l force -d 'Allow same br
 complete -c git -n '__fish_git_gtr_using_command new' -l name -d 'Custom folder name suffix' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l folder -d 'Custom folder name (replaces default)' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l yes -d 'Non-interactive mode'
+complete -c git -n '__fish_git_gtr_using_command new' -l porcelain -d 'Machine-readable output'
 complete -c git -n '__fish_git_gtr_using_command new' -s e -l editor -d 'Open in editor after creation'
 complete -c git -n '__fish_git_gtr_using_command new' -s a -l ai -d 'Start AI tool after creation'
 

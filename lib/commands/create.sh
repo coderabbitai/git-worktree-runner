@@ -84,8 +84,31 @@ _create_resolve_from_ref() {
 
   printf "%s" "$from_ref"
 }
+
+# Print a stable, escaped record stream for scripting and agent integrations.
+# Format: key<tab>value, one record per line.
+_create_print_porcelain() {
+  local worktree_path="$1" branch_name="$2" hook_status="$3"
+  printf "path\t%s\n" "$(_tsv_escape_field "$worktree_path")"
+  printf "branch\t%s\n" "$(_tsv_escape_field "$branch_name")"
+  printf "hook_status\t%s\n" "$hook_status"
+}
+
+# Detect machine mode before parsing so all incidental stdout, including hook
+# output, can be redirected away from the stable record stream.
+_create_wants_porcelain() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --porcelain) return 0 ;;
+      --) return 1 ;;
+    esac
+  done
+  return 1
+}
+
 # shellcheck disable=SC2154  # _arg_* _pa_* set by parse_args, _ctx_* set by resolve_*
-cmd_create() {
+_cmd_create_impl() {
   local _spec
   _spec="--from: value
 --from-current
@@ -100,6 +123,7 @@ cmd_create() {
 --force
 --name: value
 --folder: value
+--porcelain
 --editor|-e
 --ai|-a"
   parse_args "$_spec" "$@"
@@ -118,8 +142,17 @@ cmd_create() {
   local force="${_arg_force:-0}"
   local custom_name="${_arg_name:-}"
   local folder_override="${_arg_folder:-}"
+  local porcelain="${_arg_porcelain:-0}"
   local open_editor="${_arg_editor:-0}"
   local start_ai="${_arg_ai:-0}"
+
+  if [ "$porcelain" -eq 1 ]; then
+    yes_mode=1
+    if [ "$open_editor" -eq 1 ] || [ "$start_ai" -eq 1 ]; then
+      log_error "--porcelain cannot be combined with --editor or --ai"
+      exit 1
+    fi
+  fi
 
   # Validate flag combinations
   if [ -n "$folder_override" ] && [ -n "$custom_name" ]; then
@@ -232,20 +265,37 @@ cmd_create() {
   fi
 
   # Run post-create hooks (unless --no-hooks)
+  local hook_status="disabled"
   if [ "$skip_hooks" -eq 0 ]; then
-    run_hooks_in postCreate "$worktree_path" \
+    hook_status=$(_hooks_phase_status postCreate)
+    if ! run_hooks_in postCreate "$worktree_path" \
       REPO_ROOT="$repo_root" \
       WORKTREE_PATH="$worktree_path" \
-      BRANCH="$branch_name"
+      BRANCH="$branch_name"; then
+      exit 1
+    fi
   fi
 
   echo ""
   log_info "Worktree created: $worktree_path"
+
+  if [ "$porcelain" -eq 1 ]; then
+    _create_print_porcelain "$worktree_path" "$branch_name" "$hook_status" >&3
+    return 0
+  fi
 
   # Auto-launch editor/AI or show next steps
   [ "$open_editor" -eq 1 ] && { _auto_launch_editor "$worktree_path" || true; }
   [ "$start_ai" -eq 1 ] && { _auto_launch_ai "$worktree_path" "$repo_root" "$branch_name" || true; }
   if [ "$open_editor" -eq 0 ] && [ "$start_ai" -eq 0 ]; then
     _post_create_next_steps "$branch_name" "$folder_name" "$folder_override" "$repo_root" "$base_dir" "$prefix"
+  fi
+}
+
+cmd_create() {
+  if _create_wants_porcelain "$@"; then
+    _cmd_create_impl "$@" 3>&1 1>&2
+  else
+    _cmd_create_impl "$@"
   fi
 }

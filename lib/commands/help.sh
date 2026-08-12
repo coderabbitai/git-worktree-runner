@@ -30,6 +30,8 @@ Options:
   --name <suffix>     Custom folder name suffix (appended after branch name)
   --folder <name>     Custom folder name (replaces default entirely)
   --yes               Non-interactive mode (skip prompts)
+  --porcelain         Machine-readable key<TAB>value output (implies --yes)
+                      Cannot be combined with --editor or --ai
   -e, --editor        Open in editor after creation
   -a, --ai            Start AI tool after creation
 
@@ -37,6 +39,7 @@ Examples:
   git gtr new feature/user-auth                 # Folder: feature-user-auth
   git gtr new hotfix --from v2.0.0              # Branch from tag
   git gtr new my-feature --from-current         # Branch from current HEAD
+  git gtr new agent-task --porcelain             # Stable output for automation
   git gtr new feature -e -a                     # Create, open editor + AI
   git gtr new feature --force --name backend    # Second worktree for same branch
   git gtr new feature --folder my-dir           # Custom folder name
@@ -561,6 +564,7 @@ CORE COMMANDS (daily workflow):
          --name <suffix>: custom folder name suffix (e.g., backend, frontend)
          --folder <name>: custom folder name (replaces default, useful for long branches)
          --yes: non-interactive mode
+         --porcelain: machine-readable key<TAB>value output (implies --yes)
          -e, --editor: open in editor after creation
          -a, --ai: start AI tool after creation
 

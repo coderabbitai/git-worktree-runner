@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+### Added
+
+- `git gtr new --porcelain` emits stable worktree path, branch, and hook-status records for shell automation and coding agents, with incidental output isolated on stderr.
+- Agent integration guidance documents the machine-readable contract and recommended trust and cleanup boundaries.
+
 ## [2.9.0] - 2026-08-12
 
 ### Added

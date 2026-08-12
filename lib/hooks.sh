@@ -212,6 +212,40 @@ _hooks_get_trusted() {
   } | awk '!seen[$0]++'
 }
 
+# Report the outcome a successful hook phase will have without executing it.
+# Usage: _hooks_phase_status <phase>
+# Prints one of: none, ran, skipped-untrusted, partial
+_hooks_phase_status() {
+  local phase="$1"
+  local git_hooks="" config_file="" file_hooks=""
+  local has_runnable=0 has_untrusted=0
+
+  git_hooks=$(git config --get-all "gtr.hook.$phase" 2>/dev/null) || true
+  [ -n "$git_hooks" ] && has_runnable=1
+
+  config_file=$(_gtrconfig_path) || true
+  if [ -n "$config_file" ] && [ -f "$config_file" ]; then
+    file_hooks=$(git config -f "$config_file" --get-all "hooks.$phase" 2>/dev/null) || true
+    if [ -n "$file_hooks" ]; then
+      if _hooks_are_trusted "$config_file"; then
+        has_runnable=1
+      else
+        has_untrusted=1
+      fi
+    fi
+  fi
+
+  if [ "$has_runnable" -eq 1 ] && [ "$has_untrusted" -eq 1 ]; then
+    printf "partial"
+  elif [ "$has_runnable" -eq 1 ]; then
+    printf "ran"
+  elif [ "$has_untrusted" -eq 1 ]; then
+    printf "skipped-untrusted"
+  else
+    printf "none"
+  fi
+}
+
 # Run hooks for a specific phase
 # Usage: run_hooks phase [env_vars...]
 # Example: run_hooks postCreate REPO_ROOT="$root" WORKTREE_PATH="$path"

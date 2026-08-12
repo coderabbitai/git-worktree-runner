@@ -19,6 +19,32 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
+@test "_hooks_phase_status reports none without configured hooks" {
+  [ "$(_hooks_phase_status postCreate)" = "none" ]
+}
+
+@test "_hooks_phase_status reports ran for trusted git config hooks" {
+  git config --add gtr.hook.postCreate "echo local"
+  [ "$(_hooks_phase_status postCreate)" = "ran" ]
+}
+
+@test "_hooks_phase_status reports skipped-untrusted for untrusted file hooks" {
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCreate "echo shared"
+  [ "$(_hooks_phase_status postCreate)" = "skipped-untrusted" ]
+}
+
+@test "_hooks_phase_status reports ran for trusted file hooks" {
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCreate "echo shared"
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  [ "$(_hooks_phase_status postCreate)" = "ran" ]
+}
+
+@test "_hooks_phase_status reports partial for runnable and untrusted hooks" {
+  git config --add gtr.hook.postCreate "echo local"
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCreate "echo shared"
+  [ "$(_hooks_phase_status postCreate)" = "partial" ]
+}
+
 @test "_hooks_file_hash matches the init wrapper trust hash" {
   cat > "$TEST_REPO/.gtrconfig" <<'EOF'
 [hooks]

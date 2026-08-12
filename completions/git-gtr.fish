@@ -73,6 +73,7 @@ complete -c git -n '__fish_git_gtr_using_command new' -l force -d 'Allow same br
 complete -c git -n '__fish_git_gtr_using_command new' -l name -d 'Custom folder name suffix' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l folder -d 'Custom folder name (replaces default)' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l yes -d 'Non-interactive mode'
+complete -c git -n '__fish_git_gtr_using_command new' -l porcelain -d 'Machine-readable output'
 complete -c git -n '__fish_git_gtr_using_command new' -s e -l editor -d 'Open in editor after creation'
 complete -c git -n '__fish_git_gtr_using_command new' -s a -l ai -d 'Start AI tool after creation'
 
