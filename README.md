@@ -405,6 +405,7 @@ git gtr config set gtr.ui.color never
     include = **/.env.example
     exclude = **/.env
     includeDirs = node_modules
+    includeDirs = packages/*/generated
     excludeDirs = node_modules/.cache
 
 [hooks]

@@ -59,6 +59,13 @@ cmd_copy() {
     exit 1
   fi
 
+  # Directory discovery depends only on the source. Resolve it once so --all
+  # does not repeat the same filesystem scan for every target worktree.
+  local resolved_dirs=""
+  if [ -n "$dir_includes" ]; then
+    resolved_dirs=$(_resolve_directory_patterns "$src_path" "$dir_includes") || exit 1
+  fi
+
   # Build target list for --all mode
   if [ "$all_mode" -eq 1 ]; then
     local all_branches
@@ -88,11 +95,11 @@ cmd_copy() {
     if [ "$dry_run" -eq 1 ]; then
       log_step "[dry-run] Would copy to: $dst_branch"
       [ -n "$patterns" ] && copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true" "true"
-      [ -n "$dir_includes" ] && copy_directories "$src_path" "$dst_path" "$dir_includes" "$dir_excludes" "true"
+      [ -n "$resolved_dirs" ] && _copy_resolved_directories "$src_path" "$dst_path" "$resolved_dirs" "$dir_excludes" "true"
     else
       log_step "Copying to: $dst_branch"
       [ -n "$patterns" ] && copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true"
-      [ -n "$dir_includes" ] && copy_directories "$src_path" "$dst_path" "$dir_includes" "$dir_excludes"
+      [ -n "$resolved_dirs" ] && _copy_resolved_directories "$src_path" "$dst_path" "$resolved_dirs" "$dir_excludes"
     fi
     copied_any=1
   done

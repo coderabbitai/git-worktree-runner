@@ -699,6 +699,7 @@ CONFIGURATION OPTIONS:
   gtr.copy.exclude         Files to exclude (multi-valued)
   gtr.copy.includeDirs     Directories to copy (multi-valued)
                            Example: node_modules, .venv, vendor
+                           Supports repo-relative globs; ** matches recursively
                            WARNING: May include sensitive files!
                            Use gtr.copy.excludeDirs to exclude them.
   gtr.copy.excludeDirs     Directories to exclude (multi-valued)

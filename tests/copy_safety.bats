@@ -342,3 +342,42 @@ teardown() {
   [ ! -e "$dst/vendor/bundle/cache" ]
   ! grep -qx "vendor/bundle/cache" "$copy_log"
 }
+
+@test "literal directory patterns do not invoke find" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" find_log="$_test_tmpdir/find.log"
+  mkdir -p "$src/build/generated"
+
+  find() {
+    printf 'called\n' >> "$find_log"
+    return 1
+  }
+
+  local resolved
+  resolved=$(_resolve_directory_patterns "$src" $'build/generated\nmissing')
+
+  [ "$resolved" = "./build/generated" ]
+  [ ! -e "$find_log" ]
+}
+
+@test "single-star directory patterns are bounded to their explicit depth" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src"
+  mkdir -p "$src/one/cache" "$src/one/deep/cache"
+
+  local resolved
+  resolved=$(_resolve_directory_patterns "$src" "*/cache")
+
+  [ "$resolved" = "./one/cache" ]
+}
+
+@test "double-star directory patterns retain recursive matching" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src"
+  mkdir -p "$src/one/cache" "$src/one/deep/cache"
+
+  local resolved
+  resolved=$(_resolve_directory_patterns "$src" "**/cache")
+
+  [ "$resolved" = $'./one/cache\n./one/deep/cache' ]
+}
