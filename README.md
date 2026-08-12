@@ -190,10 +190,11 @@ git gtr new agent-task --porcelain                                              
 - `--yes`: Non-interactive mode
 - `--porcelain`: Emit stable `key<TAB>value` records (implies `--yes`; incompatible with `--editor` and `--ai`)
 
-`--porcelain` writes exactly three records to stdout: `path`, `branch`, and
-`hook_status`. Progress messages and hook output are written to stderr. See
-[AI agent usage](docs/agent-usage.md) for the format and recommended safety
-boundaries.
+On success, `--porcelain` writes exactly three records to stdout: `path`,
+`branch`, and `hook_status`. Progress messages and hook output are written to
+stderr. If a post-create hook fails, the command exits non-zero and emits no
+success records. See [AI agent usage](docs/agent-usage.md) for the format and
+recommended safety boundaries.
 
 ### `git gtr pr <number|url|branch> [options]`
 
