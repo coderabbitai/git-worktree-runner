@@ -29,6 +29,11 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+@test "git gtr rm propagates a failed exit status" {
+  run env PATH="$PROJECT_ROOT/bin:$PATH" git gtr rm nonexistent
+  [ "$status" -eq 1 ]
+}
+
 @test "cmd_remove cannot remove main repo" {
   run cmd_remove 1
   [ "$status" -eq 1 ]
