@@ -379,5 +379,7 @@ teardown() {
   local resolved
   resolved=$(_resolve_directory_patterns "$src" "**/cache")
 
-  [ "$resolved" = $'./one/cache\n./one/deep/cache' ]
+  [ "$(printf '%s\n' "$resolved" | grep -c '^./one/cache$')" -eq 1 ]
+  [ "$(printf '%s\n' "$resolved" | grep -c '^./one/deep/cache$')" -eq 1 ]
+  [ "$(printf '%s\n' "$resolved" | wc -l | tr -d ' ')" -eq 2 ]
 }
