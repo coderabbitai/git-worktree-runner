@@ -5,6 +5,7 @@
 # shellcheck disable=SC2154  # _arg_* _pa_* set by parse_args, _ctx_* set by resolve_*
 
 declare _ctx_pr_number _ctx_pr_head_ref _ctx_pr_head_owner _ctx_pr_head_repo _ctx_pr_url
+declare _ctx_pr_maintainer_can_modify _ctx_pr_is_cross_repository
 
 _pr_resolve() {
   local selector="$1" repo_arg="$2"
@@ -16,8 +17,8 @@ _pr_resolve() {
   fi
 
   local output gh_stderr err_file
-  local json_fields="number,headRefName,headRepositoryOwner,headRepository,url"
-  local template='{{.number}}{{"\t"}}{{.headRefName}}{{"\t"}}{{.headRepositoryOwner.login}}{{"\t"}}{{.headRepository.name}}{{"\t"}}{{.url}}'
+  local json_fields="number,headRefName,headRepositoryOwner,headRepository,url,maintainerCanModify,isCrossRepository"
+  local template='{{.number}}{{"\t"}}{{.headRefName}}{{"\t"}}{{.headRepositoryOwner.login}}{{"\t"}}{{.headRepository.name}}{{"\t"}}{{.url}}{{"\t"}}{{.maintainerCanModify}}{{"\t"}}{{.isCrossRepository}}'
   err_file=$(mktemp "${TMPDIR:-/tmp}/gtr-gh.XXXXXX") || {
     log_error "Could not create temporary file for gh output"
     return 1
@@ -44,7 +45,7 @@ _pr_resolve() {
 
   local old_ifs="$IFS"
   IFS="$(printf '\t')"
-  read -r _ctx_pr_number _ctx_pr_head_ref _ctx_pr_head_owner _ctx_pr_head_repo _ctx_pr_url <<EOF
+  read -r _ctx_pr_number _ctx_pr_head_ref _ctx_pr_head_owner _ctx_pr_head_repo _ctx_pr_url _ctx_pr_maintainer_can_modify _ctx_pr_is_cross_repository <<EOF
 $output
 EOF
   IFS="$old_ifs"
@@ -53,6 +54,10 @@ EOF
     log_error "Could not read pull request number from gh output"
     return 1
   fi
+}
+
+_pr_gh_supports_worktree() {
+  gh pr checkout --help 2>&1 | grep -q -- '--worktree'
 }
 
 _pr_url_with_git_suffix() {
@@ -120,7 +125,7 @@ _pr_remote_for_url() {
   local remote_name remote_url remote_norm
   while IFS= read -r remote_name; do
     [ -z "$remote_name" ] && continue
-    remote_url=$(git remote get-url "$remote_name" 2>/dev/null) || continue
+    remote_url=$(git config --get "remote.$remote_name.url" 2>/dev/null) || continue
     remote_norm=$(_pr_normalize_repo_url "$remote_url")
     if [ "$remote_norm" = "$wanted" ]; then
       printf "%s" "$remote_name"
@@ -131,6 +136,41 @@ $(git remote 2>/dev/null)
 EOF
 
   return 1
+}
+
+_pr_repo_url_for_gh_protocol() {
+  local repo_url="$1"
+
+  case "$repo_url" in
+    http://*|https://*) ;;
+    *)
+      printf "%s" "$repo_url"
+      return 0
+      ;;
+  esac
+
+  local host path protocol
+  host="${repo_url#*://}"
+  host="${host%%/*}"
+  path="${repo_url#*://}"
+  path="${path#*/}"
+  protocol=$(gh config get git_protocol --host "$host" 2>/dev/null) || protocol=""
+
+  if [ "$protocol" = "ssh" ]; then
+    printf "git@%s:%s" "$host" "$path"
+  else
+    printf "%s" "$repo_url"
+  fi
+}
+
+_pr_preferred_repo_source() {
+  local repo_url="$1" remote_name
+  remote_name=$(_pr_remote_for_url "$repo_url") || remote_name=""
+  if [ -n "$remote_name" ]; then
+    printf "%s" "$remote_name"
+  else
+    _pr_repo_url_for_gh_protocol "$repo_url"
+  fi
 }
 
 _pr_configure_base_remote_for_gh() {
@@ -148,7 +188,9 @@ _pr_configure_base_remote_for_gh() {
       remote_name="$candidate-$suffix"
       suffix=$((suffix + 1))
     done
-    git remote add "$remote_name" "$base_repo_url" || return 1
+    local preferred_url
+    preferred_url=$(_pr_repo_url_for_gh_protocol "$base_repo_url") || preferred_url="$base_repo_url"
+    git remote add "$remote_name" "$preferred_url" || return 1
   fi
 
   git config "remote.$remote_name.gh-resolved" base
@@ -166,14 +208,16 @@ _pr_config_set() {
 }
 
 _pr_configure_branch_for_gh() {
-  local branch_name="$1" head_ref="$2" head_repo_url="$3" preserve_existing="${4:-0}"
+  local branch_name="$1" remote_source="$2" merge_ref="$3" push_source="$4" preserve_existing="${5:-0}"
 
-  [ -z "$head_ref" ] && return 0
-  [ -z "$head_repo_url" ] && return 0
+  [ -z "$remote_source" ] && return 0
+  [ -z "$merge_ref" ] && return 0
 
-  _pr_config_set "$branch_name" remote "$head_repo_url" "$preserve_existing" || return 1
-  _pr_config_set "$branch_name" pushRemote "$head_repo_url" "$preserve_existing" || return 1
-  _pr_config_set "$branch_name" merge "refs/heads/$head_ref" "$preserve_existing" || return 1
+  _pr_config_set "$branch_name" remote "$remote_source" "$preserve_existing" || return 1
+  if [ -n "$push_source" ]; then
+    _pr_config_set "$branch_name" pushRemote "$push_source" "$preserve_existing" || return 1
+  fi
+  _pr_config_set "$branch_name" merge "$merge_ref" "$preserve_existing" || return 1
 }
 
 _pr_branch_is_checked_out() {
@@ -250,12 +294,16 @@ cmd_pr() {
   _pr_resolve "$selector" "$repo_arg" || exit 1
   local pr_number="$_ctx_pr_number" pr_head_ref="$_ctx_pr_head_ref"
   local pr_head_owner="$_ctx_pr_head_owner" pr_head_repo="$_ctx_pr_head_repo" pr_url="$_ctx_pr_url"
+  local maintainer_can_modify="$_ctx_pr_maintainer_can_modify" is_cross_repository="$_ctx_pr_is_cross_repository"
   local head_repo_url base_repo_url fetch_source
   head_repo_url=$(_pr_head_repo_url "$pr_url" "$pr_head_owner" "$pr_head_repo") || head_repo_url=""
   base_repo_url=$(_pr_base_repo_url "$pr_url") || base_repo_url=""
-  fetch_source="$remote"
-  if [ -z "$remote_arg" ] && [ -n "$base_repo_url" ]; then
-    fetch_source="$base_repo_url"
+  if [ -n "$remote_arg" ]; then
+    fetch_source="$remote_arg"
+  elif [ -n "$base_repo_url" ]; then
+    fetch_source=$(_pr_preferred_repo_source "$base_repo_url") || fetch_source="$base_repo_url"
+  else
+    fetch_source="$remote"
   fi
   if [ -z "$branch_name" ]; then
     branch_name="$pr_head_ref"
@@ -273,45 +321,78 @@ cmd_pr() {
     exit 1
   fi
 
-  log_step "Fetching pull request #$pr_number..."
-  if ! git fetch "$fetch_source" "refs/pull/$pr_number/head"; then
-    log_error "Could not fetch pull request #$pr_number from $fetch_source"
-    exit 1
-  fi
-
-  local track_mode="none" branch_preexisted=0
-  if git show-ref --verify --quiet "refs/heads/$branch_name"; then
-    branch_preexisted=1
-    local branch_oid fetch_oid
-    branch_oid=$(git rev-parse --verify "refs/heads/$branch_name^{commit}" 2>/dev/null) || branch_oid=""
-    fetch_oid=$(git rev-parse --verify "FETCH_HEAD^{commit}" 2>/dev/null) || fetch_oid=""
-    if [ -z "$branch_oid" ] || [ "$branch_oid" != "$fetch_oid" ]; then
-      log_error "Local branch $branch_name already exists and differs from pull request #$pr_number"
-      log_info "Use --branch <name> to choose a different local branch name"
-      exit 1
-    fi
-    track_mode="local"
-    if _pr_branch_is_checked_out "$branch_name"; then
-      log_warn "Local branch $branch_name is already checked out; using it without resetting"
-    fi
-  fi
-
   log_step "Creating worktree: $folder_name"
   echo "Location: $base_dir/${prefix}${folder_name}"
   echo "Pull request: #$pr_number"
   [ -n "$pr_head_ref" ] && echo "Head branch: $pr_head_ref"
   echo "Local branch: $branch_name"
 
-  local worktree_path
-  if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "FETCH_HEAD" "$track_mode" "1" "$force" "$custom_name" "$folder_override" "$remote"); then
-    exit 1
+  local worktree_path native_checkout=0
+  if [ -z "$remote_arg" ] && [ "$force" -eq 0 ] && _pr_gh_supports_worktree; then
+    local gh_checkout_args=(pr checkout "$selector" --worktree "$expected_worktree_path" --branch "$branch_name")
+    [ -n "$repo_arg" ] && gh_checkout_args+=(--repo "$repo_arg")
+    mkdir -p "$base_dir"
+    if ! gh "${gh_checkout_args[@]}"; then
+      log_error "Could not create pull request worktree with gh"
+      exit 1
+    fi
+    worktree_path="$expected_worktree_path"
+    native_checkout=1
+  else
+    log_step "Fetching pull request #$pr_number..."
+    if ! git fetch "$fetch_source" "refs/pull/$pr_number/head"; then
+      log_error "Could not fetch pull request #$pr_number from $fetch_source"
+      exit 1
+    fi
+
+    local track_mode="none" branch_preexisted=0
+    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+      branch_preexisted=1
+      local branch_oid fetch_oid
+      branch_oid=$(git rev-parse --verify "refs/heads/$branch_name^{commit}" 2>/dev/null) || branch_oid=""
+      fetch_oid=$(git rev-parse --verify "FETCH_HEAD^{commit}" 2>/dev/null) || fetch_oid=""
+      if [ -z "$branch_oid" ] || [ "$branch_oid" != "$fetch_oid" ]; then
+        log_error "Local branch $branch_name already exists and differs from pull request #$pr_number"
+        log_info "Use --branch <name> to choose a different local branch name"
+        exit 1
+      fi
+      track_mode="local"
+      if _pr_branch_is_checked_out "$branch_name"; then
+        log_warn "Local branch $branch_name is already checked out; using it without resetting"
+      fi
+    fi
+
+    if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "FETCH_HEAD" "$track_mode" "1" "$force" "$custom_name" "$folder_override" "$remote"); then
+      exit 1
+    fi
   fi
 
-  if ! _pr_configure_base_remote_for_gh "$pr_number" "$base_repo_url"; then
-    log_warn "Could not configure base repository metadata for gh pr view"
-  fi
-  if ! _pr_configure_branch_for_gh "$branch_name" "$pr_head_ref" "$head_repo_url" "$branch_preexisted"; then
-    log_warn "Could not configure branch metadata for gh pr view"
+  if [ "$native_checkout" -eq 0 ]; then
+    if ! _pr_configure_base_remote_for_gh "$pr_number" "$base_repo_url"; then
+      log_warn "Could not configure base repository metadata for gh pr view"
+    fi
+
+    local branch_remote="$fetch_source" branch_merge_ref="refs/pull/$pr_number/head" branch_push_remote=""
+    local matching_head_remote=""
+    if [ -n "$head_repo_url" ]; then
+      matching_head_remote=$(_pr_remote_for_url "$head_repo_url") || matching_head_remote=""
+    fi
+    if [ -n "$matching_head_remote" ]; then
+      branch_remote="$matching_head_remote"
+      branch_push_remote="$matching_head_remote"
+      branch_merge_ref="refs/heads/$pr_head_ref"
+    elif [ "$is_cross_repository" != "true" ]; then
+      branch_push_remote="$fetch_source"
+      branch_merge_ref="refs/heads/$pr_head_ref"
+    elif [ "$maintainer_can_modify" = "true" ] && [ -n "$head_repo_url" ]; then
+      branch_remote=$(_pr_preferred_repo_source "$head_repo_url") || branch_remote="$head_repo_url"
+      branch_push_remote="$branch_remote"
+      branch_merge_ref="refs/heads/$pr_head_ref"
+    fi
+
+    if ! _pr_configure_branch_for_gh "$branch_name" "$branch_remote" "$branch_merge_ref" "$branch_push_remote" "$branch_preexisted"; then
+      log_warn "Could not configure branch metadata for gh pr view"
+    fi
   fi
 
   if [ "$skip_copy" -eq 0 ]; then

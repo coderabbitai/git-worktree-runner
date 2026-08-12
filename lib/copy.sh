@@ -430,29 +430,41 @@ EOF
   _apply_directory_excludes "$dst_root" "$dir_path" "$excludes"
 }
 
-# Copy directories matching patterns (typically git-ignored directories like node_modules)
-# Usage: copy_directories src_root dst_root dir_patterns excludes [dry_run]
-# dir_patterns: newline-separated directory names to copy (e.g., "node_modules", ".venv")
-# excludes: newline-separated directory patterns to exclude (supports globs like "node_modules/.cache")
-# WARNING: This copies entire directories including potentially sensitive files.
-#          Use gtr.copy.excludeDirs to exclude sensitive directories.
-copy_directories() {
+# Return the number of path components in a directory pattern.
+# Usage: _directory_pattern_depth <pattern>
+_directory_pattern_depth() {
+  local pattern="$1"
+  local depth=1
+
+  while :; do
+    case "$pattern" in
+      */*)
+        depth=$((depth + 1))
+        pattern="${pattern#*/}"
+        ;;
+      *) break ;;
+    esac
+  done
+
+  printf '%s\n' "$depth"
+}
+
+# Resolve directory patterns once relative to a source root.
+# Literal paths use a direct filesystem check. Missing bare basenames retain
+# the legacy recursive fallback, batched into one scan. Single-star path globs
+# are bounded to their explicit component depth; only ** patterns recurse.
+# Usage: _resolve_directory_patterns <src_root> <dir_patterns>
+_resolve_directory_patterns() {
   local src_root="$1"
-  local dst_root="$2"
-  local dir_patterns="$3"
-  local excludes="$4"
-  local dry_run="${5:-false}"
-
-  if [ -z "$dir_patterns" ]; then
-    return 0
-  fi
-
+  local dir_patterns="$2"
   local old_pwd
   old_pwd=$(pwd)
   cd "$src_root" || return 1
 
-  local copied_count=0
-
+  local pattern
+  local bounded_max_depth=0
+  local -a bounded_expr=()
+  local -a recursive_expr=()
   while IFS= read -r pattern; do
     [ -z "$pattern" ] && continue
 
@@ -461,59 +473,116 @@ copy_directories() {
       continue
     fi
 
-    # Find directories matching the pattern
-    # Use -path for patterns with slashes (e.g., vendor/bundle), -name for basenames
-    # Note: case inside $() inside heredocs breaks Bash 3.2, so compute first
-    # Use -maxdepth 1 for simple basenames to avoid scanning entire repo (e.g., node_modules)
-    # Falls back to recursive search if shallow search finds nothing
-    local find_results
+    local find_results=""
     case "$pattern" in
-      */*) find_results=$(find . -type d -path "./$pattern" 2>/dev/null || true) ;;
-      *)   find_results=$(find . -maxdepth 1 -type d -name "$pattern" 2>/dev/null || true)
-           if [ -z "$find_results" ]; then
-             find_results=$(find . -type d -name "$pattern" 2>/dev/null || true)
-           fi ;;
+      *[\*\?\[]*)
+        case "$pattern" in
+          *'**'*)
+            [ "${#recursive_expr[@]}" -gt 0 ] && recursive_expr+=("-o")
+            recursive_expr+=("-path" "./$pattern")
+            ;;
+          */*)
+            local max_depth
+            max_depth=$(_directory_pattern_depth "$pattern")
+            [ "$max_depth" -gt "$bounded_max_depth" ] && bounded_max_depth="$max_depth"
+            [ "${#bounded_expr[@]}" -gt 0 ] && bounded_expr+=("-o")
+            bounded_expr+=("-path" "./$pattern")
+            ;;
+          *)
+            find_results=$(find . -maxdepth 1 -type d -name "$pattern" 2>/dev/null || true)
+            if [ -z "$find_results" ]; then
+              [ "${#recursive_expr[@]}" -gt 0 ] && recursive_expr+=("-o")
+              recursive_expr+=("-name" "$pattern")
+            fi
+            ;;
+        esac
+        ;;
+      *)
+        if [ -d "$pattern" ]; then
+          find_results="./$pattern"
+        else
+          case "$pattern" in
+            */*) ;;
+            *)
+              [ "${#recursive_expr[@]}" -gt 0 ] && recursive_expr+=("-o")
+              recursive_expr+=("-name" "$pattern")
+              ;;
+          esac
+        fi
+        ;;
     esac
 
-    while IFS= read -r dir_path; do
-      [ -z "$dir_path" ] && continue
-      dir_path="${dir_path#./}"
+    [ -n "$find_results" ] && printf '%s\n' "$find_results"
+  done <<EOF
+$dir_patterns
+EOF
 
-      is_excluded "$dir_path" "$excludes" && continue
-      [ ! -d "$dir_path" ] && continue
+  if [ "${#bounded_expr[@]}" -gt 0 ]; then
+    find . -maxdepth "$bounded_max_depth" -type d \( "${bounded_expr[@]}" \) 2>/dev/null || true
+  fi
 
-      local dest_dir="$dst_root/$dir_path"
-      local dest_parent
-      dest_parent=$(dirname "$dest_dir")
+  if [ "${#recursive_expr[@]}" -gt 0 ]; then
+    find . -type d \( "${recursive_expr[@]}" \) 2>/dev/null || true
+  fi
 
-      if [ "$dry_run" = "true" ]; then
-        log_info "[dry-run] Would copy directory $dir_path"
-        copied_count=$((copied_count + 1))
-        continue
-      fi
+  cd "$old_pwd" || return 1
+}
 
-      mkdir -p "$dest_parent"
+# Copy already-resolved directories from a source root.
+# Usage: _copy_resolved_directories src_root dst_root resolved_dirs excludes [dry_run]
+_copy_resolved_directories() {
+  local src_root="$1"
+  local dst_root="$2"
+  local resolved_dirs="$3"
+  local excludes="$4"
+  local dry_run="${5:-false}"
 
-      # Copy directory using CoW when available (preserves symlinks as symlinks)
-      if _has_subdir_excludes "$dir_path" "$excludes"; then
-        if _selective_copy_dir "$dir_path" "$dst_root" "$excludes"; then
-          log_info "Copied directory $dir_path"
-          copied_count=$((copied_count + 1))
-        else
-          log_warn "Failed to copy directory $dir_path"
-        fi
-      elif _fast_copy_dir "$dir_path" "$dest_parent/"; then
+  if [ -z "$resolved_dirs" ]; then
+    return 0
+  fi
+
+  local old_pwd
+  old_pwd=$(pwd)
+  cd "$src_root" || return 1
+
+  local copied_count=0
+  local dir_path
+  while IFS= read -r dir_path; do
+    [ -z "$dir_path" ] && continue
+    dir_path="${dir_path#./}"
+
+    is_excluded "$dir_path" "$excludes" && continue
+    [ ! -d "$dir_path" ] && continue
+
+    local dest_dir="$dst_root/$dir_path"
+    local dest_parent
+    dest_parent=$(dirname "$dest_dir")
+
+    if [ "$dry_run" = "true" ]; then
+      log_info "[dry-run] Would copy directory $dir_path"
+      copied_count=$((copied_count + 1))
+      continue
+    fi
+
+    mkdir -p "$dest_parent"
+
+    # Copy directory using CoW when available (preserves symlinks as symlinks)
+    if _has_subdir_excludes "$dir_path" "$excludes"; then
+      if _selective_copy_dir "$dir_path" "$dst_root" "$excludes"; then
         log_info "Copied directory $dir_path"
         copied_count=$((copied_count + 1))
-        _apply_directory_excludes "$dst_root" "$dir_path" "$excludes"
       else
         log_warn "Failed to copy directory $dir_path"
       fi
-    done <<EOF
-$find_results
-EOF
+    elif _fast_copy_dir "$dir_path" "$dest_parent/"; then
+      log_info "Copied directory $dir_path"
+      copied_count=$((copied_count + 1))
+      _apply_directory_excludes "$dst_root" "$dir_path" "$excludes"
+    else
+      log_warn "Failed to copy directory $dir_path"
+    fi
   done <<EOF
-$dir_patterns
+$resolved_dirs
 EOF
 
   cd "$old_pwd" || return 1
@@ -527,4 +596,22 @@ EOF
   fi
 
   return 0
+}
+
+# Copy directories matching patterns (typically git-ignored directories like node_modules)
+# Usage: copy_directories src_root dst_root dir_patterns excludes [dry_run]
+# dir_patterns: newline-separated repo-relative paths or glob patterns
+# excludes: newline-separated directory patterns to exclude (supports globs like "node_modules/.cache")
+# WARNING: This copies entire directories including potentially sensitive files.
+#          Use gtr.copy.excludeDirs to exclude sensitive directories.
+copy_directories() {
+  local src_root="$1"
+  local dst_root="$2"
+  local dir_patterns="$3"
+  local excludes="$4"
+  local dry_run="${5:-false}"
+
+  local resolved_dirs
+  resolved_dirs=$(_resolve_directory_patterns "$src_root" "$dir_patterns") || return 1
+  _copy_resolved_directories "$src_root" "$dst_root" "$resolved_dirs" "$excludes" "$dry_run"
 }

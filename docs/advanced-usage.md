@@ -15,6 +15,7 @@
 - [CI/CD Integration](#cicd-integration)
 - [Multiple Worktrees Same Branch](#multiple-worktrees-same-branch)
 - [Parallel AI Development](#parallel-ai-development)
+- [Sparse-Checkout Inheritance](#sparse-checkout-inheritance)
 
 ---
 
@@ -199,6 +200,35 @@ git gtr ai feature-auth-tests -- --message "Write integration tests"
 2. **Frequent commits** - Each agent should commit frequently to avoid conflicts
 3. **Pull before push** - Have agents pull changes from others before pushing
 4. **Use descriptive names** - Make it clear what each worktree is for
+
+---
+
+## Sparse-Checkout Inheritance
+
+When working in a large monorepo, a base worktree often uses [sparse-checkout](https://git-scm.com/docs/git-sparse-checkout) to materialize only a slice of the tree. `gtr` carries that slice into the worktrees you branch off it, so feature worktrees stay lean instead of exploding into the full repo.
+
+```bash
+# my-app is a sparse worktree checking out only apps/my-app + packages.
+# A feature branch off it inherits the same cone automatically:
+git gtr new my-app-feature-xyz --from my-app
+
+# The new worktree contains only the inherited sparse slice:
+ls "$(git gtr go my-app-feature-xyz)"
+git -C "$(git gtr go my-app-feature-xyz)" sparse-checkout list
+
+# Opt out for a single command (full checkout):
+git gtr new big-refactor --from my-app --no-sparse
+```
+
+**How it works:**
+
+- On Git 2.36+, gtr inspects the worktree holding the base ref (`--from`, falling back to the current worktree). If it has valid sparse-checkout settings, gtr creates the new worktree from that source so Git copies its patterns and per-worktree config before checkout — the full tree is never written to disk.
+- Git 2.17–2.35 keeps the existing full-checkout behavior. An explicit `--sparse` request prints a warning that inheritance requires Git 2.36+.
+- Controlled by `gtr.sparse.inherit` (default on). Use `--sparse` / `--no-sparse` to override per command.
+- Full-checkout repositories are unaffected — they always get a full checkout.
+
+> [!NOTE]
+> Sparse-checkout is per-worktree, not per-branch. Inheriting "from `my-app`" copies the live sparse settings and worktree-specific Git config of the `my-app` worktree, not anything stored on the branch itself. If the same branch is checked out more than once, gtr prefers the current matching worktree; otherwise it warns and creates a full checkout rather than choosing arbitrarily.
 
 ---
 

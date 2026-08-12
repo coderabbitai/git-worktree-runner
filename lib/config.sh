@@ -107,6 +107,7 @@ _CFG_KEY_MAP=(
   "gtr.ai.default|defaults.ai"
   "gtr.worktrees.dir|worktrees.dir"
   "gtr.worktrees.prefix|worktrees.prefix"
+  "gtr.sparse.inherit|sparse.inherit"
   "gtr.defaultBranch|defaults.branch"
   "gtr.defaultRemote|defaults.remote"
   "gtr.provider|defaults.provider"
@@ -193,28 +194,62 @@ cfg_get_all() {
   esac
 }
 
-# Get a boolean config value
-# Usage: cfg_bool key [default]
-# Returns: 0 for true, 1 for false
-cfg_bool() {
-  local key="$1"
-  local default="${2:-false}"
-  local value
-
-  value=$(cfg_get "$key")
-
-  if [ -z "$value" ]; then
-    value="$default"
+# Read one config source with Git's native boolean parser.
+# Returns 0 with true/false output, 1 when absent, 2 when present but invalid,
+# and 3 when the installed Git does not recognize a requested config option.
+_cfg_read_bool() {
+  local key="$1" value status
+  shift
+  if value=$(git config "$@" --bool --get "$key" 2>/dev/null); then
+    printf "%s" "$value"
+    return 0
+  else
+    status=$?
   fi
+  [ "$status" -eq 1 ] && return 1
+  [ "$status" -eq 129 ] && return 3
+  return 2
+}
 
-  case "$value" in
-    true|yes|1|on)
-      return 0
-      ;;
-    false|no|0|off|*)
-      return 1
-      ;;
+# Get a boolean config value.
+# Precedence: worktree > local > .gtrconfig > global > system > default.
+# Usage: cfg_bool key [default]
+# Returns: 0 for true, 1 for false.
+cfg_bool() {
+  local key="$1" default="${2:-false}" source candidate value status
+  local file_key="" config_file=""
+  local args=()
+
+  for source in worktree local file global system; do
+    candidate="$key"
+    case "$source" in
+      worktree) args=(--worktree) ;;
+      local) args=(--local) ;;
+      file)
+        file_key=$(cfg_map_to_file_key "$key")
+        [ -n "$file_key" ] || continue
+        config_file=$(_gtrconfig_path)
+        [ -f "$config_file" ] || continue
+        candidate="$file_key"
+        args=(-f "$config_file")
+        ;;
+      global) args=(--global) ;;
+      system) args=(--system) ;;
+    esac
+    if value=$(_cfg_read_bool "$candidate" "${args[@]}"); then
+      [ "$value" = "true" ]
+      return
+    else
+      status=$?
+      [ "$source" = "worktree" ] && [ "$status" -eq 3 ] && continue
+      [ "$status" -eq 2 ] && return 1
+    fi
+  done
+
+  case "$default" in
+    [tT][rR][uU][eE]|[yY][eE][sS]|1|[oO][nN]) return 0 ;;
   esac
+  return 1
 }
 
 # Convert scope name to git config flag

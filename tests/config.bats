@@ -79,6 +79,25 @@ teardown() {
   ! _cfg_is_known_key "gtr.nonexistent"
 }
 
+# ── Boolean values ───────────────────────────────────────────────────────────
+
+@test "cfg_bool uses Git boolean parsing for nonzero integers" {
+  setup_integration_repo
+  git -C "$TEST_REPO" config gtr.sparse.inherit 2
+
+  cfg_bool gtr.sparse.inherit false
+}
+
+@test "cfg_bool skips an unsupported worktree config scope" {
+  _cfg_read_bool() {
+    [ "${2:-}" = "--worktree" ] && return 3
+    [ "${2:-}" = "--local" ] && { printf "true"; return 0; }
+    return 1
+  }
+
+  cfg_bool gtr.sparse.inherit false
+}
+
 # ── cfg_list deduplication ───────────────────────────────────────────────────
 
 @test "_cfg_list_add_entry adds entry to result" {

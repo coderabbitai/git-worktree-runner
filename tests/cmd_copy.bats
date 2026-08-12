@@ -103,6 +103,25 @@ teardown() {
   [ -f "$TEST_WORKTREES_DIR/copy-target-2/.zed/settings.json" ]
 }
 
+@test "cmd_copy --all resolves includeDirs once" {
+  create_test_worktree "copy-target-2"
+  mkdir -p "$TEST_REPO/.zed"
+  echo "settings" > "$TEST_REPO/.zed/settings.json"
+  git config --add gtr.copy.includeDirs ".zed"
+  local resolve_log="$BATS_TEST_TMPDIR/resolve.log"
+
+  _resolve_directory_patterns() {
+    printf 'called\n' >> "$resolve_log"
+    printf './.zed\n'
+  }
+
+  run cmd_copy --all
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$resolve_log" | tr -d ' ')" -eq 1 ]
+  [ -f "$TEST_WORKTREES_DIR/copy-target/.zed/settings.json" ]
+  [ -f "$TEST_WORKTREES_DIR/copy-target-2/.zed/settings.json" ]
+}
+
 @test "cmd_copy --from copies configured includeDirs from source worktree" {
   create_test_worktree "copy-source"
   mkdir -p "$TEST_WORKTREES_DIR/copy-source/.idea"

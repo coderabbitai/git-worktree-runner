@@ -24,15 +24,19 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
-@test "cmd_remove skips unknown branch and continues" {
-  # cmd_remove uses 'continue' for individual failures, not 'exit'
+@test "cmd_remove fails for an unknown branch" {
   run cmd_remove nonexistent
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ]
+}
+
+@test "git gtr rm propagates a failed exit status" {
+  run env PATH="$PROJECT_ROOT/bin:$PATH" git gtr rm nonexistent
+  [ "$status" -eq 1 ]
 }
 
 @test "cmd_remove cannot remove main repo" {
   run cmd_remove 1
-  [ "$status" -eq 0 ]  # continues past error, doesn't exit
+  [ "$status" -eq 1 ]
   # Main repo should still exist
   [ -d "$TEST_REPO" ]
 }
@@ -56,8 +60,20 @@ teardown() {
   create_test_worktree "hook-block"
   git config --add gtr.hook.preRemove "exit 1"
   run cmd_remove hook-block
+  [ "$status" -eq 1 ]
   # Worktree should still exist (hook blocked removal)
   [ -d "$TEST_WORKTREES_DIR/hook-block" ]
+}
+
+@test "cmd_remove fails when git refuses to remove a dirty worktree" {
+  create_test_worktree "dirty-rm"
+  touch "$TEST_WORKTREES_DIR/dirty-rm/untracked"
+
+  run cmd_remove dirty-rm
+
+  [ "$status" -eq 1 ]
+  [ -d "$TEST_WORKTREES_DIR/dirty-rm" ]
+  [[ "$output" == *"contains modified or untracked files"* ]]
 }
 
 @test "cmd_remove --force skips failed pre-remove hook" {
@@ -78,6 +94,7 @@ teardown() {
   create_test_worktree "good-rm"
   # Try to remove both a nonexistent and existing worktree
   run cmd_remove nonexistent good-rm
+  [ "$status" -eq 1 ]
   # The good one should have been removed despite the bad one failing
   [ ! -d "$TEST_WORKTREES_DIR/good-rm" ]
 }

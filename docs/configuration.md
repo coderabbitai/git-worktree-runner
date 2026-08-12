@@ -110,6 +110,32 @@ echo "/.worktrees/" >> .gitignore
 
 ---
 
+## Sparse-Checkout Settings
+
+If the worktree you branch from uses [sparse-checkout](https://git-scm.com/docs/git-sparse-checkout) (e.g. a slice of a large monorepo), `gtr` can give the new worktree the same narrowed working tree instead of an expensive full checkout.
+
+```bash
+# Inherit sparse-checkout from the base worktree (default: true)
+gtr.sparse.inherit = true
+```
+
+On Git 2.36+, `git gtr new` looks at the worktree holding the base ref (the `--from` target, falling back to the current worktree). If that worktree has valid sparse-checkout settings, gtr runs worktree creation from that source so Git copies its patterns and per-worktree config before checkout. The full tree is never materialized. Git 2.17–2.35 retains full-checkout behavior; explicit `--sparse` requests print a version warning.
+
+Per-command overrides:
+
+```bash
+# Force inheritance even if gtr.sparse.inherit is off
+git gtr new feature-xyz --from my-app --sparse
+
+# Force a full checkout even if gtr.sparse.inherit is on
+git gtr new feature-xyz --from my-app --no-sparse
+```
+
+> [!NOTE]
+> Sparse-checkout is stored per-worktree, not per-branch. "Inherit from `my-app`" means inherit the live sparse settings and worktree-specific Git config of the `my-app` *worktree*. Ambiguous duplicate-branch worktrees fall back to a full checkout instead of choosing a source arbitrarily.
+
+---
+
 ## Provider Settings
 
 The `clean --merged` and `clean --closed` commands auto-detect your hosting provider from the `origin` remote URL (`github.com` → GitHub, `gitlab.com` → GitLab). For self-hosted instances, set the provider explicitly:
@@ -263,7 +289,16 @@ Copy entire directories (like `node_modules`, `.venv`, `vendor`) to avoid reinst
 git gtr config add gtr.copy.includeDirs "node_modules"
 git gtr config add gtr.copy.includeDirs ".venv"
 git gtr config add gtr.copy.includeDirs "vendor"
+git gtr config add gtr.copy.includeDirs "packages/*/generated"
+```
 
+Directory include patterns are relative to the repository root. Literal paths
+are checked directly, `*` and `?` match within the pattern's explicit depth,
+and `**` enables recursive matching when a full-tree search is intentional. For
+backward compatibility, a bare basename that has no root-level match falls back
+to a recursive search. Prefer an explicit nested path to avoid that scan.
+
+```bash
 # Exclude specific nested directories (supports glob patterns)
 git gtr config add gtr.copy.excludeDirs "node_modules/.cache"  # Exclude exact path
 git gtr config add gtr.copy.excludeDirs "node_modules/.npm"    # Exclude npm cache (may contain tokens)

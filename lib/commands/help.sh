@@ -23,6 +23,8 @@ Options:
   --no-copy           Skip file copying (gtr.copy.include patterns)
   --no-fetch          Skip git fetch before creating
   --no-hooks          Skip post-create hooks
+  --sparse            Inherit sparse-checkout from the base worktree (Git 2.36+)
+  --no-sparse         Force a full checkout (override gtr.sparse.inherit)
   --force             Allow same branch in multiple worktrees
                       (requires --name or --folder to distinguish them)
   --name <suffix>     Custom folder name suffix (appended after branch name)
@@ -48,6 +50,8 @@ git gtr pr - Create a worktree for a GitHub pull request
 Usage: git gtr pr <number|url|branch> [options]
 
 Creates a worktree from a GitHub pull request, similar to gh pr checkout.
+Uses gh's native worktree checkout when available and a compatible fallback
+otherwise, preserving configured Git remotes and protocols.
 The default local branch is the PR head branch so GitHub CLI can infer the PR
 from inside the worktree. Requires GitHub CLI (gh) for PR lookup.
 
@@ -749,6 +753,7 @@ CONFIGURATION OPTIONS:
   gtr.copy.exclude         Files to exclude (multi-valued)
   gtr.copy.includeDirs     Directories to copy (multi-valued)
                            Example: node_modules, .venv, vendor
+                           Supports repo-relative globs; ** matches recursively
                            WARNING: May include sensitive files!
                            Use gtr.copy.excludeDirs to exclude them.
   gtr.copy.excludeDirs     Directories to exclude (multi-valued)

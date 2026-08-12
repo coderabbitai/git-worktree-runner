@@ -193,7 +193,7 @@ MIDDLE1
     new)
       # Complete flags
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--from --from-current --remote --track --no-copy --no-fetch --no-hooks --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
+        COMPREPLY=($(compgen -W "--from --from-current --remote --track --no-copy --no-fetch --no-hooks --sparse --no-sparse --force --name --folder --yes --editor -e --ai -a" -- "$cur"))
       elif [ "$prev" = "--track" ]; then
         COMPREPLY=($(compgen -W "auto remote local none" -- "$cur"))
       fi
@@ -332,6 +332,8 @@ _git-gtr() {
       '--no-copy[Skip file copying]' \
       '--no-fetch[Skip git fetch]' \
       '--no-hooks[Skip post-create hooks]' \
+      '--sparse[Inherit sparse-checkout from base worktree (Git 2.36+)]' \
+      '--no-sparse[Force a full checkout]' \
       '--force[Allow same branch in multiple worktrees]' \
       '--name[Custom folder name suffix]:name:' \
       '--folder[Custom folder name (replaces default)]:folder:' \
@@ -574,6 +576,8 @@ complete -c git -n '__fish_git_gtr_using_command new' -l track -d 'Track mode' -
 complete -c git -n '__fish_git_gtr_using_command new' -l no-copy -d 'Skip file copying'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-fetch -d 'Skip git fetch'
 complete -c git -n '__fish_git_gtr_using_command new' -l no-hooks -d 'Skip post-create hooks'
+complete -c git -n '__fish_git_gtr_using_command new' -l sparse -d 'Inherit sparse-checkout from base worktree (Git 2.36+)'
+complete -c git -n '__fish_git_gtr_using_command new' -l no-sparse -d 'Force a full checkout'
 complete -c git -n '__fish_git_gtr_using_command new' -l force -d 'Allow same branch in multiple worktrees'
 complete -c git -n '__fish_git_gtr_using_command new' -l name -d 'Custom folder name suffix' -r
 complete -c git -n '__fish_git_gtr_using_command new' -l folder -d 'Custom folder name (replaces default)' -r

@@ -190,6 +190,8 @@ git gtr new my-feature --name descriptive-variant                               
 ### `git gtr pr <number|url|branch> [options]`
 
 Create a worktree from a GitHub pull request. Requires GitHub CLI (`gh`) for PR lookup.
+When supported, GTR delegates checkout to `gh pr checkout --worktree`; otherwise it
+uses a compatibility path that preserves configured Git remotes and protocols.
 The default local branch is the PR head branch so GitHub CLI can infer the PR from inside the worktree.
 
 ```bash
@@ -420,6 +422,9 @@ git gtr config add gtr.copy.include "**/.env.example"
 # Run setup after creating worktrees
 git gtr config add gtr.hook.postCreate "npm install"
 
+# Inherit sparse-checkout from the base worktree on Git 2.36+ (default: on)
+git gtr config set gtr.sparse.inherit true
+
 # Re-source environment after gtr cd, gtr new --cd, or gtr pr --cd (runs in current shell)
 git gtr config add gtr.hook.postCd "source ./vars.sh"
 
@@ -435,6 +440,7 @@ git gtr config set gtr.ui.color never
     include = **/.env.example
     exclude = **/.env
     includeDirs = node_modules
+    includeDirs = packages/*/generated
     excludeDirs = node_modules/.cache
 
 [hooks]

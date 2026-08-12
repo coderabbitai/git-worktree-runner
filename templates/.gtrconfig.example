@@ -69,3 +69,10 @@
     # Set to "none" to disable workspace lookup entirely
     # workspace = project.code-workspace
     # workspace = none
+
+[sparse]
+    # Inherit sparse-checkout from the base worktree when creating a new one
+    # (default: true; requires Git 2.36+). Useful for monorepos where the base
+    # worktree checks out only a slice of the tree. Override per command with
+    # --sparse / --no-sparse.
+    # inherit = true

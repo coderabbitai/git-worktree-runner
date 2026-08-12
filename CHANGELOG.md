@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+## [2.8.2] - 2026-08-12
+
+### Fixed
+
+- `gtr.copy.includeDirs` now resolves literal paths without full-repository scans, batches unavoidable recursive discovery, and reuses results across `git gtr copy --all` targets while preserving nested basename matching ([#191](https://github.com/coderabbitai/git-worktree-runner/pull/191))
+
+## [2.8.1] - 2026-08-12
+
+### Fixed
+
+- `git gtr rm` now returns a non-zero exit status when any requested worktree cannot be resolved or removed, or when a pre-remove hook blocks removal, while still processing later targets ([#190](https://github.com/coderabbitai/git-worktree-runner/pull/190))
+
 ## [2.8.0] - 2026-06-12
 
 ### Added
@@ -234,7 +246,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 - Improved base directory resolution logic to distinguish `.` (repo root), `./path` (repo-internal) from other relative values (sibling directories)
 
-[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.8.0...HEAD
+[Unreleased]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.8.1...HEAD
+[2.8.1]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.7.3...v2.8.0
 [2.7.3]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.7.2...v2.7.3
 [2.7.2]: https://github.com/coderabbitai/git-worktree-runner/compare/v2.7.1...v2.7.2

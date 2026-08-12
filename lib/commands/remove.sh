@@ -14,6 +14,7 @@ cmd_remove() {
   local delete_branch="${_arg_delete_branch:-0}"
   local yes_mode="${_arg_yes:-0}"
   local force="${_arg_force:-0}"
+  local had_failure=0
 
   resolve_repo_context || exit 1
 
@@ -22,13 +23,17 @@ cmd_remove() {
   for identifier in "${_pa_positional[@]}"; do
     # Resolve target branch
     local is_main worktree_path branch_name
-    resolve_worktree "$identifier" "$repo_root" "$base_dir" "$prefix" || continue
-  
+    if ! resolve_worktree "$identifier" "$repo_root" "$base_dir" "$prefix"; then
+      had_failure=1
+      continue
+    fi
+
     is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch_name="$_ctx_branch"
 
     # Cannot remove main repository
     if [ "$is_main" = "1" ]; then
       log_error "Cannot remove main repository"
+      had_failure=1
       continue
     fi
 
@@ -41,6 +46,7 @@ cmd_remove() {
       BRANCH="$branch_name"; then
       if [ "$force" -eq 0 ]; then
         log_error "Pre-remove hook failed for $branch_name. Use --force to skip hooks."
+        had_failure=1
         continue
       else
         log_warn "Pre-remove hook failed, continuing due to --force"
@@ -49,6 +55,7 @@ cmd_remove() {
 
     # Remove the worktree
     if ! remove_worktree "$worktree_path" "$force"; then
+      had_failure=1
       continue
     fi
 
@@ -73,4 +80,6 @@ cmd_remove() {
       log_warn "Post-remove hook failed for $branch_name"
     fi
   done
+
+  return "$had_failure"
 }

@@ -507,21 +507,23 @@ resolve_worktree() {
 }
 
 # Try to create a worktree, handling the common log/add/report pattern.
-# Usage: _try_worktree_add <path> <step_msg> <ok_msg> [git_worktree_add_args...]
+# Usage: _try_worktree_add <path> <step_msg> <ok_msg> <add_source> [git_worktree_add_args...]
 # Prints worktree path on success; returns 1 on failure (caller handles error).
 # Note: step_msg may be empty to skip the log_step call.
 _try_worktree_add() {
-  local wt_path="$1" step_msg="$2" ok_msg="$3"
-  shift 3
+  local wt_path="$1" step_msg="$2" ok_msg="$3" add_source="$4"
+  shift 4
 
   [ -n "$step_msg" ] && log_step "$step_msg"
 
-  if git worktree add "$wt_path" "$@" >&2; then
-    log_info "$ok_msg"
-    printf "%s" "$wt_path"
-    return 0
+  if [ -n "$add_source" ]; then
+    git -C "$add_source" worktree add "$wt_path" "$@" >&2 || return 1
+  else
+    git worktree add "$wt_path" "$@" >&2 || return 1
   fi
-  return 1
+  log_info "$ok_msg"
+  printf "%s" "$wt_path"
+  return 0
 }
 
 # Build and validate folder name from branch/custom/override.
@@ -572,11 +574,11 @@ _check_branch_refs() {
 }
 
 # Auto-track: create local tracking branch from remote if needed, then add worktree.
-# Usage: _worktree_add_tracked <worktree_path> <branch_name> [remote] [force_args...]
+# Usage: _worktree_add_tracked <worktree_path> <branch_name> <remote> <add_source> [force_args...]
 # shellcheck disable=SC2317  # Called indirectly from create_worktree
 _worktree_add_tracked() {
-  local wt_path="$1" branch_name="$2" remote="${3:-$(resolve_default_remote)}"
-  shift 3
+  local wt_path="$1" branch_name="$2" remote="${3:-$(resolve_default_remote)}" add_source="${4:-}"
+  shift 4
 
   log_step "Branch '$branch_name' exists on $remote"
   if git branch --track "$branch_name" "$remote/$branch_name" >/dev/null 2>&1; then
@@ -584,21 +586,238 @@ _worktree_add_tracked() {
   fi
   _try_worktree_add "$wt_path" "" \
     "Worktree created tracking $remote/$branch_name" \
+    "$add_source" \
     "$@" "$branch_name"
 }
 
+# Normalize a remote-tracking ref only when its prefix names a configured remote.
+# Usage: _remote_branch_for_ref <ref> [repo_root]
+# Prints: local branch portion for a configured remote ref, empty otherwise.
+_remote_branch_for_ref() {
+  local ref="$1" repo_root="${2:-}" remote default_remote matched_remote=""
+  [ -n "$repo_root" ] || repo_root=$(_resolve_main_repo_root) || return 0
+  case "$ref" in
+    refs/remotes/*) ref="${ref#refs/remotes/}" ;;
+    remotes/*) ref="${ref#remotes/}" ;;
+  esac
+
+  # The configured/default remote remains meaningful before the first fetch,
+  # when it may not yet appear in `git remote` (common in isolated tests too).
+  default_remote=$(resolve_default_remote)
+  case "$ref" in
+    "$default_remote/"*) matched_remote="$default_remote" ;;
+  esac
+
+  while IFS= read -r remote; do
+    case "$ref" in
+      "$remote/"*)
+        if [ -z "$matched_remote" ] || [ "${#remote}" -gt "${#matched_remote}" ]; then
+          matched_remote="$remote"
+        fi
+        ;;
+    esac
+  done < <(git -C "$repo_root" remote 2>/dev/null || true)
+  [ -n "$matched_remote" ] && printf "%s" "${ref#"$matched_remote/"}"
+  return 0
+}
+
+# Find the worktree that has a given local or remote-tracking ref checked out.
+# Exact local branch names always win; remote prefixes are stripped only when
+# they match a configured remote.
+# Usage: _worktree_path_for_ref <ref>
+# Prints: worktree path on match, empty otherwise.
+_worktree_path_for_ref() {
+  local ref="$1" repo_root current_path records resolved_ref branch_candidate
+  [ -n "$ref" ] || return 0
+  repo_root=$(_resolve_main_repo_root) || return 0
+  current_path=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  [ -n "$current_path" ] && current_path=$(canonicalize_path "$current_path" || printf "%s" "$current_path")
+
+  # Let Git apply its own revision precedence and namespace shorthand rules.
+  # Tags and other non-branch refs deliberately have no owning worktree.
+  resolved_ref=$(git -C "$repo_root" rev-parse --verify --symbolic-full-name "$ref" 2>/dev/null || true)
+  case "$resolved_ref" in
+    refs/heads/*)
+      branch_candidate="${resolved_ref#refs/heads/}"
+      ;;
+    refs/remotes/*)
+      branch_candidate=$(_remote_branch_for_ref "$resolved_ref" "$repo_root")
+      ;;
+    refs/*)
+      return 0
+      ;;
+    "")
+      # A commit-ish that resolves without a symbolic ref (for example a tag
+      # collision, SHA, or revision expression) has no unique owning worktree.
+      if git -C "$repo_root" rev-parse --verify "${ref}^{commit}" >/dev/null 2>&1; then
+        return 0
+      fi
+      # Preserve configured-remote matching before the first fetch, when the
+      # remote-tracking ref does not exist yet.
+      branch_candidate=$(_remote_branch_for_ref "$ref" "$repo_root")
+      ;;
+  esac
+  [ -n "$branch_candidate" ] || return 0
+  records=$(list_worktree_records "$repo_root")
+
+  local path="" branch="" line
+  local matched_path="" matched_current="" matched_count=0
+  while IFS= read -r line; do
+    case "$line" in
+      "")
+        if [ -n "$path" ] && [ "$branch" = "$branch_candidate" ]; then
+          matched_count=$((matched_count + 1))
+          [ -z "$matched_path" ] && matched_path="$path"
+          [ -n "$current_path" ] && [ "$path" = "$current_path" ] && matched_current="$path"
+        fi
+        path=""
+        branch=""
+        ;;
+      "path "*) path=$(_tsv_unescape_field "${line#path }") ;;
+      "branch "*) branch=$(_tsv_unescape_field "${line#branch }") ;;
+    esac
+  done <<EOF
+$records
+
+EOF
+
+  if [ -n "$matched_current" ]; then
+    printf "%s" "$matched_current"
+  elif [ "$matched_count" -eq 1 ]; then
+    printf "%s" "$matched_path"
+  elif [ "$matched_count" -gt 1 ]; then
+    log_warn "Multiple worktrees use branch '$branch_candidate'; sparse-checkout source is ambiguous"
+    return 2
+  fi
+  return 0
+}
+
+# Test whether sparse-checkout is configured, even if its pattern file is bad.
+# Usage: _worktree_sparse_enabled <worktree_path>
+_worktree_sparse_enabled() {
+  local wt="$1"
+  [ -n "$wt" ] || return 1
+  local enabled
+  enabled=$(git -C "$wt" config --bool core.sparseCheckout 2>/dev/null || true)
+  [ "$enabled" = "true" ]
+}
+
+# Test whether a worktree has usable sparse-checkout settings.
+# Usage: _worktree_is_sparse <worktree_path>
+_worktree_is_sparse() {
+  local wt="$1"
+  _worktree_sparse_enabled "$wt" || return 1
+
+  (
+    cd "$wt" || exit 1
+    local pattern_file
+    pattern_file=$(git rev-parse --git-path info/sparse-checkout 2>/dev/null) || exit 1
+    [ -r "$pattern_file" ] || exit 1
+    git sparse-checkout list >/dev/null 2>&1
+  )
+}
+
+# Resolve which worktree's sparse-checkout config a new worktree should inherit.
+# Prefers the worktree holding from_ref, falling back to the current worktree.
+# Only prints a path if the chosen worktree actually has sparse-checkout enabled;
+# a matching but non-sparse worktree does not short-circuit the fallback.
+# Usage: _resolve_sparse_source <from_ref>
+# Prints: source worktree path if sparse-enabled, empty otherwise.
+_resolve_sparse_source() {
+  local from_ref="$1"
+  local src status current
+
+  # Prefer the worktree holding from_ref, but only if it is sparse-enabled.
+  if src=$(_worktree_path_for_ref "$from_ref"); then
+    :
+  else
+    status=$?
+    [ "$status" -eq 2 ] && return 0
+  fi
+  if [ -n "$src" ] && _worktree_is_sparse "$src"; then
+    printf "%s" "$src"
+    return 0
+  fi
+  if [ -n "$src" ] && _worktree_sparse_enabled "$src"; then
+    log_warn "Sparse-checkout settings in $src are incomplete; falling back to a full checkout"
+    return 0
+  fi
+
+  # Otherwise fall back to the current/top-level worktree if it is sparse.
+  current=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$current" ] && _worktree_is_sparse "$current"; then
+    printf "%s" "$current"
+    return 0
+  fi
+  if [ -n "$current" ] && [ "$current" != "$src" ] && _worktree_sparse_enabled "$current"; then
+    log_warn "Sparse-checkout settings in $current are incomplete; falling back to a full checkout"
+  fi
+
+  return 0
+}
+
+# Compare the running Git's major/minor version.
+# Usage: _git_version_at_least <major> <minor>
+_git_version_at_least() {
+  local required_major="$1" required_minor="$2"
+  local version major minor
+  version=$(git --version 2>/dev/null) || return 1
+  version="${version#git version }"
+  version="${version%% *}"
+  major="${version%%.*}"
+  minor="${version#*.}"
+  minor="${minor%%.*}"
+  [ -n "$major" ] || return 1
+  case "$major$minor" in
+    *[!0-9]* | "") return 1 ;;
+  esac
+  [ "$major" -gt "$required_major" ] && return 0
+  [ "$major" -eq "$required_major" ] && [ "$minor" -ge "$required_minor" ] && return 0
+  return 1
+}
+
+# Git 2.36+ natively copies sparse patterns and worktree config on worktree add.
+_git_supports_sparse_inheritance() {
+  _git_version_at_least 2 36
+}
+
+# Ensure a worktree is fully populated. When populate is 1, checkout is forced
+# because the worktree may have been created with --no-checkout.
+# Usage: _ensure_full_checkout <worktree> [populate]
+_ensure_full_checkout() {
+  local wt="$1" populate="${2:-0}"
+
+  if _worktree_sparse_enabled "$wt"; then
+    if ! git -C "$wt" sparse-checkout disable >/dev/null 2>&1; then
+      log_warn "Could not disable sparse-checkout in $wt"
+      return 1
+    fi
+    populate=1
+  fi
+
+  if [ "$populate" -eq 1 ] && ! git -C "$wt" checkout >/dev/null 2>&1; then
+    log_warn "Could not populate full checkout in $wt"
+    return 1
+  fi
+  return 0
+}
+
 # Create a new git worktree
-# Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override] [remote]
+# Usage: create_worktree base_dir prefix branch_name from_ref track_mode [skip_fetch] [force] [custom_name] [folder_override] [remote] [no_checkout] [add_source]
 # track_mode: auto, remote, local, or none
 # skip_fetch: 0 (default, fetch) or 1 (skip)
 # force: 0 (default, check branch) or 1 (allow same branch in multiple worktrees)
 # custom_name: optional custom name suffix (e.g., "backend" creates "feature-auth-backend")
 # folder_override: optional complete folder name override (replaces default naming)
+# no_checkout: 0 (default) or 1 (pass --no-checkout, e.g. for deferred sparse-checkout)
+# add_source: worktree path whose context should be used only for `git worktree add`
 create_worktree() {
   local base_dir="$1" prefix="$2" branch_name="$3" from_ref="$4"
   local track_mode="${5:-auto}" skip_fetch="${6:-0}" force="${7:-0}"
   local custom_name="${8:-}" folder_override="${9:-}"
   local remote="${10:-$(resolve_default_remote)}"
+  local no_checkout="${11:-0}"
+  local add_source="${12:-}"
 
   local sanitized_name
   sanitized_name=$(_resolve_folder_name "$branch_name" "$custom_name" "$folder_override") || return 1
@@ -606,6 +825,7 @@ create_worktree() {
   local worktree_path="$base_dir/${prefix}${sanitized_name}"
   local force_args=()
   [ "$force" -eq 1 ] && force_args=(--force)
+  [ "$no_checkout" -eq 1 ] && force_args+=(--no-checkout)
 
   if [ -d "$worktree_path" ]; then
     log_error "Worktree $sanitized_name already exists at $worktree_path"
@@ -635,9 +855,11 @@ create_worktree() {
         _try_worktree_add "$worktree_path" \
           "Creating worktree from remote branch $remote/$branch_name" \
           "Worktree created tracking $remote/$branch_name" \
+          "$add_source" \
           "${force_args[@]}" -b "$branch_name" "$remote/$branch_name" && return 0
         _try_worktree_add "$worktree_path" "" \
           "Worktree created tracking $remote/$branch_name" \
+          "$add_source" \
           "${force_args[@]}" "$branch_name" && return 0
       fi
       log_error "Remote branch $remote/$branch_name does not exist"
@@ -649,6 +871,7 @@ create_worktree() {
         _try_worktree_add "$worktree_path" \
           "Creating worktree from local branch $branch_name" \
           "Worktree created with local branch $branch_name" \
+          "$add_source" \
           "${force_args[@]}" "$branch_name" && return 0
       fi
       log_error "Local branch $branch_name does not exist"
@@ -659,6 +882,7 @@ create_worktree() {
       _try_worktree_add "$worktree_path" \
         "Creating new branch $branch_name from $from_ref" \
         "Worktree created with new branch $branch_name" \
+        "$add_source" \
         "${force_args[@]}" -b "$branch_name" "$resolved_ref" && return 0
       log_error "Failed to create worktree with new branch"
       return 1
@@ -666,16 +890,18 @@ create_worktree() {
 
     auto|*)
       if [ "$_wt_remote_exists" -eq 1 ] && [ "$_wt_local_exists" -eq 0 ]; then
-        _worktree_add_tracked "$worktree_path" "$branch_name" "$remote" "${force_args[@]}" && return 0
+        _worktree_add_tracked "$worktree_path" "$branch_name" "$remote" "$add_source" "${force_args[@]}" && return 0
       elif [ "$_wt_local_exists" -eq 1 ]; then
         _try_worktree_add "$worktree_path" \
           "Using existing local branch $branch_name" \
           "Worktree created with local branch $branch_name" \
+          "$add_source" \
           "${force_args[@]}" "$branch_name" && return 0
       else
         _try_worktree_add "$worktree_path" \
           "Creating new branch $branch_name from $from_ref" \
           "Worktree created with new branch $branch_name" \
+          "$add_source" \
           "${force_args[@]}" -b "$branch_name" "$resolved_ref" && return 0
       fi
       ;;
