@@ -57,6 +57,12 @@ teardown() {
   [[ "$result" == *"vim"* ]]
   [[ "$result" == *"cursor"* ]]
   [[ "$result" == *"emacs"* ]]
+
+  source "$PROJECT_ROOT/lib/commands/adapter.sh"
+  adapter_is_ready() { return 0; }
+  load_adapter() { :; }
+  run _print_adapter_list "Editor Adapters" "atom|atom|standard||" "editor" "adapter_is_ready" "load_adapter"
+  [[ "$output" =~ atom[[:space:]]+\[ready\][[:space:]]+Legacy[[:space:]]compatibility ]]
 }
 
 @test "_list_registry_names includes expected AI tools" {
@@ -64,6 +70,12 @@ teardown() {
   [[ "$result" == *"aider"* ]]
   [[ "$result" == *"copilot"* ]]
   [[ "$result" == *"gemini"* ]]
+
+  source "$PROJECT_ROOT/lib/commands/adapter.sh"
+  adapter_is_missing() { return 1; }
+  load_adapter() { :; }
+  run _print_adapter_list "AI Tool Adapters" "continue|continue|standard||" "ai" "adapter_is_missing" "load_adapter"
+  [[ "$output" =~ continue[[:space:]]+\[missing\][[:space:]]+Legacy[[:space:]]compatibility\;[[:space:]]not[[:space:]]found[[:space:]]in[[:space:]]PATH ]]
 }
 
 @test "_list_registry_names returns comma-separated format" {

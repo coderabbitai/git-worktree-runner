@@ -13,16 +13,25 @@ _print_adapter_list() {
   printf "%-15s %-15s %s\n" "---------------" "---------------" "-----"
 
   # Registry-defined adapters
-  local listed=" " line adapter_name
+  local listed=" " line adapter_name notes
   while IFS= read -r line; do
     [ -z "$line" ] && continue
     adapter_name="${line%%|*}"
     listed="$listed$adapter_name "
+    notes=""
+    case "$subdir:$adapter_name" in
+      editor:atom|ai:continue) notes="Legacy compatibility" ;;
+    esac
     "$load_func" "$line"
     if $can_func 2>/dev/null; then
-      printf "%-15s %-15s %s\n" "$adapter_name" "[ready]" ""
+      printf "%-15s %-15s %s\n" "$adapter_name" "[ready]" "$notes"
     else
-      printf "%-15s %-15s %s\n" "$adapter_name" "[missing]" "Not found in PATH"
+      if [ -n "$notes" ]; then
+        notes="$notes; not found in PATH"
+      else
+        notes="Not found in PATH"
+      fi
+      printf "%-15s %-15s %s\n" "$adapter_name" "[missing]" "$notes"
     fi
   done <<EOF
 $registry
@@ -57,9 +66,6 @@ cmd_adapter() {
 
   _print_adapter_list "AI Tool Adapters" "$_AI_REGISTRY" "ai" "ai_can_start" "_load_from_ai_registry"
 
-  echo ""
-  echo "Legacy compatibility: atom (editor), continue (AI tool)"
-  echo ""
   echo ""
   echo "Tip: Set defaults with:"
   echo "   git gtr config set gtr.editor.default <name>"
