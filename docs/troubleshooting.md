@@ -207,14 +207,14 @@ git-worktree-runner/
 
 - Shell completions require bash-completion v2+ for Bash
 - Some AI adapters require recent tool versions (see adapter docs)
-- Windows native (non-WSL) support is experimental
+- Native PowerShell is not supported; use Git Bash or WSL2
 
 ### Testing Approach
 
 - **Automated tests**: BATS test suite (`tests/`) covers core functions
 - **CI**: ShellCheck linting + BATS tests run on all PRs
 - **Manual testing**: End-to-end workflows tested across macOS, Linux, WSL2
-- **Production use**: Battle-tested with Cursor, VS Code, Aider, Claude Code
+- **Adapter coverage**: Built-in and generic `PATH` launch behavior is covered by BATS; product-specific behavior depends on installed tool versions
 - Community testing appreciated - please report issues!
 
 ### Experimental Features

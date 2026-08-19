@@ -160,7 +160,7 @@ _git-gtr() {
         _arguments '--editor[Editor to use]:editor:(antigravity atom cursor emacs idea nano none nvim pycharm sublime vim vscode webstorm zed)'
         ;;
       ai)
-        _arguments '--ai[AI tool to use]:tool:(aider auggie claude codex continue copilot cursor gemini none opencode)'
+        _arguments '--ai[AI tool to use]:tool:(aider antigravity auggie claude codex continue copilot cursor gemini none opencode)'
         ;;
       rm)
         _arguments \

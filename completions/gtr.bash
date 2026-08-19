@@ -67,7 +67,7 @@ _git_gtr() {
       if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "--ai" -- "$cur"))
       elif [ "$prev" = "--ai" ]; then
-        COMPREPLY=($(compgen -W "aider auggie claude codex continue copilot cursor gemini none opencode" -- "$cur"))
+        COMPREPLY=($(compgen -W "aider antigravity auggie claude codex continue copilot cursor gemini none opencode" -- "$cur"))
       else
         local branches all_options
         branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)

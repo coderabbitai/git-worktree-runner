@@ -3,7 +3,9 @@
 
 # Check if Cursor agent/CLI is available
 ai_can_start() {
-  command -v cursor-agent >/dev/null 2>&1 || command -v cursor >/dev/null 2>&1
+  command -v agent >/dev/null 2>&1 \
+    || command -v cursor-agent >/dev/null 2>&1 \
+    || command -v cursor >/dev/null 2>&1
 }
 
 # Start Cursor agent in a directory
@@ -14,8 +16,8 @@ ai_start() {
   local configured_args=("${GTR_AI_CMD_ARGS[@]}")
 
   if ! ai_can_start; then
-    log_error "Cursor not found. Install from https://cursor.com"
-    log_info "Make sure to enable the Cursor CLI/agent from the app"
+    log_error "Cursor agent not found. Install from https://cursor.com/docs/cli/installation"
+    log_info "Current releases use 'agent'; legacy 'cursor-agent' and 'cursor' commands are also supported"
     return 1
   fi
 
@@ -24,8 +26,10 @@ ai_start() {
     return 1
   fi
 
-  # Try cursor-agent first, then fallback to cursor CLI commands
-  if command -v cursor-agent >/dev/null 2>&1; then
+  # Prefer the current standalone CLI, then fall back to legacy commands.
+  if command -v agent >/dev/null 2>&1; then
+    (cd "$path" && agent "${configured_args[@]}" "$@")
+  elif command -v cursor-agent >/dev/null 2>&1; then
     (cd "$path" && cursor-agent "${configured_args[@]}" "$@")
   elif command -v cursor >/dev/null 2>&1; then
     # Try various Cursor CLI patterns (implementation varies by version)

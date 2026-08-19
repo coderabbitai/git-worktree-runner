@@ -103,7 +103,7 @@ teardown() {
   local entry
   entry=$(_registry_lookup "$_EDITOR_REGISTRY" "antigravity")
   _load_from_editor_registry "$entry"
-  [ "$_EDITOR_CMD" = "agy" ]
+  [ "$_EDITOR_CMD" = "agy-ide" ]
   [ "$_EDITOR_WORKSPACE" -eq 1 ]
   [ "$_EDITOR_DOT" -eq 1 ]
 }
@@ -115,6 +115,14 @@ teardown() {
   entry=$(_registry_lookup "$_AI_REGISTRY" "aider")
   _load_from_ai_registry "$entry"
   [ "$_AI_CMD" = "aider" ]
+  declare -f ai_can_start >/dev/null
+}
+
+@test "_load_from_ai_registry maps antigravity to agy" {
+  local entry
+  entry=$(_registry_lookup "$_AI_REGISTRY" "antigravity")
+  _load_from_ai_registry "$entry"
+  [ "$_AI_CMD" = "agy" ]
   declare -f ai_can_start >/dev/null
 }
 
@@ -212,6 +220,22 @@ EOF
   ai_start "$BATS_TMPDIR/worktree" --resume
 
   [ "$(cat "$BATS_TMPDIR/claude-args")" = "--continue --resume" ]
+}
+
+@test "cursor AI adapter prefers current agent command and preserves flags" {
+  mock_bin_dir="$(mktemp -d)"
+  PATH="$mock_bin_dir:/usr/bin:/bin"
+  mkdir -p "$BATS_TMPDIR/worktree"
+  cat > "$mock_bin_dir/agent" <<'EOF'
+#!/usr/bin/env bash
+printf '%s|%s\n' "$(pwd)" "$*" > "$BATS_TMPDIR/cursor-agent-call"
+EOF
+  chmod +x "$mock_bin_dir/agent"
+
+  load_ai_adapter "cursor --resume"
+  ai_start "$BATS_TMPDIR/worktree" --verbose
+
+  [ "$(cat "$BATS_TMPDIR/cursor-agent-call")" = "$BATS_TMPDIR/worktree|--resume --verbose" ]
 }
 
 @test "override editor adapters preserve configured flags" {

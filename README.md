@@ -5,7 +5,7 @@
 [![Git](https://img.shields.io/badge/Git-2.17%2B-orange.svg)](https://git-scm.com/)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#platform-support)
 
-> A portable, cross-platform CLI for managing git worktrees with ease
+> A portable Git worktree CLI for PR reviews, coding agents, and repeatable per-branch setup
 
 ![4 AI agents working in parallel across different worktrees](docs/assets/demo-parallel.png)
 
@@ -13,11 +13,11 @@
 
 - [What are git worktrees?](#what-are-git-worktrees)
 - [Quick Start](#quick-start)
+- [AI Agent Usage](#ai-agent-usage)
 - [Why gtr?](#why-gtr)
 - [Features](#features)
 - [Requirements](#requirements)
 - [Commands](#commands)
-- [AI Agent Usage](#ai-agent-usage)
 - [Configuration](#configuration)
 - [Shell Completions](#shell-completions-optional)
 - [Platform Support](#platform-support)
@@ -50,7 +50,7 @@ brew tap coderabbitai/tap
 brew install git-gtr
 ```
 
-**Script installer (macOS / Linux):**
+**Install from source (macOS / Linux):**
 
 ```bash
 git clone https://github.com/coderabbitai/git-worktree-runner.git
@@ -118,6 +118,17 @@ git gtr rm my-feature
 git gtr clean --merged --closed
 ```
 
+## AI Agent Usage
+
+Shell-capable coding agents can use `git gtr` directly; a separate MCP server is
+not required. Use `git gtr new <branch> --porcelain` to create a worktree and
+reliably capture its path, then run the agent inside that directory. Built-in
+adapters cover popular tools, while the safe `PATH` fallback works with other
+agent CLIs without requiring a dedicated adapter.
+
+See [docs/agent-usage.md](docs/agent-usage.md) for a copy-paste `AGENTS.md`
+policy, output contract, and safe lifecycle examples.
+
 ## Why gtr?
 
 While `git worktree` is powerful, it's verbose and manual. `git gtr` adds quality-of-life features for modern development:
@@ -142,7 +153,7 @@ While `git worktree` is powerful, it's verbose and manual. `git gtr` adds qualit
 - **Repository-scoped** - Each repo has independent worktrees
 - **Configuration over flags** - Set defaults once, use simple commands
 - **Editor integration** - Open worktrees in Antigravity, Cursor, VS Code, Zed, and more
-- **AI tool support** - Launch Aider, Claude Code, or other AI coding tools
+- **AI tool support** - Launch Claude Code, Codex, Gemini CLI, or any safe command in `PATH`
 - **Smart file copying** - Selectively copy configs/env files to new worktrees
 - **Hooks system** - Run custom commands after create/remove
 - **Cross-platform** - Works on macOS, Linux, and Windows (Git Bash)
@@ -240,7 +251,7 @@ Start AI coding tool (uses `gtr.ai.default` or `--ai` flag).
 ```bash
 git gtr ai my-feature                      # Uses configured AI tool
 git gtr ai my-feature --ai codex          # Override with different tool
-git gtr ai my-feature -- --model gpt-4    # Pass arguments to tool
+git gtr ai my-feature -- --verbose        # Pass arguments to tool
 git gtr ai 1                              # Use AI in main repo
 ```
 
@@ -414,16 +425,16 @@ All configuration is stored via `git config`. For team settings, create a `.gtrc
 # Set your editor (antigravity, cursor, vscode, zed)
 git gtr config set gtr.editor.default cursor
 
-# Set your AI tool (aider, auggie, claude, codex, continue, copilot, cursor, gemini, opencode)
+# Set your AI tool (antigravity, aider, auggie, claude, codex, copilot, cursor, gemini, opencode)
 git gtr config set gtr.ai.default claude
 
 # Override-backed adapters may include flags
 git gtr config set gtr.editor.default "nano -w"
 git gtr config set gtr.ai.default "claude --continue"
 
-# Generic fallbacks may use other safe PATH commands
+# Generic fallbacks support other safe PATH commands without dedicated adapters
 git gtr config set gtr.editor.default "code --wait"
-git gtr config set gtr.ai.default "bunx @github/copilot@latest"
+git gtr config set gtr.ai.default goose
 
 # Copy env files to new worktrees
 git gtr config add gtr.copy.include "**/.env.example"
@@ -470,6 +481,9 @@ git gtr config set gtr.ui.color never
 1. `git config --local` (`.git/config`) - personal overrides
 2. `.gtrconfig` (repo root) - team defaults (hooks and editor/AI defaults require `git gtr trust`)
 3. `git config --global` (`~/.gitconfig`) - user defaults
+4. `git config --system` (`/etc/gitconfig`) - system defaults
+5. Environment variables
+6. Built-in defaults
 
 > For complete configuration reference including all settings, hooks, file copying patterns, and environment variables, see [docs/configuration.md](docs/configuration.md)
 
@@ -505,15 +519,6 @@ Requires Git 2.17+ and Bash 3.2+.
 
 > For troubleshooting, platform-specific notes, and architecture details, see [docs/troubleshooting.md](docs/troubleshooting.md)
 
-## AI Agent Usage
-
-Shell-capable coding agents can use `git gtr` directly; a separate MCP server is
-not required. Use `git gtr new <branch> --porcelain` to create a worktree and
-reliably capture its path, then run the agent inside that directory.
-
-See [docs/agent-usage.md](docs/agent-usage.md) for a copy-paste `AGENTS.md`
-policy, output contract, and safe lifecycle examples.
-
 ## Advanced Usage
 
 For advanced workflows including:
@@ -530,8 +535,8 @@ See [docs/advanced-usage.md](docs/advanced-usage.md)
 
 Contributions welcome! Areas where help is appreciated:
 
-- **New editor adapters** - JetBrains IDEs, Neovim, etc.
-- **New AI tool adapters** - Codeium, etc.
+- **New editor adapters** - Editors that need behavior beyond the safe `PATH` fallback
+- **New AI tool adapters** - Agent CLIs that need custom launch or discovery logic
 - **Bug reports** - Platform-specific issues
 - **Documentation** - Tutorials, examples, use cases
 

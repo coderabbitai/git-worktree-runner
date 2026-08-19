@@ -18,8 +18,8 @@
 #
 # Loading: file override (adapters/editor/<name>.sh) → registry → generic PATH fallback
 _EDITOR_REGISTRY="
-antigravity|agy|standard|Antigravity 'agy' command not found. Install from https://antigravity.google|workspace,dot
-atom|atom|standard|Atom not found. Install from https://atom.io|
+antigravity|agy-ide|standard|Antigravity 'agy-ide' command not found. Install from https://antigravity.google|workspace,dot
+atom|atom|standard|Atom (legacy) not found. Atom was sunset; see https://github.blog/news-insights/product-news/sunsetting-atom/|
 cursor|cursor|standard|Cursor not found. Install from https://cursor.com or enable the shell command.|workspace
 emacs|emacs|terminal|Emacs not found. Install from https://www.gnu.org/software/emacs/|background
 idea|idea|standard|IntelliJ IDEA 'idea' command not found. Enable shell launcher in Tools > Create Command-line Launcher|
@@ -44,10 +44,11 @@ zed|zed|standard|Zed not found. Install from https://zed.dev|
 #
 # Loading: file override (adapters/ai/<name>.sh) → registry → generic PATH fallback
 _AI_REGISTRY="
-aider|aider|Aider not found. Install with: pip install aider-chat|See https://aider.chat for more information
-auggie|auggie|Auggie CLI not found. Install with: npm install -g @augmentcode/auggie|See https://www.augmentcode.com/product/CLI for more information
+antigravity|agy|Antigravity CLI not found. Install from https://antigravity.google|See https://antigravity.google/docs/cli/getting-started for more information
+aider|aider|Aider not found. Install with: python -m pip install aider-install && aider-install|See https://aider.chat/docs/install.html for more information
+auggie|auggie|Auggie CLI not found. Install with: npm install -g @augmentcode/auggie|See https://docs.augmentcode.com/cli/overview for more information
 codex|codex|Codex CLI not found. Install with: npm install -g @openai/codex|Or: brew install codex;See https://github.com/openai/codex for more info
-continue|cn|Continue CLI not found. Install from https://continue.dev|See https://docs.continue.dev/cli/install for installation
+continue|cn|Continue CLI (legacy) not found.|Continue is no longer actively maintained; see https://github.com/continuedev/continue
 copilot|copilot|GitHub Copilot CLI not found.|Install with: npm install -g @github/copilot;Or: brew install copilot-cli;See https://github.com/github/copilot-cli for more information
 gemini|gemini|Gemini CLI not found. Install with: npm install -g @google/gemini-cli|Or: brew install gemini-cli;See https://github.com/google-gemini/gemini-cli for more info
 opencode|opencode|OpenCode not found. Install from https://opencode.ai|Make sure the 'opencode' CLI is available in your PATH
@@ -522,7 +523,7 @@ _load_adapter() {
 load_editor_adapter() {
   local builtin_names
   builtin_names="$(_list_registry_names "$_EDITOR_REGISTRY"), nano"
-  _load_adapter "editor" "$1" "Editor" "$builtin_names" "code-insiders, fleet"
+  _load_adapter "editor" "$1" "Editor" "$builtin_names" "code-insiders, hx"
 }
 
 load_ai_adapter() {

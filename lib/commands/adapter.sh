@@ -58,6 +58,8 @@ cmd_adapter() {
   _print_adapter_list "AI Tool Adapters" "$_AI_REGISTRY" "ai" "ai_can_start" "_load_from_ai_registry"
 
   echo ""
+  echo "Legacy compatibility: atom (editor), continue (AI tool)"
+  echo ""
   echo ""
   echo "Tip: Set defaults with:"
   echo "   git gtr config set gtr.editor.default <name>"

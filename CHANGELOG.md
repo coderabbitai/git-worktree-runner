@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+### Added
+
+- Antigravity's terminal agent is available as the `antigravity` AI adapter, while other safe agent commands continue to work through the generic `PATH` fallback.
+
+### Changed
+
+- Antigravity editor launches now use the current `agy-ide` command, and the Cursor AI adapter prefers the current `agent` command while retaining legacy fallbacks.
+- Editor and AI documentation now uses current installation commands and labels retired or unmaintained integrations as legacy compatibility.
+- The README now leads with PR review and coding-agent workflows, surfaces agent automation earlier, and documents the complete configuration precedence.
+
 ## [2.10.0] - 2026-08-12
 
 ### Added
