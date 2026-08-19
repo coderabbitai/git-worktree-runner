@@ -18,8 +18,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install ShellCheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Verify ShellCheck is available
+        run: shellcheck --version
 
       - name: Run ShellCheck
         run: |
