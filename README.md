@@ -542,6 +542,15 @@ Contributions welcome! Areas where help is appreciated:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards.
 
+## Maintainers
+
+gtr was created and is maintained by [@helizaga](https://github.com/helizaga).
+
+Much of what gtr supports today came from outside contributors - editor and AI tool adapters, platform
+fixes, shell integrations, and documentation. See the
+[contributor list](https://github.com/coderabbitai/git-worktree-runner/graphs/contributors) for everyone
+who has shipped something here.
+
 ## License
 
 This project is licensed under the [Apache License 2.0](LICENSE.txt).
