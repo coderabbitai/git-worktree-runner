@@ -48,8 +48,9 @@ File-based adapters take precedence over registry entries of the same name.
 **Also update**:
 
 - README.md (setup instructions)
-- All three completion files: `completions/gtr.bash`, `completions/_git-gtr`, `completions/gtr.fish`
-- Help text in `lib/commands/help.sh` (`cmd_help` function)
+- Completions: run `./scripts/generate-completions.sh` (registry names are picked up automatically; the files under `completions/` are generated and checked in CI)
+- Help text in `lib/commands/help.sh` (`_help_editor`)
+- Editor table in `docs/configuration.md`
 
 ## Contract & Guidelines
 
@@ -58,6 +59,6 @@ File-based adapters take precedence over registry entries of the same name.
 - Use `log_error` with actionable install guidance if command missing.
 - Keep adapter lean: no project scans, no blocking prompts.
 - Naming: file/registry name = tool name (`zed` → `zed` flag). Avoid uppercase.
-- Update: README editor list, completions (bash/zsh/fish), help (`Available editors:`), optional screenshots.
+- Update: README editor list, `docs/configuration.md` editor table, help text, then regenerate completions.
 - Fallback behavior: if editor absent, fail clearly; do NOT silently defer to file browser.
 - Inspect function definition if needed: `declare -f editor_open`.

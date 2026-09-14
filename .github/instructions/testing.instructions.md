@@ -1,10 +1,23 @@
 ---
-applyTo: bin/gtr, lib/**/*.sh, adapters/**/*.sh
+applyTo: bin/git-gtr, bin/gtr, lib/**/*.sh, adapters/**/*.sh, tests/**/*.bats
 ---
 
 # Testing Instructions
 
-Run after core or adapter changes; all manual (no automated tests).
+Run the automated checks after any change, then the manual matrix for the areas you touched.
+
+## Automated Checks (CI gates)
+
+```bash
+bats tests/                          # BATS suite, 29 files; fixtures in tests/test_helper.bash
+bats tests/cmd_list.bats             # one file; add --filter "name" for one test
+shellcheck bin/gtr bin/git-gtr lib/*.sh lib/commands/*.sh adapters/editor/*.sh adapters/ai/*.sh
+./scripts/generate-completions.sh --check   # committed completions match the generator
+```
+
+These three jobs are exactly what `.github/workflows/lint.yml` runs on every pull request.
+
+## Manual Matrix
 
 ```bash
 # Basic create/remove
@@ -31,7 +44,7 @@ Run after core or adapter changes; all manual (no automated tests).
 
 # Editor + AI adapters
 ./bin/gtr config set gtr.editor.default cursor
-./bin/gtr open test-feature
+./bin/gtr editor test-feature
 ./bin/gtr config set gtr.ai.default claude
 ./bin/gtr ai test-feature
 
@@ -42,6 +55,13 @@ Run after core or adapter changes; all manual (no automated tests).
 # Navigation
 cd "$(./bin/gtr go 1)"               # repo root
 cd "$(./bin/gtr go test-feature)"    # worktree path
+
+# Pull request worktrees (needs gh) and PR-based cleanup
+./bin/gtr pr 123                     # folder from the PR head branch
+./bin/gtr clean --merged --dry-run   # preview, remove nothing
+
+# .gtrconfig trust (hooks and defaults stay inert until approved)
+./bin/gtr trust
 
 # Config commands
 ./bin/gtr config set gtr.editor.default cursor
@@ -72,7 +92,7 @@ git --version
 ## Adapter Sourcing Checks
 
 ```bash
-bash -c 'source adapters/editor/cursor.sh && editor_can_open && echo OK'
+bash -c 'source adapters/editor/nano.sh && editor_can_open && echo OK'
 bash -c 'source adapters/ai/claude.sh && ai_can_start && echo OK'
 ```
 
@@ -80,6 +100,7 @@ bash -c 'source adapters/ai/claude.sh && ai_can_start && echo OK'
 
 ```bash
 bash -x ./bin/gtr new test-feature   # global trace
+GTR_DEBUG=1 ./bin/gtr new test-feature  # file:line:function on set -e failures
 set -x; create_worktree ...; set +x  # scoped trace inside function
 declare -f resolve_target            # confirm function loaded
 echo "DEBUG worktree_path=$worktree_path" >&2  # variable inspection
@@ -87,6 +108,7 @@ echo "DEBUG worktree_path=$worktree_path" >&2  # variable inspection
 
 ## Success Criteria
 
+- `bats tests/`, ShellCheck, and `./scripts/generate-completions.sh --check` pass.
 - All commands exit 0 (except intentional failures) and produce expected side-effects.
 - No unquoted path errors; spaces handled.
 - Hooks run only once per creation/removal.
@@ -95,5 +117,6 @@ echo "DEBUG worktree_path=$worktree_path" >&2  # variable inspection
 
 ## When Adding Features
 
+- Add or extend the matching `tests/cmd_<name>.bats`; BATS covers behavior, this matrix covers what BATS cannot (editors, AI tools, shell integration).
 - Extend this matrix minimally (keep concise).
 - Prefer adding under relevant section (e.g. new flag under create/remove).

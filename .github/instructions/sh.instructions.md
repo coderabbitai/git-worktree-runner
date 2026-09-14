@@ -20,7 +20,7 @@ applyTo: **/*.bash, **/*.fish, **/*.sh
 
 ### Strict Mode & Safety
 
-- Global `set -e` in `bin/gtr`: guard non-critical commands with `|| true`.
+- Global `set -e` in `bin/git-gtr` (every sourced library inherits it): guard non-critical commands with `|| true`.
 - Prefer `[ ]` over `[[ ]]` for POSIX portability (use `[[` only when needed).
 - Always quote glob inputs; disable unintended globbing (`set -f` temporarily if required).
 
@@ -32,13 +32,14 @@ applyTo: **/*.bash, **/*.fish, **/*.sh
 ### Debugging
 
 - Quick trace: `bash -x ./bin/gtr <cmd>`.
+- Failure location: `GTR_DEBUG=1 ./bin/gtr <cmd>` prints `file:line:function` when a command fails under `set -e`.
 - Inline: wrap suspicious block with `set -x` / `set +x`.
 - Function presence: `declare -f create_worktree` or `declare -f resolve_target`.
 - Variable inspection: `echo "DEBUG var=$var" >&2` (stderr keeps stdout clean for command substitution).
 
 ### External Commands
 
-- Keep dependencies minimal: only `git`, `sed`, `awk`, `find`, `grep` (avoid jq/curl unless justified).
+- Keep dependencies minimal: only `git`, `sed`, `awk`, `find`, `grep` (avoid jq/curl unless justified). `gh` and `glab` are optional and used only by `pr` and `clean --merged/--closed`.
 - Check availability before use if adding new tools.
 
 ### Quoting & Paths
