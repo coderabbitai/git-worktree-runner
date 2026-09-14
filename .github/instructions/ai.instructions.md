@@ -44,7 +44,7 @@ ai_start() {
 
 File-based adapters take precedence over registry entries of the same name.
 
-**Also update**: README and `docs/configuration.md` tool tables, help text in `lib/commands/help.sh` (`_help_ai`); then run `./scripts/generate-completions.sh` (completions are generated and checked in CI)
+**Also update**: the README tool list and the `docs/configuration.md` AI tool table, help text in `lib/commands/help.sh` (`_help_ai`); then run `./scripts/generate-completions.sh` (completions are generated and checked in CI)
 
 ## Contract & Guidelines
 

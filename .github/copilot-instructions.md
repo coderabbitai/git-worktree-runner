@@ -43,7 +43,7 @@ Standard tools are registry lines, not files. `_EDITOR_REGISTRY` entries are `na
 
 **Add a command**: create `lib/commands/<name>.sh` with `cmd_<name>()`; add a `case` entry to `main()` in `bin/git-gtr`; add `_help_<name>()` to `lib/commands/help.sh` (found by name; add a `case` alias in `cmd_help` only if the command has aliases); add the command and its flags to the `generate_bash`, `generate_zsh`, and `generate_fish` templates in `scripts/generate-completions.sh`; run `./scripts/generate-completions.sh`; add `tests/cmd_<name>.bats`; document it in README.
 
-**Add an adapter**: add a registry line in `lib/adapters.sh`; run `./scripts/generate-completions.sh`; update the adapter tables in README and `docs/configuration.md` and the tool list in `lib/commands/help.sh`.
+**Add an adapter**: add a registry line in `lib/adapters.sh`; run `./scripts/generate-completions.sh`; update the adapter lists in README and `docs/configuration.md` and the tool list in `lib/commands/help.sh`.
 
 **Change a flag**: update the command's `parse_args` spec, its `_help_<name>()`, the three completion templates, the regenerated completions, README, and the matching BATS file.
 

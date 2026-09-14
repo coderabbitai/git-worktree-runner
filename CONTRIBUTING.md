@@ -119,7 +119,7 @@ Format: `name|cmd|type|err_msg|flags` where:
 
 Create `adapters/editor/yourname.sh` implementing `editor_can_open()` and `editor_open()`. See `adapters/editor/nano.sh` for an example.
 
-**Also update**: README.md, help text in `lib/commands/help.sh`, then run `./scripts/generate-completions.sh` (the files under `completions/` are generated; CI checks them).
+**Also update**: README.md, the editor list in `docs/configuration.md`, help text in `lib/commands/help.sh`, then run `./scripts/generate-completions.sh` (the files under `completions/` are generated; CI checks them).
 
 #### Adding an AI Tool Adapter
 
@@ -137,7 +137,7 @@ Format: `name|cmd|err_msg|info_lines` (info lines are semicolon-separated).
 
 Create `adapters/ai/yourname.sh` implementing `ai_can_start()` and `ai_start()`. See `adapters/ai/claude.sh` for an example.
 
-**Also update**: README.md, help text, then regenerate completions with `./scripts/generate-completions.sh`.
+**Also update**: README.md, the AI tool table in `docs/configuration.md`, help text, then regenerate completions with `./scripts/generate-completions.sh`.
 
 #### Adding Core Features
 
