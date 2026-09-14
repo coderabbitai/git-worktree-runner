@@ -236,9 +236,8 @@ git-worktree-runner/
 If you're still having issues:
 
 1. Run `git gtr doctor` to check your setup
-2. Locate the failure: `GTR_DEBUG=1 git gtr <command>` prints `file:line:function` when an internal command fails
-3. For a full trace, run the script directly: `bash -x "$(command -v git-gtr)" <command>`
-4. [Open an issue](https://github.com/coderabbitai/git-worktree-runner/issues) with:
+2. Get a full trace by running the script directly: `bash -x "$(command -v git-gtr)" <command>`
+3. [Open an issue](https://github.com/coderabbitai/git-worktree-runner/issues) with:
    - Your OS and version
    - Git version (`git --version`)
    - Bash version (`bash --version`)
