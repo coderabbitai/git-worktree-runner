@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents (Codex, Copilot, and similar tools) when working with code in this repository.
 
 ## Project Overview
 
@@ -32,7 +32,7 @@ This project uses **BATS tests** for core functions and **manual smoke tests** f
 
 For exhaustive manual testing (hooks, copy patterns, adapters, `--force`, `--from-current`, etc.), see the full checklist in CONTRIBUTING.md or `.github/instructions/testing.instructions.md`.
 
-**Test files**: `adapters`, `config`, `copy_safety`, `integration_lifecycle`, `parse_args`, `provider`, `resolve_base_dir`, `sanitize_branch_name` (all in `tests/`). Shared fixtures in `tests/test_helper.bash`.
+**Test files** (all in `tests/`): one `cmd_*.bats` file per command (`cmd_clean`, `cmd_config`, `cmd_copy`, `cmd_create_integration`, `cmd_go`, `cmd_help`, `cmd_list`, `cmd_pr`, `cmd_remove`, `cmd_rename`, `cmd_run`, `cmd_trust`), library tests (`adapters`, `completion`, `config`, `copy_safety`, `core_create_worktree`, `core_resolve_target`, `hooks`, `init`, `launch`, `parse_args`, `platform`, `provider`, `resolve_base_dir`, `sanitize_branch_name`, `sparse`, `ui_color`), and `integration_lifecycle` for end-to-end flows. Shared fixtures in `tests/test_helper.bash`.
 
 **Tip**: Use a disposable repo for testing to avoid polluting your working tree:
 
@@ -58,11 +58,11 @@ mkdir -p /tmp/gtr-test && cd /tmp/gtr-test && git init && git commit --allow-emp
 | `lib/platform.sh`   | OS detection, GUI helpers                                                                                   |
 | `lib/core.sh`       | Worktree CRUD: `create_worktree`, `remove_worktree`, `list_worktrees`, `resolve_target`, `resolve_base_dir` |
 | `lib/copy.sh`       | File/directory copying with glob patterns: `copy_patterns`, `copy_directories`                              |
-| `lib/hooks.sh`      | Hook execution: `run_hooks_in` for postCreate/preRemove/postRemove                                          |
-| `lib/provider.sh`   | Remote hosting detection (GitHub/GitLab) and CLI integration for `clean --merged`                           |
+| `lib/hooks.sh`      | Hook execution: `run_hooks_in` for postCreate/preRemove/postRemove/postCd                                   |
+| `lib/provider.sh`   | Remote hosting detection (GitHub/GitLab) and CLI integration for `clean --merged/--closed`                  |
 | `lib/adapters.sh`   | Adapter registry, builder functions, generic fallbacks, loader functions                                    |
 | `lib/launch.sh`     | Editor/AI launch orchestration: `_open_editor`, `_auto_launch_editor`, `_auto_launch_ai`                    |
-| `lib/commands/*.sh` | One file per subcommand: `cmd_create`, `cmd_remove`, etc. (16 files)                                        |
+| `lib/commands/*.sh` | One file per subcommand: `cmd_create`, `cmd_remove`, `cmd_pr`, `cmd_trust`, etc. (18 files)                 |
 
 Libraries are sourced in the order listed above (ui → args → config → ... → launch → commands/\*.sh glob).
 
@@ -72,17 +72,17 @@ Most adapters are defined declaratively in the **adapter registry** (`lib/adapte
 
 **Registry-defined adapters**: antigravity, atom, cursor, emacs, idea, nvim, pycharm, sublime, vim, vscode, webstorm, zed (editors) and aider, auggie, codex, continue, copilot, gemini, opencode (AI).
 
-**Custom adapter files**: `adapters/editor/nano.sh`, `adapters/ai/Codex.sh`, `adapters/ai/cursor.sh` — these implement `editor_can_open()`/`editor_open()` or `ai_can_start()`/`ai_start()` directly.
+**Custom adapter files**: `adapters/editor/nano.sh`, `adapters/ai/claude.sh`, `adapters/ai/cursor.sh` — these implement `editor_can_open()`/`editor_open()` or `ai_can_start()`/`ai_start()` directly.
 
 **Loading order**: file override → registry → generic PATH fallback. `GTR_EDITOR_CMD` / `GTR_AI_CMD` env vars allow custom tools without adapters.
 
 ### Command Flow
 
 ```
-bin/gtr main() → case statement → cmd_*() handler → lib/*.sh functions → adapters (if needed)
+bin/git-gtr main() → case statement → cmd_*() handler → lib/*.sh functions → adapters (if needed)
 ```
 
-Key dispatch: `new`→`cmd_create`, `rm`→`cmd_remove`, `mv|rename`→`cmd_rename`, `go`→`cmd_go`, `run`→`cmd_run`, `editor`→`cmd_editor`, `ai`→`cmd_ai`, `copy`→`cmd_copy`, `ls|list`→`cmd_list`, `clean`→`cmd_clean`, `init`→`cmd_init`, `config`→`cmd_config`, `completion`→`cmd_completion`, `doctor`→`cmd_doctor`, `adapter`→`cmd_adapter`.
+Key dispatch: `new`→`cmd_create`, `pr`→`cmd_pr`, `rm`→`cmd_remove`, `mv|rename`→`cmd_rename`, `go`→`cmd_go`, `run`→`cmd_run`, `editor`→`cmd_editor`, `ai`→`cmd_ai`, `copy`→`cmd_copy`, `ls|list`→`cmd_list`, `clean`→`cmd_clean`, `init`→`cmd_init`, `config`→`cmd_config`, `completion`→`cmd_completion`, `doctor`→`cmd_doctor`, `adapter|adapters`→`cmd_adapter`, `trust`→`cmd_trust`. `cd` has no `cmd_*` handler: the dispatcher prints shell-integration instructions because `gtr cd` is implemented by the shell function that `init` generates.
 
 **Example: `git gtr new my-feature`**
 
@@ -114,14 +114,20 @@ cmd_editor() → resolve_target() → load_editor_adapter() → editor_open()
 
 **`init` command**: Outputs shell functions for `gtr cd <branch>` navigation. Output is cached to `~/.cache/gtr/` and auto-invalidates on version change. Users source the cache file directly in their shell rc for fast startup (see `git gtr help init`).
 
-**`clean --merged`**: Removes worktrees whose PRs/MRs are merged. Auto-detects GitHub (`gh`) or GitLab (`glab`) from the `origin` remote URL. Override with `gtr.provider` config for self-hosted instances.
+**`clean --merged` / `clean --closed`**: Removes worktrees whose PRs/MRs are merged or closed and deletes their branches. Auto-detects GitHub (`gh`) or GitLab (`glab`) from the `origin` remote URL. Override with `gtr.provider` config for self-hosted instances. `clean` also unlocks and prunes locked registry entries whose directories no longer exist.
+
+**`pr <number|url|branch>`** (lib/commands/pr.sh): Creates a worktree from a GitHub pull request via `gh`. Uses `gh pr checkout --worktree` when the installed `gh` supports it, otherwise fetches `refs/pull/<n>/head` through a compatibility path.
+
+**`new --porcelain`**: Emits exactly three `key<TAB>value` records (`path`, `branch`, `hook_status`) on stdout with everything else on stderr. Contract documented in `docs/agent-usage.md`; keep it stable.
+
+**Sparse-checkout inheritance** (`gtr.sparse.inherit`, default on): On Git 2.36+, `new` copies the base worktree's sparse-checkout patterns instead of materializing a full tree. `--sparse`/`--no-sparse` override per invocation.
 
 ## Common Development Tasks
 
 ### Adding a New Command
 
 1. Create `lib/commands/<name>.sh` with `cmd_<name>()` function
-2. Add case entry in `main()` dispatcher in `bin/gtr`
+2. Add case entry in `main()` dispatcher in `bin/git-gtr`
 3. Add help text in `lib/commands/help.sh`
 4. Update all three completion files: `completions/gtr.bash`, `completions/_git-gtr`, `completions/git-gtr.fish`
 5. Update README.md
@@ -130,7 +136,7 @@ cmd_editor() → resolve_target() → load_editor_adapter() → editor_open()
 
 **Standard adapters** (just a command name + error message): Add an entry to `_EDITOR_REGISTRY` or `_AI_REGISTRY` in `lib/adapters.sh`. Then update: help text in `lib/commands/help.sh`, all three completions, README.md.
 
-**Custom adapters** (special logic needed): Create `adapters/{editor,ai}/<name>.sh` implementing the two required functions (see `adapters/ai/Codex.sh` for an example). File-based adapters take priority over registry entries.
+**Custom adapters** (special logic needed): Create `adapters/{editor,ai}/<name>.sh` implementing the two required functions (see `adapters/ai/claude.sh` for an example). File-based adapters take priority over registry entries.
 
 ### Updating the Version
 
@@ -171,10 +177,15 @@ All config uses `gtr.*` prefix via `git config`. Key settings:
 
 - `gtr.worktrees.dir` — Base directory (default: `<repo-name>-worktrees` sibling)
 - `gtr.worktrees.prefix` — Folder prefix (default: `""`)
+- `gtr.defaultBranch` / `gtr.defaultRemote` — Base branch (default: auto-detect) and remote (default: `origin`) for new worktrees
+- `gtr.sparse.inherit` — Inherit sparse-checkout from the base worktree on Git 2.36+ (default: `true`)
+- `gtr.provider` — Force `github` or `gitlab` for `clean --merged/--closed` (default: detect from `origin` URL)
 - `gtr.editor.default` / `gtr.ai.default` — Default editor/AI tool
 - `gtr.copy.include` / `gtr.copy.exclude` — File glob patterns (multi-valued, use `--add`)
 - `gtr.copy.includeDirs` / `gtr.copy.excludeDirs` — Directory patterns (multi-valued)
-- `gtr.hook.postCreate` / `gtr.hook.preRemove` / `gtr.hook.postRemove` — Hook commands (multi-valued)
+- `gtr.hook.postCreate` / `gtr.hook.preRemove` / `gtr.hook.postRemove` / `gtr.hook.postCd` — Hook commands (multi-valued; `postCd` runs in the current shell after `gtr cd`, `gtr new --cd`, or `gtr pr --cd`)
+
+Every `cfg_default` key also has an environment-variable fallback (for example `GTR_WORKTREES_DIR`, `GTR_DEFAULT_BRANCH`); the full table is in `docs/configuration.md`.
 
 Hook env vars: `REPO_ROOT`, `WORKTREE_PATH`, `BRANCH`. preRemove hooks run with cwd in worktree; failure aborts removal unless `--force`.
 
@@ -182,6 +193,7 @@ Hook env vars: `REPO_ROOT`, `WORKTREE_PATH`, `BRANCH`. preRemove hooks run with 
 
 ```bash
 bash -x ./bin/gtr <command>          # Full trace
+GTR_DEBUG=1 ./bin/gtr <command>      # Print file:line:function on set -e failures
 declare -f function_name             # Check function definition
 echo "Debug: var=$var" >&2           # Inspect variable
 ./bin/gtr doctor                     # Health check
@@ -195,3 +207,5 @@ echo "Debug: var=$var" >&2           # Inspect variable
 - `.github/instructions/*.instructions.md` — File-pattern-specific guidance (testing, shell conventions, lib modifications, adapter contracts, completions)
 - `docs/configuration.md` — Complete configuration reference
 - `docs/advanced-usage.md` — Advanced workflows
+- `docs/agent-usage.md` — `--porcelain` output contract and safety boundaries for coding agents
+- `docs/troubleshooting.md` — Common failures and fixes

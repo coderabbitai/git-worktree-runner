@@ -499,18 +499,24 @@ git gtr config set gtr.defaultRemote upstream --global
 
 ## Environment Variables
 
-| Variable              | Description                                                          | Default                    |
-| --------------------- | -------------------------------------------------------------------- | -------------------------- |
-| `GTR_DIR`             | Override script directory location                                   | Auto-detected              |
-| `GTR_WORKTREES_DIR`   | Override base worktrees directory                                    | `gtr.worktrees.dir` config |
-| `GTR_EDITOR_CMD`      | Custom editor command (e.g., `emacs`)                                | None                       |
-| `GTR_EDITOR_CMD_NAME` | First word of `GTR_EDITOR_CMD` for availability checks               | None                       |
-| `GTR_AI_CMD`          | Custom AI tool command (e.g., `copilot`)                             | None                       |
-| `GTR_AI_CMD_NAME`     | First word of `GTR_AI_CMD` for availability checks                   | None                       |
-| `GTR_DEFAULT_REMOTE`  | Remote used for default base refs and tracking                       | `origin`                   |
-| `GTR_COLOR`           | Override color output (`always`, `never`, `auto`)                    | `auto`                     |
-| `GTR_PROVIDER`        | Override hosting provider (`github` or `gitlab`)                     | Auto-detected from URL     |
-| `NO_COLOR`            | Disable color output when set ([no-color.org](https://no-color.org)) | Unset                      |
+Environment variables sit below every `git config` and `.gtrconfig` source in the precedence order, so they act as fallbacks when no matching `gtr.*` key is set.
+
+| Variable               | Description                                                          | Default                                  |
+| ---------------------- | -------------------------------------------------------------------- | ---------------------------------------- |
+| `GTR_DIR`              | Override script directory location                                   | Auto-detected                            |
+| `GTR_WORKTREES_DIR`    | Override base worktrees directory                                    | `gtr.worktrees.dir` config               |
+| `GTR_WORKTREES_PREFIX` | Folder name prefix for new worktrees                                 | `gtr.worktrees.prefix` config            |
+| `GTR_DEFAULT_BRANCH`   | Base branch for new worktrees                                        | `gtr.defaultBranch` config (auto-detect) |
+| `GTR_EDITOR_DEFAULT`   | Default editor adapter                                               | `gtr.editor.default` config              |
+| `GTR_AI_DEFAULT`       | Default AI tool adapter                                              | `gtr.ai.default` config                  |
+| `GTR_EDITOR_CMD`       | Custom editor command (e.g., `emacs`)                                | None                                     |
+| `GTR_EDITOR_CMD_NAME`  | First word of `GTR_EDITOR_CMD` for availability checks               | None                                     |
+| `GTR_AI_CMD`           | Custom AI tool command (e.g., `copilot`)                             | None                                     |
+| `GTR_AI_CMD_NAME`      | First word of `GTR_AI_CMD` for availability checks                   | None                                     |
+| `GTR_DEFAULT_REMOTE`   | Remote used for default base refs and tracking                       | `origin`                                 |
+| `GTR_COLOR`            | Override color output (`always`, `never`, `auto`)                    | `auto`                                   |
+| `GTR_PROVIDER`         | Override hosting provider (`github` or `gitlab`)                     | Auto-detected from URL                   |
+| `NO_COLOR`             | Disable color output when set ([no-color.org](https://no-color.org)) | Unset                                    |
 
 **Hook environment variables** (available in hook scripts):
 

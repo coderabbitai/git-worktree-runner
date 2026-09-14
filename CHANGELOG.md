@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+### Changed
+
+- The README documents `--sparse`/`--no-sparse` under `git gtr new` and lists the Maintainers section in its table of contents.
+- `docs/agent-usage.md` explains how to suppress hooks, file copying, and fetching for bare automation worktrees.
+- `docs/configuration.md` lists the remaining `GTR_*` fallback variables, and `docs/troubleshooting.md` describes `GTR_DEBUG`.
+- `AGENTS.md` and `CLAUDE.md` now cover the `pr` and `trust` commands, `clean --closed`, sparse-checkout inheritance, `postCd` hooks, and the current test suite layout.
+
+### Fixed
+
+- `AGENTS.md` referenced a nonexistent `adapters/ai/Codex.sh`; it now points at `adapters/ai/claude.sh`.
+
 ## [2.11.0] - 2026-08-19
 
 ### Added

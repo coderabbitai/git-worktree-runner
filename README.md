@@ -22,6 +22,7 @@
 - [Shell Completions](#shell-completions-optional)
 - [Platform Support](#platform-support)
 - [Contributing](#contributing)
+- [Maintainers](#maintainers)
 - [License](#license)
 
 ---
@@ -193,6 +194,8 @@ git gtr new agent-task --porcelain                                              
 - `--no-copy`: Skip file copying
 - `--no-fetch`: Skip git fetch
 - `--no-hooks`: Skip post-create hooks
+- `--sparse`: Inherit sparse-checkout from the base worktree (Git 2.36+; overrides `gtr.sparse.inherit = false`)
+- `--no-sparse`: Force a full checkout even when `gtr.sparse.inherit` is on
 - `--force`: Allow same branch in multiple worktrees (**requires --name or --folder**)
 - `--name <suffix>`: Custom folder name suffix (optional, required with --force)
 - `--folder <name>`: Custom folder name (replaces default, useful for long branch names)

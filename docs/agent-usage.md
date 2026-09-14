@@ -36,6 +36,24 @@ Progress messages, warnings, and hook output go to stderr. `--porcelain` implies
 A non-zero exit means creation or a post-create hook failed. No success records
 are emitted in that case.
 
+## Restricting side effects
+
+`--porcelain` only changes output and prompting. Repository setup still runs:
+configured file copying (`gtr.copy.*`), trusted post-create hooks, and a
+`git fetch` before creation. Automation that wants a bare worktree can disable
+each of these explicitly:
+
+```bash
+# No hooks, no file copying
+git gtr new agent/my-task --porcelain --no-hooks --no-copy
+
+# Also skip the network round-trip
+git gtr new agent/my-task --porcelain --no-hooks --no-copy --no-fetch
+```
+
+With `--no-hooks`, `hook_status` is always `disabled`. The trust model still
+applies without it: `.gtrconfig` hooks the user has not approved never run.
+
 ## Recommended agent lifecycle
 
 1. Inspect existing worktrees with `git gtr list --porcelain`.
