@@ -3,7 +3,11 @@
 # Portable, cross-platform git worktree management
 # Invoked as: git gtr <command> (git subcommand via PATH discovery)
 
-set -e
+# -E propagates the ERR trap below into functions, command substitutions and
+# subshells. Without it the GTR_DEBUG trap never fires, because every command
+# runs inside main() and a cmd_* handler. With no ERR trap installed, -E has no
+# effect, so the default path behaves exactly as it did with plain -e.
+set -eE
 
 # Debug: show file:line:function on set -e failures
 if [ -n "${GTR_DEBUG:-}" ]; then

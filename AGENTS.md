@@ -191,8 +191,7 @@ Hook env vars: `REPO_ROOT`, `WORKTREE_PATH`, `BRANCH`. preRemove hooks run with 
 
 ```bash
 bash -x ./bin/gtr <command>          # Full trace
-# GTR_DEBUG=1 installs an ERR trap, but bin/git-gtr sets `set -e` without
-# `set -E`, so it does not fire for failures inside functions. Use bash -x.
+GTR_DEBUG=1 ./bin/gtr <command>      # Report file:line:function on an unguarded failure
 declare -f function_name             # Check function definition
 echo "Debug: var=$var" >&2           # Inspect variable
 ./bin/gtr doctor                     # Health check
