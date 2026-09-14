@@ -64,3 +64,21 @@ teardown() {
   [ "$status" -ne 0 ]
   [[ "$output" != *"ERROR at "* ]]
 }
+
+@test "GTR_DEBUG reports a failure raised inside a subshell" {
+  # cmd_run executes the requested command in a subshell:
+  #   (cd "$worktree_path" && "${run_args[@]}")
+  # A failing command there is only reported when the ERR trap is inherited by
+  # subshells, which is the other half of what errtrace buys.
+  run env GTR_DEBUG=1 "$PROJECT_ROOT/bin/git-gtr" run 1 false
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"ERROR at "* ]]
+  [[ "$output" == *"lib/commands/run.sh"* ]]
+  [[ "$output" == *"cmd_run()"* ]]
+}
+
+@test "a successful command under gtr run reports nothing" {
+  run env GTR_DEBUG=1 "$PROJECT_ROOT/bin/git-gtr" run 1 true
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"ERROR at "* ]]
+}
