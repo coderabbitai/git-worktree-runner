@@ -164,15 +164,20 @@ git gtr config get gtr.copy.exclude
 ```
 git-worktree-runner/
 ├── bin/
-│   ├── git-gtr         # Git subcommand entry point (wrapper)
-│   └── gtr             # Entry point (~105 lines, sources lib/*.sh)
+│   ├── git-gtr         # Entry point: sources lib/*.sh, dispatches commands
+│   └── gtr             # Development wrapper (exec bin/git-gtr)
 ├── lib/                 # Core libraries
 │   ├── core.sh         # Git worktree operations
 │   ├── config.sh       # Configuration management
 │   ├── platform.sh     # OS-specific code
 │   ├── ui.sh           # User interface
 │   ├── copy.sh         # File copying
-│   └── hooks.sh        # Hook execution
+│   ├── hooks.sh        # Hook execution
+│   ├── args.sh         # Argument parsing
+│   ├── provider.sh     # GitHub/GitLab detection
+│   ├── adapters.sh     # Editor & AI adapter registry
+│   ├── launch.sh       # Editor & AI launching
+│   └── commands/       # One file per subcommand
 ├── adapters/           # Editor & AI tool plugins
 │   ├── editor/
 │   └── ai/

@@ -44,11 +44,11 @@ configured file copying (`gtr.copy.*`), trusted post-create hooks, and a
 each of these explicitly:
 
 ```bash
-# No hooks, no file copying
-git gtr new agent/my-task --porcelain --no-hooks --no-copy
+# Option 1: no hooks, no file copying
+git gtr new agent/bare-task --porcelain --no-hooks --no-copy
 
-# Also skip the network round-trip
-git gtr new agent/my-task --porcelain --no-hooks --no-copy --no-fetch
+# Option 2: additionally skip the network round-trip
+git gtr new agent/offline-task --porcelain --no-hooks --no-copy --no-fetch
 ```
 
 With `--no-hooks`, `hook_status` is always `disabled`. The trust model still

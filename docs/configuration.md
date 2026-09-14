@@ -499,7 +499,7 @@ git gtr config set gtr.defaultRemote upstream --global
 
 ## Environment Variables
 
-Environment variables sit below every `git config` and `.gtrconfig` source in the precedence order, so they act as fallbacks when no matching `gtr.*` key is set.
+For the variables that back a `gtr.*` key (`GTR_WORKTREES_DIR`, `GTR_WORKTREES_PREFIX`, `GTR_DEFAULT_BRANCH`, `GTR_DEFAULT_REMOTE`, `GTR_EDITOR_DEFAULT`, `GTR_AI_DEFAULT`, `GTR_PROVIDER`), the environment value is used only when no `git config` or `.gtrconfig` source sets that key. The other variables are read directly and are not part of that order: `GTR_DIR` is resolved before any configuration loads, `GTR_EDITOR_CMD` and `GTR_AI_CMD` are consumed by the adapter loader, `GTR_COLOR` sets the initial color mode but a `gtr.ui.color` value of `always` or `never` replaces it, and `NO_COLOR` disables color regardless of any other setting.
 
 | Variable               | Description                                                          | Default                                  |
 | ---------------------- | -------------------------------------------------------------------- | ---------------------------------------- |
