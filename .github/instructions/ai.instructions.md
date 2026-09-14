@@ -44,7 +44,7 @@ ai_start() {
 
 File-based adapters take precedence over registry entries of the same name.
 
-**Also update**: README, completions (bash/zsh/fish), help text in `lib/commands/help.sh`
+**Also update**: the README tool list and the `docs/configuration.md` AI tool table, help text in `lib/commands/help.sh` (`_help_ai`); then run `./scripts/generate-completions.sh` (completions are generated and checked in CI)
 
 ## Contract & Guidelines
 
@@ -54,5 +54,5 @@ File-based adapters take precedence over registry entries of the same name.
 - Keep side effects confined to worktree directory; do not modify repo root unintentionally.
 - Accept extra args after `--`: preserve ordering (`ai_start` receives already-shifted args).
 - Prefer fast startup; heavy initialization belongs in hooks (`postCreate`), not adapters.
-- When adding adapter: update `cmd_help`, README tool list, and completions (bash/zsh/fish).
+- When adding adapter: update help text, README and `docs/configuration.md` tool lists, then regenerate completions.
 - Inspect function definition if needed: `declare -f ai_start`.

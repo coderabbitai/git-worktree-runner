@@ -1,83 +1,83 @@
 # Copilot Instructions
 
-## Architecture & Flow
+Condensed guide for AI agents working in this repository. `AGENTS.md` and `CLAUDE.md` are the long-form versions; keep all three consistent.
 
-`bin/gtr` (961 lines) dispatches to `cmd_*` functions (case block lines 36‑77). Libraries sourced at startup:
+## What This Is
 
-- `lib/core.sh` - create/list/remove/resolve worktrees
-- `lib/config.sh` - git config wrapper with precedence
-- `lib/ui.sh` - log_error/log_info/prompts
-- `lib/copy.sh` - glob pattern file copying
-- `lib/hooks.sh` - postCreate/postRemove execution
-- `lib/platform.sh` - OS detection + GUI helpers
+`git gtr` (Git Worktree Runner) is a Bash CLI that wraps `git worktree` with editor and AI-tool launching, file copying, hooks, and pull-request checkout. It is installed as a git subcommand. User-facing docs always say `git gtr`, never `./bin/gtr`.
 
-Adapters in `adapters/{editor,ai}` each implement two functions with strict contracts (see below).
+## Layout
+
+- `bin/git-gtr` - entry point. Sets `set -e`, defines `GTR_VERSION`, sources every library, and dispatches in `main()` with a `case` on the first argument.
+- `bin/gtr` - development wrapper that `exec`s `bin/git-gtr`.
+- `lib/*.sh` - sourced in this order: `ui.sh` (logging, prompts), `args.sh` (flag parser that fills `_arg_*` vars), `config.sh` (`cfg_get`, `cfg_default`, `cfg_get_all`), `platform.sh` (OS detection), `core.sh` (worktree CRUD, `resolve_target`, `resolve_base_dir`, `sanitize_branch_name`), `copy.sh`, `hooks.sh` (`run_hooks_in`/`run_hooks`, plus `run_hooks_export` for postCd), `provider.sh` (GitHub/GitLab detection for `clean`), `adapters.sh` (adapter registries and loaders), `launch.sh` (editor/AI launch orchestration).
+- `lib/commands/*.sh` - one file per subcommand defining `cmd_<name>()` (18 files, including `pr.sh` and `trust.sh`). Help text lives in `lib/commands/help.sh` as `_help_<command>()` functions; `cmd_help` finds them by name, with a small `case` mapping aliases such as `ls` to `list`.
+- `adapters/editor/nano.sh`, `adapters/ai/claude.sh`, `adapters/ai/cursor.sh` - the only file-based adapters. Every other editor and AI tool is a registry line in `lib/adapters.sh`.
+- `completions/` - generated output. Never edit by hand (see Common Changes).
+- `tests/*.bats` - BATS suite (29 files) with shared fixtures in `tests/test_helper.bash`.
+
+## Commands
+
+`new`, `pr`, `rm`, `mv|rename`, `go`, `run`, `editor`, `ai`, `copy`, `ls|list`, `clean`, `doctor`, `adapter|adapters`, `config`, `completion`, `init`, `trust`, `version`, `help`. There is no `open` command; the editor command is `editor`. `cd` has no `cmd_*` handler: the dispatcher errors and points at `git gtr help init`, because `gtr cd` is a shell function emitted by `init`.
+
+Dispatch names that differ from the command: `new`→`cmd_create`, `rm`→`cmd_remove`, `mv|rename`→`cmd_rename`, `ls|list`→`cmd_list`, `adapter|adapters`→`cmd_adapter`. Everything else is `cmd_<command>`, except `version`, which `main()` answers inline, and `cd`.
 
 ## Key Concepts
 
-- Special ID `1` = main repo (usable in `open`, `go`, `ai`).
-- Folder naming = sanitized branch (`feature/auth` → `feature-auth`).
-- Base dir resolution (`resolve_base_dir`): config `gtr.worktrees.dir` → env → default `<repo>-worktrees`; relative paths resolved from repo root; tilde expanded; warns if inside repo unignored.
-- Target resolution (`resolve_target`): ID `1` → current → sanitized path → scan directories; returns TSV: `is_main\tpath\tbranch`.
-- Config precedence (`cfg_default`): git config (local→global→system) → env → fallback. Multi-value keys merged & deduped (`cfg_get_all`).
+- Special ID `1` means the main repository in `go`, `editor`, `ai`, `run`, and other commands that take a worktree target.
+- Folder name = sanitized branch (`feature/auth` → `feature-auth`); `--folder` replaces it, `--name` adds a suffix.
+- `resolve_base_dir`: `gtr.worktrees.dir` → `GTR_WORKTREES_DIR` → `<repo>-worktrees` sibling. Relative paths resolve from the repo root, tilde expands, and it warns when the directory sits inside the repo without a `.gitignore` entry.
+- `resolve_target`: ID `1` → current branch → sanitized path match → full scan. Returns TSV `is_main\tpath\tbranch`.
+- Config precedence (`cfg_default`): local git config → `.gtrconfig` → global/system git config → `GTR_*` env var → default. Multi-value keys (`gtr.copy.*`, `gtr.hook.*`) merge and dedupe through `cfg_get_all`.
+- `.gtrconfig` settings that execute code (hooks, editor/AI defaults) are ignored until `git gtr trust` approves them.
+- `new --porcelain` prints exactly three `key<TAB>value` records (`path`, `branch`, `hook_status`) on stdout and everything else on stderr. Keep that contract stable; it is documented in `docs/agent-usage.md`.
+- `new` inherits sparse-checkout from the base worktree on Git 2.36+ (`gtr.sparse.inherit`, `--sparse`, `--no-sparse`).
 
 ## Adapter Contract
 
-Editor: `editor_can_open`, `editor_open <path>`; AI: `ai_can_start`, `ai_start <path> [args...]`. Must check tool availability (`command -v`), emit errors via `log_error`, never silently fail, and avoid side effects outside the target directory (AI uses subshell `(cd ...)`). Update README, help (`cmd_help`), completions.
+Editor adapters define `editor_can_open` and `editor_open <path>`. AI adapters define `ai_can_start` and `ai_start <path> [args...]`, and run the tool in a subshell: `(cd "$path" && ...)`. Probe with `command -v`, report a missing tool with `log_error` plus an install hint, never fail silently, and keep side effects inside the target directory.
 
-## Manual Testing (Essential Subset)
-
-```bash
-./bin/gtr new feature/x      # creates folder feature-x
-./bin/gtr open feature/x     # loads configured editor
-./bin/gtr ai feature/x       # starts configured AI tool
-./bin/gtr list               # lists main + worktrees
-./bin/gtr rm feature/x       # removes worktree
-./bin/gtr go feature/x       # prints path (use in cd)
-```
-
-Advanced: `--force --name backend` (same branch multi-worktree); `git config --add gtr.copy.include "**/.env.example"`; hooks: `git config --add gtr.hook.postCreate "npm install"`.
-Full matrix: see `.github/instructions/testing.instructions.md`.
+Standard tools are registry lines, not files. `_EDITOR_REGISTRY` entries are `name|cmd|type|err_msg|flags`; `_AI_REGISTRY` entries are `name|cmd|err_msg|info_lines`. Write an adapter file only for behavior the registry builders cannot express. A file override wins over a registry entry of the same name.
 
 ## Common Changes
 
-**Add command**: new `cmd_<name>()` function in `bin/gtr` + case entry (lines 36‑77) + help text in `cmd_help` + all three completions (bash/zsh/fish) + README docs.
+**Add a command**: create `lib/commands/<name>.sh` with `cmd_<name>()`; add a `case` entry to `main()` in `bin/git-gtr`; add `_help_<name>()` to `lib/commands/help.sh` (found by name; add a `case` alias in `cmd_help` only if the command has aliases); add the command and its flags to the `generate_bash`, `generate_zsh`, and `generate_fish` templates in `scripts/generate-completions.sh`; run `./scripts/generate-completions.sh`; add `tests/cmd_<name>.bats`; document it in README.
 
-**Add adapter**: two functions (see contract below), `log_error` with install instructions, quote all paths, check `command -v`. Update: README, help text (`cmd_help`), completions (all three).
+**Add an adapter**: add a registry line in `lib/adapters.sh`; run `./scripts/generate-completions.sh`; update the adapter lists in README and `docs/configuration.md` and the tool list in `lib/commands/help.sh`.
 
-**Modify core (`lib/*.sh`)**: keep backwards compatibility, always quote variables `"$var"`, support Git <2.22 fallback (`branch --show-current` → `rev-parse --abbrev-ref HEAD`), test manually across macOS/Linux.
+**Change a flag**: update the command's `parse_args` spec, its `_help_<name>()`, the three completion templates, the regenerated completions, README, and the matching BATS file.
+
+**Modify `lib/*.sh`**: keep existing configs working, quote every path, add fallbacks for Git older than 2.22 (see `get_current_branch` in `lib/core.sh`), and stay Bash 3.2 compatible.
+
+## Validation
+
+```bash
+bats tests/                                   # full suite; bats tests/cmd_list.bats for one file
+shellcheck bin/gtr bin/git-gtr lib/*.sh lib/commands/*.sh adapters/editor/*.sh adapters/ai/*.sh
+./scripts/generate-completions.sh --check     # committed completions match the generator
+```
+
+CI (`.github/workflows/lint.yml`) runs exactly these three jobs on every pull request. Smoke-test by hand in a throwaway repo: `./bin/gtr new x`, `./bin/gtr list`, `./bin/gtr go x`, `./bin/gtr rm x`.
 
 ## Patterns & Gotchas
 
-- Always quote paths (spaces). Avoid unguarded globbing.
-- `set -e` active: ensure non-critical failures are guarded (`command || true`).
-- Multi-value config keys require `git config --add` (do not overwrite entire list unintentionally).
-- If placing worktrees inside repo (relative path), add directory to `.gitignore` to prevent accidental commits.
+- `set -e` is global. Guard anything allowed to fail: `result=$(fn) || true`, or test it inside `if`.
+- Quote every path and branch; both may contain spaces or slashes.
+- Multi-value config keys need `git config --add`; a plain `set` overwrites the list.
+- Call `sanitize_branch_name`; do not reimplement it.
+- Never hand-edit `completions/*`. CI rejects files that differ from the generator output.
 
 ## Debugging
 
-Trace: `bash -x ./bin/gtr new test`; scoped: `set -x` / `set +x`; list function: `declare -f resolve_target`; inspect var: `echo "DEBUG=$var" >&2`; adapter sourcing: `bash -c 'source adapters/ai/claude.sh && ai_can_start && echo OK'`.
+`bash -x ./bin/gtr <cmd>` gives a full trace. `GTR_DEBUG=1` reports `ERROR at <file>:<line> in <function>()` for an unguarded failure, including one raised inside a subshell such as the one `cmd_run` uses. Handled error paths add no such line. `declare -f resolve_target` confirms a function is loaded. `./bin/gtr doctor` and `./bin/gtr adapter` check the environment.
 
-## Troubleshooting Quick
+## Releasing
 
-Permission: `chmod +x bin/gtr`. Missing adapter: `gtr adapter`. Install check: `./bin/gtr doctor`. Config issues: `git config --list | grep gtr`. Worktree confusion: inspect `resolve_target` logic & naming. Symlink problems: ensure `/usr/local/bin` exists then `ln -s "$(pwd)/bin/gtr" /usr/local/bin/gtr`.
+Bump `GTR_VERSION` in `bin/git-gtr`, add a dated `CHANGELOG.md` entry, and publish a GitHub release. `.github/workflows/homebrew.yml` then updates the Homebrew tap formula.
 
-## Version
+## Documentation Map
 
-Update `GTR_VERSION` (line 8 `bin/gtr`) when releasing; affects `gtr version` / `--version`.
-
-## Documentation Structure
-
-- **`.github/copilot-instructions.md`** (this file) - High-level guide for AI agents
-- **`.github/instructions/*.instructions.md`** - Specific guidance by file pattern:
-  - `testing.instructions.md` - Manual testing checklist (applies to: `bin/gtr`, `lib/**/*.sh`, `adapters/**/*.sh`)
-  - `sh.instructions.md` - Shell scripting conventions (applies to: `**/*.sh`, `**/*.bash`, `**/*.fish`)
-  - `lib.instructions.md` - Core library modification guidelines (applies to: `lib/**/*.sh`)
-  - `editor.instructions.md` - Editor adapter contract (applies to: `adapters/editor/**/*.sh`)
-  - `ai.instructions.md` - AI tool adapter contract (applies to: `adapters/ai/**/*.sh`)
-  - `completions.instructions.md` - Shell completion updates (applies to: `completions/*`)
-- **`README.md`** - User-facing documentation
-- **`CONTRIBUTING.md`** - Contribution guidelines
-- **`CLAUDE.md`** - Extended development guide for Claude Code
-
-Feedback: Ask if more detail needed on copy patterns, hooks, or multi-worktree `--force` safety.
+- `AGENTS.md` / `CLAUDE.md` - long-form architecture and workflow guide
+- `.github/instructions/*.instructions.md` - file-pattern guidance: `testing`, `sh`, `lib`, `editor`, `ai`, `completions`
+- `README.md` - user docs, with `docs/configuration.md`, `docs/advanced-usage.md`, `docs/agent-usage.md`, `docs/troubleshooting.md`
+- `CONTRIBUTING.md` - contribution process and manual test checklist

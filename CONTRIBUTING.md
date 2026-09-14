@@ -119,7 +119,7 @@ Format: `name|cmd|type|err_msg|flags` where:
 
 Create `adapters/editor/yourname.sh` implementing `editor_can_open()` and `editor_open()`. See `adapters/editor/nano.sh` for an example.
 
-**Also update**: README.md, all three completion files, help text in `lib/commands/help.sh`.
+**Also update**: README.md, the editor list in `docs/configuration.md`, help text in `lib/commands/help.sh`, then run `./scripts/generate-completions.sh` (the files under `completions/` are generated; CI checks them).
 
 #### Adding an AI Tool Adapter
 
@@ -137,7 +137,7 @@ Format: `name|cmd|err_msg|info_lines` (info lines are semicolon-separated).
 
 Create `adapters/ai/yourname.sh` implementing `ai_can_start()` and `ai_start()`. See `adapters/ai/claude.sh` for an example.
 
-**Also update**: README.md, completions, help text.
+**Also update**: README.md, the AI tool table in `docs/configuration.md`, help text, then regenerate completions with `./scripts/generate-completions.sh`.
 
 #### Adding Core Features
 
@@ -182,7 +182,7 @@ Please also test your changes manually on:
 - [ ] Remove worktree by branch name
 - [ ] List worktrees
 - [ ] Test configuration commands
-- [ ] Test completions (tab completion works)
+- [ ] `./scripts/generate-completions.sh --check` passes (regenerate after changing adapters, config keys, commands, or flags)
 - [ ] Test `git gtr go 1` for main repo
 - [ ] Test `git gtr go <branch>` for worktrees
 
