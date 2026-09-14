@@ -18,9 +18,9 @@ Condensed guide for AI agents working in this repository. `AGENTS.md` and `CLAUD
 
 ## Commands
 
-`new`, `pr`, `rm`, `mv|rename`, `go`, `run`, `editor`, `ai`, `copy`, `ls|list`, `clean`, `doctor`, `adapter|adapters`, `config`, `completion`, `init`, `trust`, `version`, `help`. There is no `open` command; the editor command is `editor`. `cd` has no `cmd_*` handler: the dispatcher prints setup instructions because `gtr cd` is a shell function emitted by `init`.
+`new`, `pr`, `rm`, `mv|rename`, `go`, `run`, `editor`, `ai`, `copy`, `ls|list`, `clean`, `doctor`, `adapter|adapters`, `config`, `completion`, `init`, `trust`, `version`, `help`. There is no `open` command; the editor command is `editor`. `cd` has no `cmd_*` handler: the dispatcher errors and points at `git gtr help init`, because `gtr cd` is a shell function emitted by `init`.
 
-Dispatch names that differ from the command: `new`→`cmd_create`, `rm`→`cmd_remove`, `mv|rename`→`cmd_rename`, `ls|list`→`cmd_list`, `adapter|adapters`→`cmd_adapter`. Everything else is `cmd_<command>`.
+Dispatch names that differ from the command: `new`→`cmd_create`, `rm`→`cmd_remove`, `mv|rename`→`cmd_rename`, `ls|list`→`cmd_list`, `adapter|adapters`→`cmd_adapter`. Everything else is `cmd_<command>`, except `version`, which `main()` answers inline, and `cd`.
 
 ## Key Concepts
 
@@ -69,7 +69,7 @@ CI (`.github/workflows/lint.yml`) runs exactly these three jobs on every pull re
 
 ## Debugging
 
-`bash -x ./bin/gtr <cmd>` gives a full trace. `GTR_DEBUG=1 ./bin/gtr <cmd>` prints `file:line:function` when a command fails under `set -e`. `declare -f resolve_target` confirms a function is loaded. `./bin/gtr doctor` and `./bin/gtr adapter` check the environment.
+`bash -x ./bin/gtr <cmd>` gives a full trace. `GTR_DEBUG=1` installs an ERR trap in `bin/git-gtr`, but the script uses `set -e` without `set -E`, so the trap is not inherited by functions and stays silent for failures inside `cmd_*` handlers; use `bash -x` for those. `declare -f resolve_target` confirms a function is loaded. `./bin/gtr doctor` and `./bin/gtr adapter` check the environment.
 
 ## Releasing
 

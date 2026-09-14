@@ -100,7 +100,8 @@ bash -c 'source adapters/ai/claude.sh && ai_can_start && echo OK'
 
 ```bash
 bash -x ./bin/gtr new test-feature   # global trace
-GTR_DEBUG=1 ./bin/gtr new test-feature  # file:line:function on set -e failures
+# Note: GTR_DEBUG=1 installs an ERR trap, but bin/git-gtr lacks set -E,
+# so it does not fire for failures inside functions. Use bash -x.
 set -x; create_worktree ...; set +x  # scoped trace inside function
 declare -f resolve_target            # confirm function loaded
 echo "DEBUG worktree_path=$worktree_path" >&2  # variable inspection

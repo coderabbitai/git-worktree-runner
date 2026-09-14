@@ -14,7 +14,7 @@ Sources of truth:
 - Config keys: `_CFG_KEY_MAP` in `lib/config.sh`.
 - Commands, their flags, and which commands accept branch arguments: the `generate_bash`, `generate_zsh`, and `generate_fish` templates inside the script.
 
-`git gtr completion <shell>` (`lib/commands/completion.sh`) prints the matching generated file from the source checkout or the Homebrew install layout. It does not build completions at runtime.
+`git gtr completion <shell>` (`lib/commands/completion.sh`) resolves the asset from the source checkout or the Homebrew install layout. For bash and fish it prints the generated file; for zsh it prints a `zstyle` + `fpath` + `compinit` snippet that puts the generated `_git-gtr` on your fpath. It never builds completions at runtime.
 
 ## Making Changes
 
