@@ -32,7 +32,7 @@ applyTo: bin/git-gtr, bin/gtr, **/*.bash, **/*.fish, **/*.sh
 ### Debugging
 
 - Quick trace: `bash -x ./bin/gtr <cmd>`.
-- `GTR_DEBUG=1` installs an ERR trap in `bin/git-gtr`, but the script sets `set -e` without `set -E`, so the trap is not inherited by functions and does not fire for failures inside `cmd_*` handlers. Prefer `bash -x` until that changes.
+- Failure location: `GTR_DEBUG=1 ./bin/gtr <cmd>` installs an ERR trap and, because `bin/git-gtr` runs under `set -eE`, reports the file, line and function of an unguarded failure in functions and subshells alike. Guarded failures (`|| true`, `if cmd`) deliberately produce nothing.
 - Inline: wrap suspicious block with `set -x` / `set +x`.
 - Function presence: `declare -f create_worktree` or `declare -f resolve_target`.
 - Variable inspection: `echo "DEBUG var=$var" >&2` (stderr keeps stdout clean for command substitution).

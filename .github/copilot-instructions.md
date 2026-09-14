@@ -69,7 +69,7 @@ CI (`.github/workflows/lint.yml`) runs exactly these three jobs on every pull re
 
 ## Debugging
 
-`bash -x ./bin/gtr <cmd>` gives a full trace. `GTR_DEBUG=1` installs an ERR trap in `bin/git-gtr`, but the script uses `set -e` without `set -E`, so the trap is not inherited by functions and stays silent for failures inside `cmd_*` handlers; use `bash -x` for those. `declare -f resolve_target` confirms a function is loaded. `./bin/gtr doctor` and `./bin/gtr adapter` check the environment.
+`bash -x ./bin/gtr <cmd>` gives a full trace. `GTR_DEBUG=1` reports `ERROR at <file>:<line> in <function>()` for an unguarded failure, including one raised inside a subshell such as the one `cmd_run` uses. Handled error paths add no such line. `declare -f resolve_target` confirms a function is loaded. `./bin/gtr doctor` and `./bin/gtr adapter` check the environment.
 
 ## Releasing
 
