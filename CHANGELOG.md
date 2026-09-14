@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+## [2.11.1] - 2026-09-14
+
 ### Changed
 
 - The README documents `--sparse`/`--no-sparse` under `git gtr new` and lists the Maintainers section in its table of contents.
