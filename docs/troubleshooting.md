@@ -164,15 +164,20 @@ git gtr config get gtr.copy.exclude
 ```
 git-worktree-runner/
 ├── bin/
-│   ├── git-gtr         # Git subcommand entry point (wrapper)
-│   └── gtr             # Entry point (~105 lines, sources lib/*.sh)
+│   ├── git-gtr         # Entry point: sources lib/*.sh, dispatches commands
+│   └── gtr             # Development wrapper (exec bin/git-gtr)
 ├── lib/                 # Core libraries
 │   ├── core.sh         # Git worktree operations
 │   ├── config.sh       # Configuration management
 │   ├── platform.sh     # OS-specific code
 │   ├── ui.sh           # User interface
 │   ├── copy.sh         # File copying
-│   └── hooks.sh        # Hook execution
+│   ├── hooks.sh        # Hook execution
+│   ├── args.sh         # Argument parsing
+│   ├── provider.sh     # GitHub/GitLab detection
+│   ├── adapters.sh     # Editor & AI adapter registry
+│   ├── launch.sh       # Editor & AI launching
+│   └── commands/       # One file per subcommand
 ├── adapters/           # Editor & AI tool plugins
 │   ├── editor/
 │   └── ai/
@@ -231,8 +236,9 @@ git-worktree-runner/
 If you're still having issues:
 
 1. Run `git gtr doctor` to check your setup
-2. Enable debug mode: `bash -x git gtr <command>`
-3. [Open an issue](https://github.com/coderabbitai/git-worktree-runner/issues) with:
+2. Re-run with `GTR_DEBUG=1 git gtr <command>`; an unexpected failure prints `ERROR at <file>:<line> in <function>()`. Handled errors, such as a missing worktree, are reported normally and add no such line.
+3. For a full trace, run the script directly: `bash -x "$(command -v git-gtr)" <command>`
+4. [Open an issue](https://github.com/coderabbitai/git-worktree-runner/issues) with:
    - Your OS and version
    - Git version (`git --version`)
    - Bash version (`bash --version`)

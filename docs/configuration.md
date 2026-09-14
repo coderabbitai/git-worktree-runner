@@ -499,18 +499,24 @@ git gtr config set gtr.defaultRemote upstream --global
 
 ## Environment Variables
 
-| Variable              | Description                                                          | Default                    |
-| --------------------- | -------------------------------------------------------------------- | -------------------------- |
-| `GTR_DIR`             | Override script directory location                                   | Auto-detected              |
-| `GTR_WORKTREES_DIR`   | Override base worktrees directory                                    | `gtr.worktrees.dir` config |
-| `GTR_EDITOR_CMD`      | Custom editor command (e.g., `emacs`)                                | None                       |
-| `GTR_EDITOR_CMD_NAME` | First word of `GTR_EDITOR_CMD` for availability checks               | None                       |
-| `GTR_AI_CMD`          | Custom AI tool command (e.g., `copilot`)                             | None                       |
-| `GTR_AI_CMD_NAME`     | First word of `GTR_AI_CMD` for availability checks                   | None                       |
-| `GTR_DEFAULT_REMOTE`  | Remote used for default base refs and tracking                       | `origin`                   |
-| `GTR_COLOR`           | Override color output (`always`, `never`, `auto`)                    | `auto`                     |
-| `GTR_PROVIDER`        | Override hosting provider (`github` or `gitlab`)                     | Auto-detected from URL     |
-| `NO_COLOR`            | Disable color output when set ([no-color.org](https://no-color.org)) | Unset                      |
+For the variables that back a `gtr.*` key (`GTR_WORKTREES_DIR`, `GTR_WORKTREES_PREFIX`, `GTR_DEFAULT_BRANCH`, `GTR_DEFAULT_REMOTE`, `GTR_EDITOR_DEFAULT`, `GTR_AI_DEFAULT`, `GTR_PROVIDER`), the environment value is used only when no `git config` or `.gtrconfig` source sets that key. The other variables are read directly and are not part of that order: `GTR_DIR` is resolved before any configuration loads, `GTR_EDITOR_CMD` and `GTR_AI_CMD` are consumed by the adapter loader, `GTR_COLOR` sets the initial color mode but a `gtr.ui.color` value of `always` or `never` replaces it, and `NO_COLOR` disables color regardless of any other setting.
+
+| Variable               | Description                                                          | Default                                  |
+| ---------------------- | -------------------------------------------------------------------- | ---------------------------------------- |
+| `GTR_DIR`              | Override script directory location                                   | Auto-detected                            |
+| `GTR_WORKTREES_DIR`    | Override base worktrees directory                                    | `gtr.worktrees.dir` config               |
+| `GTR_WORKTREES_PREFIX` | Folder name prefix for new worktrees                                 | `gtr.worktrees.prefix` config            |
+| `GTR_DEFAULT_BRANCH`   | Base branch for new worktrees                                        | `gtr.defaultBranch` config (auto-detect) |
+| `GTR_EDITOR_DEFAULT`   | Default editor adapter                                               | `gtr.editor.default` config              |
+| `GTR_AI_DEFAULT`       | Default AI tool adapter                                              | `gtr.ai.default` config                  |
+| `GTR_EDITOR_CMD`       | Custom editor command (e.g., `emacs`)                                | None                                     |
+| `GTR_EDITOR_CMD_NAME`  | First word of `GTR_EDITOR_CMD` for availability checks               | None                                     |
+| `GTR_AI_CMD`           | Custom AI tool command (e.g., `copilot`)                             | None                                     |
+| `GTR_AI_CMD_NAME`      | First word of `GTR_AI_CMD` for availability checks                   | None                                     |
+| `GTR_DEFAULT_REMOTE`   | Remote used for default base refs and tracking                       | `origin`                                 |
+| `GTR_COLOR`            | Override color output (`always`, `never`, `auto`)                    | `auto`                                   |
+| `GTR_PROVIDER`         | Override hosting provider (`github` or `gitlab`)                     | Auto-detected from URL                   |
+| `NO_COLOR`             | Disable color output when set ([no-color.org](https://no-color.org)) | Unset                                    |
 
 **Hook environment variables** (available in hook scripts):
 
