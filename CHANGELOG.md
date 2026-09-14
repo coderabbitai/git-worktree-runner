@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+### Fixed
+
+- `GTR_DEBUG=1` now reports the file, line and function of an unexpected failure. `bin/git-gtr` installed an `ERR` trap but ran under `set -e` alone, so the trap was never inherited by functions; since every command runs inside `main()` and a `cmd_*` handler, the variable had no observable effect. The script now uses `set -eE`, which changes nothing when the trap is not installed.
+
 ## [2.11.0] - 2026-08-19
 
 ### Added
