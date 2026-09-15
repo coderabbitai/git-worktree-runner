@@ -23,7 +23,9 @@ export -f cfg_default cfg_get_all
 # Set up a disposable git repo for integration tests
 # Sets: TEST_REPO, TEST_WORKTREES_DIR
 setup_integration_repo() {
-  TEST_REPO=$(mktemp -d)
+  # Canonicalize: on macOS mktemp -d returns a /var path while git records the
+  # resolved /private/var one, so uncanonicalized paths never compare equal.
+  TEST_REPO=$(cd -P "$(mktemp -d)" && pwd)
   TEST_WORKTREES_DIR="${TEST_REPO}-worktrees"
   git -C "$TEST_REPO" init --quiet
   git -C "$TEST_REPO" config user.name "Test User"
