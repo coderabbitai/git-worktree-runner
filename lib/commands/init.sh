@@ -396,7 +396,7 @@ ___FUNC___completion() {
   elif [ "${COMP_WORDS[1]}" = "cd" ] && [ "$COMP_CWORD" -eq 2 ]; then
     # Worktree names for cd
     local worktrees
-    worktrees="1 $(git gtr list --porcelain 2>/dev/null | cut -f2 | tr '\n' ' ')"
+    worktrees="1 $(git worktree list --porcelain 2>/dev/null | sed -n 's#^branch refs/heads/##p' | tr '\n' ' ')"
     COMPREPLY=($(compgen -W "$worktrees" -- "$cur"))
   elif { [ "${COMP_WORDS[1]}" = "new" ] || [ "${COMP_WORDS[1]}" = "pr" ]; } && [[ "$cur" == -* ]]; then
     if type _git_gtr &>/dev/null; then
@@ -573,7 +573,7 @@ ___FUNC___completion() {
     # Completing worktree name after "cd"
     if (( CURRENT == 3 )); then
       local -a worktrees
-      worktrees=("1" ${(f)"$(git gtr list --porcelain 2>/dev/null | cut -f2)"})
+      worktrees=("1" ${(f)"$(git worktree list --porcelain 2>/dev/null | sed -n 's#^branch refs/heads/##p')"})
       _describe 'worktree' worktrees
     fi
     return
@@ -791,7 +791,7 @@ complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a version -d 'Show vers
 complete -f -c __FUNC__ -n '___FUNC___needs_subcommand' -a help -d 'Show help'
 
 # Worktree name completions for cd
-complete -f -c __FUNC__ -n '___FUNC___using_subcommand cd' -a '(echo 1; git gtr list --porcelain 2>/dev/null | cut -f2)'
+complete -f -c __FUNC__ -n '___FUNC___using_subcommand cd' -a '(echo 1; git worktree list --porcelain 2>/dev/null | sed -n "s#^branch refs/heads/##p")'
 complete -f -c __FUNC__ -n '___FUNC___using_subcommand new pr' -l cd -d 'Create and cd into the new worktree'
 FISH
 }
