@@ -550,6 +550,33 @@ run_generated_v2_trust_upgrade() (
   [[ "$output" == *"git gtr list --porcelain"* ]]
 }
 
+@test "generated bash wrapper recognizes trust markers when shasum is not installed" {
+  local root repo xdg no_shasum_path
+  root=$(mktemp -d)
+  repo="$root/repo"
+  xdg="$root/xdg"
+
+  git init --quiet "$repo"
+  cat > "$repo/.gtrconfig" <<'CFG'
+[hooks]
+  postCd = echo hi
+CFG
+
+  (
+    export XDG_CONFIG_HOME="$xdg"
+    # shellcheck disable=SC1091
+    . "$PROJECT_ROOT/lib/hooks.sh"
+    _hooks_mark_trusted "$repo/.gtrconfig"
+  )
+
+  no_shasum_path=$(path_without_command "$root/bin" shasum)
+  run env PATH="$no_shasum_path" bash -c 'eval "$1" && gtr_hooks_are_trusted "$2" "$3"' \
+    _ "$(cmd_init bash)" "$repo/.gtrconfig" "$xdg/gtr/trusted"
+  rm -rf "$root"
+
+  [ "$status" -eq 0 ]
+}
+
 @test "zsh output validates trust marker contents" {
   run cmd_init zsh
   [ "$status" -eq 0 ]

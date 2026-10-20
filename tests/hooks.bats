@@ -10,7 +10,7 @@ setup() {
 }
 
 teardown() {
-  rm -rf "$XDG_CONFIG_HOME"
+  rm -rf "$XDG_CONFIG_HOME" "$BATS_TMPDIR/no-shasum-bin-$$"
   teardown_integration_repo
 }
 
@@ -67,6 +67,30 @@ EOF
   expected="$(git config -f "$TEST_REPO/.gtrconfig" -z --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null | od -An -v -tx1 | tr -d ' \n' | { encoded=$(cat); printf '%s\n' "$encoded"; } | shasum -a 256 | cut -d' ' -f1)"
 
   [ "$(_hooks_file_hash "$TEST_REPO/.gtrconfig")" = "$expected" ]
+}
+
+@test "trust markers work when shasum is not installed" {
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  local expected
+  expected="$(_hooks_file_hash "$TEST_REPO/.gtrconfig")"
+
+  local no_shasum_path
+  no_shasum_path="$(path_without_command "$BATS_TMPDIR/no-shasum-bin-$$" shasum)"
+
+  (
+    PATH="$no_shasum_path"
+    if command -v shasum >/dev/null 2>&1; then
+      exit 1
+    fi
+
+    [ "$(_hooks_file_hash "$TEST_REPO/.gtrconfig")" = "$expected" ]
+    _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+    _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+  )
 }
 
 @test "_hooks_mark_trusted creates a marker recognized by _hooks_are_trusted" {
