@@ -155,8 +155,8 @@ cmd_init() {
   case "$cache_dir" in /*) ;; *) cache_dir="$(pwd -P)/$cache_dir" ;; esac
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 17 checks continuity with approved repository history (trust v4).
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-17}"
+  # Schema 18 hashes trusted hooks with sha256sum when shasum is not installed.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-18}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # A matching public stamp alone does not make executable cache data trusted.

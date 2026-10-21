@@ -144,13 +144,15 @@ SCRIPT
 # Exercise generated Fish hooks against a trusted or untrusted shared config.
 run_generated_fish_gtrconfig_post_cd_hooks() {
   local trust_state="$1"
-  local root repo wt xdg init_file
+  local without_shasum="${2:-0}"
+  local root repo wt xdg init_file fish_path
 
   root=$(cd -P "$(mktemp -d)" && pwd)
   repo="$root/repo"
   wt="$root/wt"
   xdg="$root/xdg"
   init_file="$root/gtr.fish"
+  fish_path="$PATH"
 
   git init --quiet "$repo"
   git -C "$repo" config user.name "Test User"
@@ -177,7 +179,11 @@ CFG
     )
   fi
 
-  XDG_CONFIG_HOME="$xdg" fish -c '
+  if [ "$without_shasum" -eq 1 ]; then
+    fish_path=$(path_without_command "$root/bin" shasum)
+  fi
+
+  PATH="$fish_path" XDG_CONFIG_HOME="$xdg" fish -c '
     source "$argv[1]"
     set -l wt "$argv[2]"
     set -l root "$argv[3]"
@@ -659,6 +665,18 @@ CFG
   hook_pwd_line=$(printf '%s\n' "$output" | sed -n 's/^HOOK_PWD=//p')
   [ "$pwd_line" = "$wt_line" ]
   [ "$hook_pwd_line" = "$wt_line" ]
+}
+
+@test "fish generated postCd trusts gtrconfig hooks when shasum is unavailable" {
+  require_runtime_shell fish
+  command -v sha256sum >/dev/null 2>&1 || skip "sha256sum is not installed"
+
+  run run_generated_fish_gtrconfig_post_cd_hooks trusted 1
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"RC=0"* ]]
+  [[ "$output" == *"HOOK_ORDER=second"* ]]
+  [[ "$output" == *"STDERR="* ]]
 }
 
 # ── new/pr --cd wrapper support ─────────────────────────────────────────────
@@ -1196,14 +1214,14 @@ CFG
   mkdir -p "$XDG_CACHE_HOME/gtr"
   for shell_name in bash zsh fish; do
     for func_name in gtr gwtr; do
-      for schema in 16 15 14 13 12 11 10 9 8 7 6; do
+      for schema in 17 16 15 14 13 12 11 10 9 8 7 6; do
         cache_file="$XDG_CACHE_HOME/gtr/init-$func_name.$shell_name"
         printf '# gtr-cache: version=test init=%s func=%s shell=%s\nold-cache\n' \
           "$schema" "$func_name" "$shell_name" > "$cache_file"
         run cmd_init "$shell_name" --as "$func_name"
         [ "$status" -eq 0 ]
         [[ "$output" != *old-cache* ]]
-        [[ "$(head -1 "$cache_file")" == *"init=17"* ]]
+        [[ "$(head -1 "$cache_file")" == *"init=18"* ]]
       done
     done
   done
@@ -1232,15 +1250,15 @@ run_documented_init_upgrade() (
     if [ "$shell_name" = zsh ]; then
       snippet='compdef() { :; }'$'\n'"$snippet"
     fi
-    for schema in 6 7 8 9 10 11 12 13 14 15 16 17; do
+    for schema in 6 7 8 9 10 11 12 13 14 15 16 17 18; do
       version="$cli_version"
-      [ "$schema" != 17 ] || version=old-version
+      [ "$schema" != 18 ] || version=old-version
       printf '# gtr-cache: version=%s init=%s func=gtr shell=%s\n' \
         "$version" "$schema" "$shell_name" > "$cache_file"
       printf '%s\n' 'echo stale > "$STALE_CACHE_MARKER"' >> "$cache_file"
       "$shell_name" -c "$snippet"
       [ ! -f "$STALE_CACHE_MARKER" ]
-      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=17 "* ]]
+      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=18 "* ]]
     done
   done
 )
