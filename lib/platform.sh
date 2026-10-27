@@ -91,8 +91,10 @@ spawn_terminal_in() {
   case "$os" in
     darwin)
       # Escape variables for AppleScript string interpolation
-      local safe_path safe_title safe_cmd
-      safe_path=$(_escape_applescript "$path")
+      local shell_path safe_cd safe_title safe_cmd
+      # Quote for the terminal shell first, then for the AppleScript string.
+      shell_path="${path//\'/\'\\\'\'}"
+      safe_cd=$(_escape_applescript "cd -- '$shell_path'")
       safe_title=$(_escape_applescript "$title")
       safe_cmd=$(_escape_applescript "$cmd")
 
@@ -109,7 +111,7 @@ spawn_terminal_in() {
 						tell current window
 							create tab with default profile
 							tell current session
-								write text "cd \"$safe_path\""
+								write text "$safe_cd"
 								set name to "$safe_title"
 								$iterm_cmd_line
 							end tell
@@ -119,7 +121,7 @@ spawn_terminal_in() {
       else
         osascript <<-EOF 2>/dev/null || true
 					tell application "Terminal"
-						do script "cd \"$safe_path\"; $safe_cmd"
+						do script "$safe_cd; $safe_cmd"
 						set custom title of front window to "$safe_title"
 					end tell
 				EOF
