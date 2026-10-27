@@ -52,7 +52,7 @@ _copy_discovery_records() {
 # Merge without following existing destination links. Stage each leaf in its
 # destination directory, then rename it so existing hard links are not written.
 _copy_tree_entry() {
-  local src="$1" dest="$2" child name staged
+  local src="$1" dest="$2" child name staged dest_mode=""
   [ -L "$dest" ] && return 1
   if [ -d "$src" ] && [ ! -L "$src" ]; then
     mkdir -p "$dest" || return 1
@@ -63,10 +63,24 @@ _copy_tree_entry() {
     done < <(find "$src" -mindepth 1 -maxdepth 1 -print0)
   else
     [ -d "$dest" ] && return 1
+    if [ -f "$dest" ]; then
+      dest_mode=$(stat -c '%a' "$dest" 2>/dev/null) ||
+        dest_mode=$(stat -f '%Lp' "$dest" 2>/dev/null) || return 1
+    fi
     staged=$(mktemp -d "${dest%/*}/.gtr-copy.XXXXXX") || return 1
-    if cp -P -- "$src" "$staged/leaf" && mv -f -- "$staged/leaf" "$dest"; then
-      rmdir "$staged"
-      return 0
+    if cp -P -- "$src" "$staged/leaf"; then
+      # Match cp's replacement semantics without writing the existing inode.
+      # Never chmod a staged symlink: it may point outside the worktree.
+      if [ -n "$dest_mode" ] && [ ! -L "$staged/leaf" ]; then
+        if ! chmod "$dest_mode" "$staged/leaf"; then
+          rm -rf -- "$staged"
+          return 1
+        fi
+      fi
+      if mv -f -- "$staged/leaf" "$dest"; then
+        rmdir "$staged"
+        return 0
+      fi
     fi
     rm -rf -- "$staged"
     return 1

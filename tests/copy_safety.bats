@@ -609,7 +609,7 @@ teardown() {
   mkdir -p "$src/tools" "$dst/tools"
   printf '#!/bin/sh\necho executable\n' > "$src/tools/run"
   chmod +x "$src/tools/run"
-  echo old > "$dst/tools/run"
+  echo unrelated > "$dst/tools/existing"
   _fast_copy_dir "$src/tools" "$dst/"
   [ -x "$dst/tools/run" ]
   [ "$("$dst/tools/run")" = executable ]
@@ -625,4 +625,36 @@ teardown() {
   local mode
   mode=$(stat -c '%a' "$dst/.env" 2>/dev/null) || mode=$(stat -f '%Lp' "$dst/.env")
   [ "$mode" = 600 ]
+}
+
+@test "staged replacements retain restrictive existing destination permissions" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src" "$dst"
+  echo secret > "$src/.env"
+  chmod 644 "$src/.env"
+  echo old > "$dst/.env"
+  chmod 600 "$dst/.env"
+  (umask 022; copy_patterns "$src" "$dst" .env '')
+  local mode
+  mode=$(stat -c '%a' "$dst/.env" 2>/dev/null) || mode=$(stat -f '%Lp' "$dst/.env")
+  [ "$mode" = 600 ]
+  [ "$(cat "$dst/.env")" = secret ]
+}
+
+@test "preserved directory symlinks never chmod their external referents" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" outside="$_test_tmpdir/secret"
+  mkdir -p "$src/cache" "$dst/cache"
+  echo private > "$outside"
+  chmod 600 "$outside"
+  ln -s "$outside" "$src/cache/link"
+  echo old > "$dst/cache/link"
+  chmod 644 "$dst/cache/link"
+  copy_directories "$src" "$dst" cache ''
+  [ -L "$dst/cache/link" ]
+  local mode
+  mode=$(stat -c '%a' "$outside" 2>/dev/null) || mode=$(stat -f '%Lp' "$outside")
+  [ "$mode" = 600 ]
+  [ "$(cat "$outside")" = private ]
 }
