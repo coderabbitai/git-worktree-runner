@@ -658,3 +658,21 @@ teardown() {
   [ "$mode" = 600 ]
   [ "$(cat "$outside")" = private ]
 }
+
+@test "copy guards reject case variants of Git metadata on every platform" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/nested/.GiT" "$dst"
+  echo source > "$src/.GIT"
+  echo metadata > "$src/nested/.GiT/config"
+  echo destination > "$dst/.git"
+  copy_patterns "$src" "$dst" '.GIT' ''
+  copy_directories "$src" "$dst" nested ''
+  [ "$(cat "$dst/.git")" = destination ]
+  [ ! -e "$dst/.GIT" ] || [ "$(cat "$dst/.GIT")" = destination ]
+  [ ! -e "$dst/nested/.GiT" ]
+  mkdir -p "$dst/nested/.GiT"
+  echo keep > "$dst/nested/.GiT/config"
+  _apply_directory_excludes "$dst" nested 'nested/.GiT'
+  [ "$(cat "$dst/nested/.GiT/config")" = keep ]
+}

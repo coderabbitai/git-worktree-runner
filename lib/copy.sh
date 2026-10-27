@@ -29,7 +29,7 @@ _copy_components_safe() {
     esac
     case "$component" in
       ""|.) continue ;;
-      .git) return 1 ;;
+      .[gG][iI][tT]) return 1 ;;
     esac
     current="$current/$component"
     [ -L "$current" ] && return 1
@@ -58,7 +58,7 @@ _copy_tree_entry() {
     mkdir -p "$dest" || return 1
     while IFS= read -r -d '' child; do
       name="${child##*/}"
-      [ "$name" = .git ] && continue
+      case "$name" in .[gG][iI][tT]) continue ;; esac
       _copy_tree_entry "$child" "$dest/$name" || return 1
     done < <(find "$src" -mindepth 1 -maxdepth 1 -print0)
   else
@@ -182,7 +182,7 @@ _fast_copy_dir() {
       ;;
   esac
   # Never introduce Git control files, including nested repositories.
-  find "$staging" -name .git -prune -exec rm -rf -- {} +
+  find "$staging" -iname .git -prune -exec rm -rf -- {} +
   if mv -- "${staging:?}/${src##*/}" "$target"; then
     rmdir "$staging"
   else
@@ -413,7 +413,7 @@ _exclude_root_is_safe() {
     esac
     case "$component" in
       ""|.) continue ;;
-      .git) return 1 ;;
+      .[gG][iI][tT]) return 1 ;;
     esac
     current="$current/$component"
     [ -L "$current" ] && return 1
@@ -445,7 +445,7 @@ _remove_directory_exclude_matches() {
     name="${matched_path##*/}"
     # Also reject glob spellings of dot, dot-dot, and Git metadata.
     case "$name" in
-      .|..|.git) continue ;;
+      .|..|.[gG][iI][tT]) continue ;;
     esac
     if [ -n "$suffix" ]; then
       if [ -d "$matched_path" ] && [ ! -L "$matched_path" ]; then
@@ -569,7 +569,7 @@ _selective_copy_dir() {
       continue
     fi
 
-    case "$child_name" in .git) continue ;; esac
+    case "$child_name" in .[gG][iI][tT]) continue ;; esac
     if ! _copy_components_safe "$dst_root" "$child_rel"; then
       log_warn "Skipping unsafe destination path: $child_rel"
       continue
