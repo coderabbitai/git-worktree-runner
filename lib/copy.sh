@@ -20,6 +20,7 @@ _is_unsafe_path() {
 _copy_components_safe() {
   local current="$1" remaining="$2" component
   _is_unsafe_path "$remaining" && return 1
+  [ -L "$current" ] && return 1
   while [ -n "$remaining" ]; do
     component="${remaining%%/*}"
     case "$remaining" in
@@ -554,7 +555,10 @@ _selective_copy_dir() {
     fi
 
     case "$child_name" in .git) continue ;; esac
-    _copy_components_safe "$dst_root" "$child_rel" || return 1
+    if ! _copy_components_safe "$dst_root" "$child_rel"; then
+      log_warn "Skipping unsafe destination path: $child_rel"
+      continue
+    fi
     if [ -d "$child_path" ] && [ ! -L "$child_path" ]; then
       _selective_copy_dir "$child_rel" "$dst_root" "$excludes" || return 1
     elif ! _fast_copy_dir "$child_path" "$dest_dir/"; then

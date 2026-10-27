@@ -582,3 +582,23 @@ teardown() {
   [ "$(cat "$_test_tmpdir/secret")" = private ]
   [ "$(cat "$dst/cache/value")" = replacement ]
 }
+
+@test "failed clone fallback only removes its own staging output" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/cache" "$dst"
+  echo value > "$src/cache/file"
+  _fast_copy_os=darwin
+  cp() {
+    if [ "$1" = -cRP ]; then
+      mkdir -p "$4/cache"
+      echo partial > "$4/cache/partial"
+      return 1
+    fi
+    command cp "$@"
+  }
+  _fast_copy_dir "$src/cache" "$dst/"
+  [ "$(cat "$dst/cache/file")" = value ]
+  [ ! -e "$dst/cache/partial" ]
+  [ "$(find "$dst" -name '.gtr-copy.*' | wc -l | tr -d ' ')" -eq 0 ]
+}
