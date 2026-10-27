@@ -64,7 +64,7 @@ _copy_tree_entry() {
   else
     [ -d "$dest" ] && return 1
     staged=$(mktemp "${dest%/*}/.gtr-copy.XXXXXX") || return 1
-    if cp -P -- "$src" "$staged" && mv -f -- "$staged" "$dest"; then
+    if cp -pP -- "$src" "$staged" && mv -f -- "$staged" "$dest"; then
       return 0
     fi
     rm -f "$staged"

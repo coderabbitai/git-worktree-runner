@@ -602,3 +602,15 @@ teardown() {
   [ ! -e "$dst/cache/partial" ]
   [ "$(find "$dst" -name '.gtr-copy.*' | wc -l | tr -d ' ')" -eq 0 ]
 }
+
+@test "staged directory merges preserve executable file permissions" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/tools" "$dst/tools"
+  printf '#!/bin/sh\necho executable\n' > "$src/tools/run"
+  chmod +x "$src/tools/run"
+  echo old > "$dst/tools/run"
+  _fast_copy_dir "$src/tools" "$dst/"
+  [ -x "$dst/tools/run" ]
+  [ "$("$dst/tools/run")" = executable ]
+}
