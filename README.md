@@ -414,6 +414,8 @@ Trust is bound to the repository path, the filesystem identity of its common Git
 
 Approval covers command definitions and the behavior they delegate to. It does not hash or pin scripts, dependencies, or tools: for example, approving `sh ./scripts/setup.sh` allows subsequent changes to that script within the same repository. Review delegated code and trust the repository's contributors before approving commands.
 
+Trust requires a known filesystem birth time for the Git directory. If `stat` cannot provide it, `.gtrconfig` executable commands remain untrusted.
+
 ### Other Commands
 
 - `git gtr doctor` - Health check (verify git, editors, AI tools)

@@ -189,6 +189,32 @@ EOF
   ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
 }
 
+@test "deleting and recreating the Git directory cannot reuse approval" {
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'sh ./bootstrap.sh'
+  printf 'echo original\n' > "$TEST_REPO/bootstrap.sh"
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  local original_identity iteration=0
+  original_identity=$(_hooks_repo_identity "$TEST_REPO")
+  while [ "$iteration" -lt 10 ]; do
+    rm -rf "$TEST_REPO/.git"
+    git -C "$TEST_REPO" init --quiet
+    printf 'echo replacement\n' > "$TEST_REPO/bootstrap.sh"
+    [ "$(_hooks_repo_identity "$TEST_REPO")" != "$original_identity" ]
+    ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+    iteration=$((iteration + 1))
+  done
+}
+
+@test "unknown or unavailable Git directory birth times fail closed" {
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'echo harmless'
+  stat() { printf '%s\n' "$fixture_stat"; }
+  local fixture_stat
+  for fixture_stat in '1:2:0.000000000' '1:2:0' '1:2:-' '1:2:-1.000000000'; do
+    ! _hooks_repo_identity "$TEST_REPO"
+    ! _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  done
+}
+
 @test "definition trust survives delegated script changes in the same repository" {
   git config -f "$TEST_REPO/.gtrconfig" hooks.postCreate 'sh ./bootstrap.sh'
   printf 'echo original\n' > "$TEST_REPO/bootstrap.sh"

@@ -483,6 +483,9 @@ Approval includes scripts and programs invoked by these commands. Their
 contents are not hashed or pinned; review delegated code and trust its
 contributors before approving.
 
+Trust requires a known filesystem birth time for the Git directory.
+Without it, .gtrconfig executable commands remain untrusted.
+
 Hooks and defaults from your local git config (.git/config, ~/.gitconfig)
 are always trusted since you control those files directly.
 

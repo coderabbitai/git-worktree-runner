@@ -200,6 +200,13 @@ run_generated_replacement_repo_hooks() (
   cmd_init "$shell_name" > "$INIT_FIXTURE"
   "$shell_name" -c 'source "$INIT_FIXTURE"; gtr_run_post_cd_hooks "$REPO_FIXTURE"'
   [ "$(cat "$REPO_FIXTURE/hook-result")" = original ]
+  # Verify every generated identity helper fails closed without birth times.
+  mkdir "$fixture/bin"
+  printf '#!/bin/sh\necho 1:2:0.000000000\n' > "$fixture/bin/stat"
+  chmod +x "$fixture/bin/stat"
+  if PATH="$fixture/bin:$PATH" "$shell_name" -c 'source "$INIT_FIXTURE"; gtr_hooks_repo_identity "$REPO_FIXTURE"'; then
+    return 1
+  fi
   mv "$REPO_FIXTURE/.git" "$fixture/original-git"
   git -C "$REPO_FIXTURE" init --quiet
   printf 'echo replacement > "$REPO_ROOT/hook-result"\n' > "$REPO_FIXTURE/bootstrap.sh"
