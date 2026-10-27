@@ -73,6 +73,8 @@ Create a `.gtrconfig` file in your repository root to share configuration across
 
 Approval is bound to the repository path and the filesystem identity of its common Git directory. A replacement or fresh clone at the same path needs new approval, as do approvals created by older versions that only used the path. Normal commits and linked worktrees retain approval. This is command-definition trust: scripts, dependencies, and tools invoked by approved commands are not hashed or pinned, so their contents can change within the trusted repository. Review delegated code and trust its contributors before approving.
 
+Command definitions are captured once for trust verification and consumption, with NUL-delimited records preserving multiline values. The version 3 trust format invalidates older approvals; review commands again with `git gtr trust` after upgrading.
+
 The identity includes device, inode, and birth time with nanosecond precision. If the filesystem or `stat` implementation cannot provide a known birth time, approval fails closed and `.gtrconfig` executable commands remain disabled.
 
 ---

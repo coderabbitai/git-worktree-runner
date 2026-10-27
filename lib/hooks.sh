@@ -19,10 +19,42 @@ _GTR_TRUST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"
 # Usage: _hooks_read_definitions <config_file>
 _hooks_read_definitions() {
   local config_file="$1"
+  # Hex keeps NUL record boundaries and trailing value newlines in shell variables.
+  # Git emits key<LF>value<NUL>; unlike line records this encoding is injective.
   local hook_content
-  hook_content=$(git config -f "$config_file" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null) || true
+  hook_content=$(git config -z -f "$config_file" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$' 2>/dev/null | od -An -v -tx1 | tr -d ' \n')
   [ -n "$hook_content" ] || return 1
   printf '%s\n' "$hook_content"
+}
+
+# Select values only from the captured definitions, never from the pathname.
+# An empty key displays every record for the trust confirmation.
+_hooks_definitions_get() {
+  local definitions="$1" key="${2:-}" mode="${3:-all}" record record_key value last_value=""
+  key=$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]')
+  while IFS= read -r -d '' record; do
+    record_key="${record%%$'\n'*}"
+    value=""
+    case "$record" in *$'\n'*) value="${record#*$'\n'}" ;; esac
+    if [ -z "$key" ]; then
+      printf '%s = %q\n' "$record_key" "$value"
+    elif [ "$record_key" = "$key" ]; then
+      if [ "$mode" = last ]; then
+        last_value="$value"
+      else
+        printf '%s\n' "$value"
+      fi
+    fi
+  done < <(printf '%b' "$(printf '%s' "$definitions" | sed 's/../\\x&/g')")
+  if [ "$mode" = last ]; then printf '%s\n' "$last_value"; fi
+}
+
+# Validate a captured snapshot against its repository-scoped marker.
+_hooks_snapshot_is_trusted() {
+  local config_file="$1" definitions="$2" trust_path
+  [ -n "$definitions" ] || return 0
+  trust_path=$(_hooks_reviewed_trust_path "$config_file" "$definitions") || return 1
+  _hooks_marker_matches_config "$trust_path" "$config_file"
 }
 
 # Compute a content hash for trusted command definitions.
@@ -96,7 +128,7 @@ _hooks_reviewed_trust_key() {
   if [ -z "$repo_identity" ]; then
     repo_identity=$(_hooks_repo_identity "$repo_root") || return 1
   fi
-  printf 'v2\n%s\n%s\n%s\n' "$repo_root" "$repo_identity" "$hash" | shasum -a 256 | cut -d' ' -f1
+  printf 'v3\n%s\n%s\n%s\n' "$repo_root" "$repo_identity" "$hash" | shasum -a 256 | cut -d' ' -f1
 }
 
 # Compute the repo-scoped trust key for the current trusted command content
@@ -164,8 +196,7 @@ _hooks_are_trusted() {
 
   local hook_content trust_path
   hook_content=$(_hooks_read_definitions "$config_file") || return 0
-  trust_path=$(_hooks_reviewed_trust_path "$config_file" "$hook_content") || return 1
-  _hooks_marker_matches_config "$trust_path" "$config_file"
+  _hooks_snapshot_is_trusted "$config_file" "$hook_content"
 }
 
 # Write a trust marker that matches the reviewed command definitions
@@ -217,15 +248,15 @@ _hooks_get_trusted() {
   local file_hooks=""
 
   if [ -n "$config_file" ] && [ -f "$config_file" ]; then
-    if _hooks_are_trusted "$config_file"; then
-      file_hooks=$(git config -f "$config_file" --get-all "hooks.$phase" 2>/dev/null) || true
-    else
-      local untrusted_hooks
-      untrusted_hooks=$(git config -f "$config_file" --get-all "hooks.$phase" 2>/dev/null) || true
-      if [ -n "$untrusted_hooks" ]; then
+    local definitions
+    definitions=$(_hooks_read_definitions "$config_file") || true
+    file_hooks=$(_hooks_definitions_get "$definitions" "hooks.$phase")
+    if ! _hooks_snapshot_is_trusted "$config_file" "$definitions"; then
+      if [ -n "$file_hooks" ]; then
         log_warn "Untrusted .gtrconfig hooks for '$phase' phase — skipping"
         log_warn "Review hooks in $config_file, then run: git gtr trust"
       fi
+      file_hooks=""
     fi
   fi
 

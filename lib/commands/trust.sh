@@ -24,10 +24,10 @@ cmd_trust() {
     return 0
   fi
 
-  if _hooks_are_trusted "$config_file"; then
+  if _hooks_snapshot_is_trusted "$config_file" "$hook_content"; then
     log_info "Executable commands in $config_file are already trusted"
     log_info "Current trusted commands:"
-    printf '%s\n' "$hook_content" >&2
+    _hooks_definitions_get "$hook_content" >&2
     return 0
   fi
 
@@ -39,7 +39,7 @@ cmd_trust() {
 
   log_warn "The following executable commands are defined in $config_file:"
   echo "" >&2
-  printf '%s\n' "$hook_content" >&2
+  _hooks_definitions_get "$hook_content" >&2
   echo "" >&2
   log_warn "These commands will execute on your machine during gtr operations."
   log_warn "Approval includes scripts and programs they invoke; their contents are not pinned."

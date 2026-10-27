@@ -1043,3 +1043,43 @@ run_generated_replacement_repo_hooks() (
     [ -f "$XDG_CACHE_HOME/gtr/init-gtr.${sh}" ]
   done
 }
+
+run_generated_snapshot_replacement_hooks() (
+  set -e
+  local shell_name="$1" fixture
+  fixture=$(mktemp -d)
+  trap 'rm -rf "$fixture"' EXIT
+  export REPO_FIXTURE="$fixture/repo"
+  export INIT_FIXTURE="$fixture/init.$shell_name"
+  export XDG_CONFIG_HOME="$fixture/config"
+  export REAL_GIT
+  REAL_GIT=$(command -v git)
+  mkdir -p "$REPO_FIXTURE" "$fixture/bin"
+  git -C "$REPO_FIXTURE" init --quiet
+  git config -f "$REPO_FIXTURE/.gtrconfig" hooks.postCd 'echo approved > "$REPO_ROOT/result"'
+  source "$PROJECT_ROOT/lib/hooks.sh"
+  _hooks_mark_trusted "$REPO_FIXTURE/.gtrconfig"
+  cmd_init "$shell_name" > "$INIT_FIXTURE"
+  cat > "$fixture/bin/git" <<'WRAPPER'
+#!/usr/bin/env bash
+if [ "$1" = config ] && [ "${2:-}" = -z ] && [ "${4:-}" = "$REPO_FIXTURE/.gtrconfig" ]; then
+  "$REAL_GIT" "$@" > "$REPO_FIXTURE/captured"
+  "$REAL_GIT" config -f "$REPO_FIXTURE/.gtrconfig" hooks.postCd 'echo attacker > "$REPO_ROOT/result"'
+  cat "$REPO_FIXTURE/captured"
+else
+  exec "$REAL_GIT" "$@"
+fi
+WRAPPER
+  chmod +x "$fixture/bin/git"
+  PATH="$fixture/bin:$PATH" "$shell_name" -c 'source "$INIT_FIXTURE"; gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+  [ "$(cat "$REPO_FIXTURE/result")" = approved ]
+)
+
+@test "generated shells execute the captured approved snapshot after pathname replacement" {
+  local shell_name
+  for shell_name in bash zsh fish; do
+    command -v "$shell_name" >/dev/null || continue
+    run run_generated_snapshot_replacement_hooks "$shell_name"
+    [ "$status" -eq 0 ]
+  done
+}

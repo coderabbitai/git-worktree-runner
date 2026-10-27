@@ -489,9 +489,11 @@ cfg_default_trusted_file() {
   if [ -z "$value" ] && [ -n "$file_key" ]; then
     config_file=$(_gtrconfig_path)
     if [ -n "$config_file" ] && [ -f "$config_file" ]; then
-      file_value=$(git config -f "$config_file" --get "$file_key" 2>/dev/null || true)
+      local definitions
+      definitions=$(_hooks_read_definitions "$config_file") || true
+      file_value=$(_hooks_definitions_get "$definitions" "$file_key" last)
       if [ -n "$file_value" ]; then
-        if _hooks_are_trusted "$config_file"; then
+        if _hooks_snapshot_is_trusted "$config_file" "$definitions"; then
           value="$file_value"
         else
           log_warn "Untrusted .gtrconfig $file_key skipped — run: git gtr trust"
