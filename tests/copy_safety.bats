@@ -505,3 +505,80 @@ teardown() {
   [ -d "$dest/deps/cache space/keep" ]
   [ "$(shopt -p nullglob dotglob globstar 2>/dev/null || true)" = "$options_before" ]
 }
+
+@test "broad includes never overwrite worktree Git pointers or nested metadata" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/nested/.git" "$dst"
+  echo source > "$src/.git"
+  echo secret > "$src/nested/.git/config"
+  echo destination > "$dst/.git"
+  copy_patterns "$src" "$dst" '*' ''
+  copy_directories "$src" "$dst" nested ''
+  [ "$(cat "$dst/.git")" = destination ]
+  [ ! -e "$dst/nested/.git" ]
+}
+
+@test "expanded traversal cannot copy outside either root" {
+  _test_tmpdir=$(mktemp -d)
+  mkdir -p "$_test_tmpdir/src" "$_test_tmpdir/dst"
+  echo secret > "$_test_tmpdir/victim"
+  cd "$_test_tmpdir/src"
+  ! _copy_pattern_file '../victim' "$_test_tmpdir/dst" '' true false
+  ! _copy_pattern_file '././../victim' "$_test_tmpdir/dst" '' true false
+  [ "$(cat "$_test_tmpdir/victim")" = secret ]
+}
+
+@test "file copies reject source links and destination leaf and ancestor links" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" outside="$_test_tmpdir/outside"
+  mkdir -p "$src/vendor" "$dst" "$outside"
+  echo private > "$outside/secret"
+  echo replacement > "$src/vendor/secret"
+  ln -s "$outside/secret" "$src/leak"
+  ln -s "$outside/secret" "$dst/leaf"
+  ln -s "$outside" "$dst/vendor"
+  echo replacement > "$src/leaf"
+  copy_patterns "$src" "$dst" $'leak\nleaf\nvendor/*' ''
+  [ ! -e "$dst/leak" ]
+  [ "$(cat "$outside/secret")" = private ]
+}
+
+@test "directory copies reject destination links at every depth" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" outside="$_test_tmpdir/outside"
+  mkdir -p "$src/vendor/cache" "$dst/vendor" "$outside"
+  echo private > "$outside/secret"
+  echo replacement > "$src/vendor/cache/secret"
+  ln -s "$outside" "$dst/vendor/cache"
+  copy_directories "$src" "$dst" vendor ''
+  [ "$(cat "$outside/secret")" = private ]
+}
+
+@test "newline discovery never reconstructs a parent traversal record" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/"$'safe\n..' "$dst"
+  echo private > "$_test_tmpdir/secret"
+  copy_directories "$src" "$dst" '*' ''
+  [ ! -e "$dst/secret" ]
+  cd "$src"
+  local count
+  echo value > "$src/"$'safe\n..'"/file"
+  count=$(_expand_and_copy_pattern '**/*' "$dst" '' true false 0)
+  [ "$count" -eq 0 ]
+}
+
+@test "directory merge preserves destination-only files and hard-linked external data" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/cache" "$dst/cache"
+  echo private > "$_test_tmpdir/secret"
+  ln "$_test_tmpdir/secret" "$dst/cache/value"
+  echo replacement > "$src/cache/value"
+  echo keep > "$dst/cache/keep"
+  copy_directories "$src" "$dst" cache ''
+  [ "$(cat "$dst/cache/keep")" = keep ]
+  [ "$(cat "$_test_tmpdir/secret")" = private ]
+  [ "$(cat "$dst/cache/value")" = replacement ]
+}

@@ -15,6 +15,62 @@ _is_unsafe_path() {
   return 1
 }
 
+# Check every relative component before a read, mkdir, or write.
+# Roots are caller-owned; paths below them may come from the checkout.
+_copy_components_safe() {
+  local current="$1" remaining="$2" component
+  _is_unsafe_path "$remaining" && return 1
+  while [ -n "$remaining" ]; do
+    component="${remaining%%/*}"
+    case "$remaining" in
+      */*) remaining="${remaining#*/}" ;;
+      *) remaining="" ;;
+    esac
+    case "$component" in
+      ""|.) continue ;;
+      .git) return 1 ;;
+    esac
+    current="$current/$component"
+    [ -L "$current" ] && return 1
+  done
+  return 0
+}
+
+# Keep discovery records intact. The public pattern list format is line based,
+# so names containing newlines are skipped rather than split into new paths.
+_copy_discovery_records() {
+  local entry
+  while IFS= read -r -d '' entry; do
+    case "$entry" in
+      *$'\n'*) log_warn "Skipping copy path containing a newline"; continue ;;
+    esac
+    printf '%s\n' "$entry"
+  done
+}
+
+# Merge without following existing destination links. Stage each leaf in its
+# destination directory, then rename it so existing hard links are not written.
+_copy_tree_entry() {
+  local src="$1" dest="$2" child name staged
+  [ -L "$dest" ] && return 1
+  if [ -d "$src" ] && [ ! -L "$src" ]; then
+    mkdir -p "$dest" || return 1
+    while IFS= read -r -d '' child; do
+      name="${child##*/}"
+      [ "$name" = .git ] && continue
+      _copy_tree_entry "$child" "$dest/$name" || return 1
+    done < <(find "$src" -mindepth 1 -maxdepth 1 -print0)
+  else
+    [ -d "$dest" ] && return 1
+    staged=$(mktemp "${dest%/*}/.gtr-copy.XXXXXX") || return 1
+    if cp -P -- "$src" "$staged" && mv -f -- "$staged" "$dest"; then
+      return 0
+    fi
+    rm -f "$staged"
+    return 1
+  fi
+}
+
 # Check if a path matches any exclude pattern
 # Usage: is_excluded "path" "excludes_newline_separated"
 # Returns: 0 if excluded, 1 if not
@@ -76,38 +132,47 @@ merge_copy_patterns() {
 }
 
 # Copy a directory using CoW (copy-on-write) when available, falling back to standard cp.
-# macOS APFS: cp -cRP (clone); Linux Btrfs/XFS: cp --reflink=auto -RP
+# New directories use a private staging directory so failed clones cannot
+# remove existing destination data. Existing trees merge with safe leaf writes.
 # Callers must guard the return value with `if` or `|| true` (set -e safe).
 # Usage: _fast_copy_dir src dest
 # Cached OS value for _fast_copy_dir; set on first call.
 _fast_copy_os=""
 
 _fast_copy_dir() {
-  local src="$1" dest="$2"
-  if [ -z "$_fast_copy_os" ]; then
-    _fast_copy_os=$(detect_os)
+  local src="$1" dest="$2" target staging os
+  target="${dest%/}/${src##*/}"
+  if [ -e "$target" ] || [ -L "$target" ] || [ ! -d "$src" ] || [ -L "$src" ]; then
+    _copy_tree_entry "$src" "$target"
+    return $?
   fi
-  local os="$_fast_copy_os"
 
+  staging=$(mktemp -d "${dest%/}/.gtr-copy.XXXXXX") || return 1
+  os="${_fast_copy_os:-$(detect_os)}"
+  _fast_copy_os="$os"
   case "$os" in
     darwin)
-      # Try CoW clone first; if unsupported, fall back to regular copy
-      if cp -cRP "$src" "$dest" 2>/dev/null; then
-        return 0
+      if ! cp -cRP -- "$src" "$staging/" 2>/dev/null; then
+        # Only this invocation's staging output is eligible for removal.
+        rm -rf -- "${staging:?}/${src##*/}"
+        cp -RP -- "$src" "$staging/" || { rm -rf -- "$staging"; return 1; }
       fi
-      # Clean up any partial clone output before fallback
-      local _clone_target
-      _clone_target="${dest%/}/$(basename "$src")"
-      if [ -e "$_clone_target" ]; then rm -rf "$_clone_target"; fi
-      cp -RP "$src" "$dest"
       ;;
     linux)
-      cp --reflink=auto -RP "$src" "$dest"
+      cp --reflink=auto -RP -- "$src" "$staging/" || { rm -rf -- "$staging"; return 1; }
       ;;
     *)
-      cp -RP "$src" "$dest"
+      cp -RP -- "$src" "$staging/" || { rm -rf -- "$staging"; return 1; }
       ;;
   esac
+  # Never introduce Git control files, including nested repositories.
+  find "$staging" -name .git -prune -exec rm -rf -- {} +
+  if mv -- "${staging:?}/${src##*/}" "$target"; then
+    rmdir "$staging"
+  else
+    rm -rf -- "$staging"
+    return 1
+  fi
 }
 
 # Copy a single file to destination, handling exclusion, path preservation, and dry-run
@@ -123,6 +188,11 @@ _copy_pattern_file() {
   # Remove leading ./
   file="${file#./}"
 
+  if ! _copy_components_safe "." "$file"; then
+    log_warn "Skipping unsafe source path: $file"
+    return 1
+  fi
+
   # Skip if excluded
   is_excluded "$file" "$excludes" && return 1
 
@@ -134,6 +204,11 @@ _copy_pattern_file() {
     dest_file="$dst_root/$(basename "$file")"
   fi
 
+  if ! _copy_components_safe "$dst_root" "${dest_file#"$dst_root/"}"; then
+    log_warn "Skipping unsafe destination path: $file"
+    return 1
+  fi
+
   # Copy the file (or show what would be copied in dry-run mode)
   if [ "$dry_run" = "true" ]; then
     log_info "[dry-run] Would copy: $file"
@@ -142,8 +217,8 @@ _copy_pattern_file() {
 
   local dest_dir
   dest_dir=$(dirname "$dest_file")
-  mkdir -p "$dest_dir"
-  if cp "$file" "$dest_file" 2>/dev/null; then
+  mkdir -p "$dest_dir" || return 1
+  if _copy_tree_entry "$file" "$dest_file" 2>/dev/null; then
     log_info "Copied $file"
     return 0
   else
@@ -167,12 +242,12 @@ _expand_and_copy_pattern() {
     # won't match across the required '/' separator. For **/-prefixed patterns,
     # also search with the suffix alone so root-level files are found.
     local _find_results
-    _find_results=$(find . -path "./$pattern" -type f 2>/dev/null || true)
+    _find_results=$(find . -path "./$pattern" -type f -print0 2>/dev/null | _copy_discovery_records)
     case "$pattern" in
       \*\*/*)
         local _suffix="${pattern#\*\*/}"
         local _root_results
-        _root_results=$(find . -maxdepth 1 -path "./$_suffix" -type f 2>/dev/null || true)
+        _root_results=$(find . -maxdepth 1 -path "./$_suffix" -type f -print0 2>/dev/null | _copy_discovery_records)
         if [ -n "$_root_results" ]; then
           if [ -n "$_find_results" ]; then
             _find_results="$_find_results"$'\n'"$_root_results"
@@ -459,10 +534,12 @@ _selective_copy_dir() {
   local dir_path="$1" dst_root="$2" excludes="$3"
   local dest_dir="$dst_root/$dir_path"
 
+  _copy_components_safe "." "$dir_path" || return 1
+  _copy_components_safe "$dst_root" "$dir_path" || return 1
   mkdir -p "$dest_dir" || return 1
 
   local find_results
-  find_results=$(find "$dir_path" -mindepth 1 -maxdepth 1 2>/dev/null || true)
+  find_results=$(find "$dir_path" -mindepth 1 -maxdepth 1 -print0 2>/dev/null | _copy_discovery_records)
 
   local child_path child_name child_rel
   while IFS= read -r child_path; do
@@ -476,7 +553,11 @@ _selective_copy_dir() {
       continue
     fi
 
-    if ! _fast_copy_dir "$child_path" "$dest_dir/"; then
+    case "$child_name" in .git) continue ;; esac
+    _copy_components_safe "$dst_root" "$child_rel" || return 1
+    if [ -d "$child_path" ] && [ ! -L "$child_path" ]; then
+      _selective_copy_dir "$child_rel" "$dst_root" "$excludes" || return 1
+    elif ! _fast_copy_dir "$child_path" "$dest_dir/"; then
       return 1
     fi
   done <<EOF
@@ -545,7 +626,7 @@ _resolve_directory_patterns() {
             bounded_expr+=("-path" "./$pattern")
             ;;
           *)
-            find_results=$(find . -maxdepth 1 -type d -name "$pattern" 2>/dev/null || true)
+            find_results=$(find . -maxdepth 1 -type d -name "$pattern" -print0 2>/dev/null | _copy_discovery_records)
             if [ -z "$find_results" ]; then
               [ "${#recursive_expr[@]}" -gt 0 ] && recursive_expr+=("-o")
               recursive_expr+=("-name" "$pattern")
@@ -574,11 +655,11 @@ $dir_patterns
 EOF
 
   if [ "${#bounded_expr[@]}" -gt 0 ]; then
-    find . -maxdepth "$bounded_max_depth" -type d \( "${bounded_expr[@]}" \) 2>/dev/null || true
+    find . -maxdepth "$bounded_max_depth" -type d \( "${bounded_expr[@]}" \) -print0 2>/dev/null | _copy_discovery_records
   fi
 
   if [ "${#recursive_expr[@]}" -gt 0 ]; then
-    find . -type d \( "${recursive_expr[@]}" \) 2>/dev/null || true
+    find . -type d \( "${recursive_expr[@]}" \) -print0 2>/dev/null | _copy_discovery_records
   fi
 
   cd "$old_pwd" || return 1
@@ -607,6 +688,10 @@ _copy_resolved_directories() {
     [ -z "$dir_path" ] && continue
     dir_path="${dir_path#./}"
 
+    if ! _copy_components_safe "." "$dir_path" || ! _copy_components_safe "$dst_root" "$dir_path"; then
+      log_warn "Skipping unsafe directory path: $dir_path"
+      continue
+    fi
     is_excluded "$dir_path" "$excludes" && continue
     [ ! -d "$dir_path" ] && continue
 
@@ -622,18 +707,13 @@ _copy_resolved_directories() {
 
     mkdir -p "$dest_parent"
 
-    # Copy directory using CoW when available (preserves symlinks as symlinks)
-    if _has_subdir_excludes "$dir_path" "$excludes"; then
-      if _selective_copy_dir "$dir_path" "$dst_root" "$excludes"; then
-        log_info "Copied directory $dir_path"
-        copied_count=$((copied_count + 1))
-      else
-        log_warn "Failed to copy directory $dir_path"
-      fi
-    elif _fast_copy_dir "$dir_path" "$dest_parent/"; then
+    if { if _has_subdir_excludes "$dir_path" "$excludes"; then
+           _selective_copy_dir "$dir_path" "$dst_root" "$excludes"
+         else
+           _fast_copy_dir "$dir_path" "$dest_parent/"
+         fi; }; then
       log_info "Copied directory $dir_path"
       copied_count=$((copied_count + 1))
-      _apply_directory_excludes "$dst_root" "$dir_path" "$excludes"
     else
       log_warn "Failed to copy directory $dir_path"
     fi
