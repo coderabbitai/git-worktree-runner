@@ -47,6 +47,8 @@ EOF
     chmod +x "$_platform_mock_bin/osascript"
     local path="$_platform_mock_bin/"'$(touch injected) `touch injected2` '\''quote"back\slash'
     mkdir -p "$path"
+    local expected_path
+    expected_path=$(cd -P "$path" && pwd)
     spawn_terminal_in "$path" 'title' ''
     # Decode the AppleScript string and run the actual shell command it carries.
     python3 - "$GTR_TEST_SCRIPT" "$_platform_mock_bin/command" <<'PYCODE'
@@ -59,7 +61,7 @@ open(sys.argv[2], 'w').write(command + '\npwd -P\n')
 PYCODE
     run bash "$_platform_mock_bin/command"
     [ "$status" -eq 0 ]
-    [ "$output" = "$path" ]
+    [ "$output" = "$expected_path" ]
     [ ! -e injected ]
     [ ! -e injected2 ]
   done
