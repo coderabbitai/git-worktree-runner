@@ -85,14 +85,17 @@ _hooks_canonical_config_path() {
 }
 
 # Compute the repo-scoped trust key for reviewed trusted command content
-# Usage: _hooks_reviewed_trust_key <config_file> <hook_content>
+# Usage: _hooks_reviewed_trust_key <config_file> <hook_content> [repo_identity]
 _hooks_reviewed_trust_key() {
   local config_file="$1"
   local hook_content="$2"
-  local hash repo_root repo_identity
+  local repo_identity="${3:-}"
+  local hash repo_root
   hash=$(_hooks_content_hash "$hook_content") || return 1
   repo_root=$(_hooks_repo_root "$config_file") || return 1
-  repo_identity=$(_hooks_repo_identity "$repo_root") || return 1
+  if [ -z "$repo_identity" ]; then
+    repo_identity=$(_hooks_repo_identity "$repo_root") || return 1
+  fi
   printf 'v2\n%s\n%s\n%s\n' "$repo_root" "$repo_identity" "$hash" | shasum -a 256 | cut -d' ' -f1
 }
 
@@ -111,12 +114,13 @@ _hooks_trust_key() {
 }
 
 # Resolve the trust marker path for reviewed trusted command content
-# Usage: _hooks_reviewed_trust_path <config_file> <hook_content>
+# Usage: _hooks_reviewed_trust_path <config_file> <hook_content> [repo_identity]
 _hooks_reviewed_trust_path() {
   local config_file="$1"
   local hook_content="$2"
+  local repo_identity="${3:-}"
   local trust_key
-  trust_key=$(_hooks_reviewed_trust_key "$config_file" "$hook_content") || return 1
+  trust_key=$(_hooks_reviewed_trust_key "$config_file" "$hook_content" "$repo_identity") || return 1
   printf '%s/%s\n' "$_GTR_TRUST_DIR" "$trust_key"
 }
 

@@ -132,3 +132,23 @@ EOF
   [[ "$output" == *"repository identity changed during review"* ]]
   ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
 }
+
+@test "cmd_trust snapshots identity before reading definitions" {
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'sh ./bootstrap.sh'
+  printf 'echo original\n' > "$TEST_REPO/bootstrap.sh"
+  _hooks_read_definitions() {
+    local definitions
+    definitions=$(git config -f "$1" --get-regexp '^hooks\.') || return 1
+    if [ ! -d "$TEST_REPO/original-git" ]; then
+      mv "$TEST_REPO/.git" "$TEST_REPO/original-git"
+      git -C "$TEST_REPO" init --quiet
+      printf 'echo replacement\n' > "$TEST_REPO/bootstrap.sh"
+    fi
+    printf '%s\n' "$definitions"
+  }
+  prompt_yes_no() { return 0; }
+  run cmd_trust
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"repository identity changed during review"* ]]
+  [ ! -f "$(_hooks_current_trust_path "$TEST_REPO/.gtrconfig")" ]
+}
