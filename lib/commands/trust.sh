@@ -37,13 +37,14 @@ cmd_trust() {
   printf '%s\n' "$hook_content" >&2
   echo "" >&2
   log_warn "These commands will execute on your machine during gtr operations."
+  log_warn "Approval includes scripts and programs they invoke; their contents are not pinned."
 
   if prompt_yes_no "Trust these commands?"; then
     if _hooks_write_trust_marker "$trust_path" "$config_file"; then
       local current_trust_path
       current_trust_path=$(_hooks_current_trust_path "$config_file") || true
-      if [ -n "$current_trust_path" ] && [ "$current_trust_path" != "$trust_path" ]; then
-        log_warn "Executable commands changed during review; current commands remain untrusted"
+      if [ "$current_trust_path" != "$trust_path" ]; then
+        log_warn "Executable commands or repository identity changed during review; current commands remain untrusted"
         return 1
       fi
       log_info "Executable commands marked as trusted"

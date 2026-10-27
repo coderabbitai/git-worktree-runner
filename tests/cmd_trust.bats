@@ -77,7 +77,7 @@ EOF
   [ "$rc" -eq 1 ]
   [ -f "$reviewed_trust_path" ]
   ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
-  grep -F "Executable commands changed during review; current commands remain untrusted" "$output_file"
+  grep -F "Executable commands or repository identity changed during review; current commands remain untrusted" "$output_file"
 }
 
 @test "cmd_trust writes the reviewed marker when hooks change during confirmation" {
@@ -99,9 +99,36 @@ EOF
 
   run cmd_trust
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Executable commands changed during review; current commands remain untrusted"* ]]
+  [[ "$output" == *"Executable commands or repository identity changed during review; current commands remain untrusted"* ]]
   [ -f "$reviewed_marker" ]
 
   run _hooks_are_trusted "$TEST_REPO/.gtrconfig"
   [ "$status" -eq 1 ]
+}
+
+@test "cmd_trust rejects repository replacement during confirmation with identical definitions" {
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'sh ./bootstrap.sh'
+  printf 'echo original\n' > "$TEST_REPO/bootstrap.sh"
+  prompt_yes_no() {
+    mv "$TEST_REPO/.git" "$TEST_REPO/original-git"
+    git -C "$TEST_REPO" init --quiet
+    printf 'echo replacement\n' > "$TEST_REPO/bootstrap.sh"
+    return 0
+  }
+  run cmd_trust
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"repository identity changed during review"* ]]
+  ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "cmd_trust fails closed when repository identity disappears during confirmation" {
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'echo harmless'
+  prompt_yes_no() {
+    mv "$TEST_REPO/.git" "$TEST_REPO/original-git"
+    return 0
+  }
+  run cmd_trust
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"repository identity changed during review"* ]]
+  ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
 }

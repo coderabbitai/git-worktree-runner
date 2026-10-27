@@ -474,8 +474,14 @@ used until explicitly trusted.
 
 This prevents malicious contributors from injecting arbitrary shell
 commands via shared .gtrconfig files. Trust is stored per repository
-path plus executable command definitions in ~/.config/gtr/trusted/ and
-must be re-approved if those commands change.
+path, common Git directory filesystem identity, and executable command
+definitions in ~/.config/gtr/trusted/. Replacing a repository at the same
+path or changing those commands requires new approval. Older path-only
+approvals require renewal.
+
+Approval includes scripts and programs invoked by these commands. Their
+contents are not hashed or pinned; review delegated code and trust its
+contributors before approving.
 
 Hooks and defaults from your local git config (.git/config, ~/.gitconfig)
 are always trusted since you control those files directly.

@@ -8,9 +8,10 @@
 # files.
 #
 # Trust state is stored in ~/.config/gtr/trusted/<key>
-# where <key> is a SHA-256 of the canonical repo root plus trusted content hash.
-# Trust is scoped to repo identity + trusted .gtrconfig definitions, not repo
-# snapshot state.
+# where <key> binds the canonical repo root, Git directory identity and trusted
+# content hash. Replacing a repository at the same path requires new approval.
+# Trust approves command definitions, including any code they delegate to; it
+# does not pin script contents, dependencies or repository snapshot state.
 
 _GTR_TRUST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"
 
@@ -56,6 +57,21 @@ _hooks_repo_root() {
   )
 }
 
+# Identify this repository instance, rather than just its reusable path.
+# Use the common Git directory so normal commits and linked worktrees do not
+# invalidate approval. Birth time supplements device/inode where available.
+# Do not use a repository-controlled config value or file as an identity token.
+_hooks_repo_identity() {
+  local repo_root="$1"
+  local common_dir identity
+  common_dir=$(git -C "$repo_root" rev-parse --git-common-dir 2>/dev/null) || return 1
+  common_dir=$(cd "$repo_root" && cd "$common_dir" && pwd -P) || return 1
+  identity=$(LC_ALL=C stat -c '%d:%i:%W' "$common_dir" 2>/dev/null) ||
+    identity=$(LC_ALL=C stat -f '%d:%i:%B' "$common_dir" 2>/dev/null) || return 1
+  [ -n "$identity" ] || return 1
+  printf '%s\n%s\n' "$common_dir" "$identity"
+}
+
 # Resolve the canonical path for a .gtrconfig file
 # Usage: _hooks_canonical_config_path <config_file>
 _hooks_canonical_config_path() {
@@ -70,10 +86,11 @@ _hooks_canonical_config_path() {
 _hooks_reviewed_trust_key() {
   local config_file="$1"
   local hook_content="$2"
-  local hash repo_root
+  local hash repo_root repo_identity
   hash=$(_hooks_content_hash "$hook_content") || return 1
   repo_root=$(_hooks_repo_root "$config_file") || return 1
-  printf '%s\n%s\n' "$repo_root" "$hash" | shasum -a 256 | cut -d' ' -f1
+  repo_identity=$(_hooks_repo_identity "$repo_root") || return 1
+  printf 'v2\n%s\n%s\n%s\n' "$repo_root" "$repo_identity" "$hash" | shasum -a 256 | cut -d' ' -f1
 }
 
 # Compute the repo-scoped trust key for the current trusted command content

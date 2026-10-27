@@ -410,7 +410,9 @@ Review and approve executable commands defined in the repository's `.gtrconfig` 
 git gtr trust                              # Review and approve .gtrconfig commands
 ```
 
-Trust is stored per repository path plus executable command definitions and must be re-approved if hooks or editor/AI defaults change. Hooks and defaults from your local git config (`.git/config`, `~/.gitconfig`) are always trusted.
+Trust is bound to the repository path, the filesystem identity of its common Git directory, and executable command definitions. Replacing or recloning a repository at the same path, or changing hooks or editor/AI defaults, requires approval again. Older path-only approvals also require renewal. Hooks and defaults from your local git config (`.git/config`, `~/.gitconfig`) are always trusted.
+
+Approval covers command definitions and the behavior they delegate to. It does not hash or pin scripts, dependencies, or tools: for example, approving `sh ./scripts/setup.sh` allows subsequent changes to that script within the same repository. Review delegated code and trust the repository's contributors before approving commands.
 
 ### Other Commands
 

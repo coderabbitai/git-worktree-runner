@@ -138,6 +138,7 @@ EOF
 @test "repo-specific trust markers differ for the same hook content" {
   local second_repo="$BATS_TMPDIR/second-repo"
   mkdir -p "$second_repo"
+  git -C "$second_repo" init --quiet
 
   cat > "$TEST_REPO/.gtrconfig" <<'EOF'
 [hooks]
@@ -154,6 +155,62 @@ EOF
   second_path="$(_hooks_trust_path "$second_repo/.gtrconfig")"
 
   [ "$first_path" != "$second_path" ]
+}
+
+@test "replacement repository cannot reuse trust for identical definitions and changed delegated code" {
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCreate 'sh ./bootstrap.sh'
+  printf 'echo original > hook-result\n' > "$TEST_REPO/bootstrap.sh"
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  local original_hash original_path
+  original_hash=$(_hooks_file_hash "$TEST_REPO/.gtrconfig")
+  original_path=$(_hooks_trust_path "$TEST_REPO/.gtrconfig")
+  run_hooks_in postCreate "$TEST_REPO"
+  [ "$(cat "$TEST_REPO/hook-result")" = original ]
+
+  # Keep the old Git directory alive so this fixture cannot reuse its inode.
+  mv "$TEST_REPO/.git" "$TEST_REPO/original-git"
+  git -C "$TEST_REPO" init --quiet
+  printf 'echo replacement > hook-result\n' > "$TEST_REPO/bootstrap.sh"
+  rm "$TEST_REPO/hook-result"
+  [ "$(_hooks_file_hash "$TEST_REPO/.gtrconfig")" = "$original_hash" ]
+  run_hooks_in postCreate "$TEST_REPO"
+  [ ! -f "$TEST_REPO/hook-result" ]
+  [ "$(_hooks_trust_path "$TEST_REPO/.gtrconfig")" != "$original_path" ]
+  ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "legacy path-only approval cannot approve a repository instance" {
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'echo harmless'
+  local legacy_key
+  legacy_key=$(printf '%s\n%s\n' "$TEST_REPO" "$(_hooks_file_hash "$TEST_REPO/.gtrconfig")" |
+    shasum -a 256 | cut -d' ' -f1)
+  mkdir -p "$_GTR_TRUST_DIR"
+  printf '%s\n' "$TEST_REPO/.gtrconfig" > "$_GTR_TRUST_DIR/$legacy_key"
+  ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "definition trust survives delegated script changes in the same repository" {
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCreate 'sh ./bootstrap.sh'
+  printf 'echo original\n' > "$TEST_REPO/bootstrap.sh"
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  printf 'echo updated\n' > "$TEST_REPO/bootstrap.sh"
+  _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "repository identity stays stable across commits and linked worktrees" {
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCreate 'echo harmless'
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  git -C "$TEST_REPO" commit --allow-empty -m second --quiet
+  create_test_worktree identity-test
+  (cd "$TEST_WT_PATH" && _hooks_are_trusted "$TEST_REPO/.gtrconfig")
+}
+
+@test "trust fails closed when repository identity cannot be resolved" {
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'echo harmless'
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  _hooks_repo_identity() { return 1; }
+  ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+  ! _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
 }
 
 @test "run_hooks executes single hook" {

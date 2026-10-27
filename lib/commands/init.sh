@@ -68,7 +68,7 @@ cmd_init() {
   # Generate output (cached to ~/.cache/gtr/, auto-invalidates on shell integration changes)
   local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gtr"
   local cache_file="$cache_dir/init-${func_name}.${shell}"
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-6}"
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-7}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # Return cached output if version matches
@@ -131,13 +131,26 @@ __SHELL_PRELUDE__
   printf '%s/%s\n' "$_gtr_repo_root" "$(basename "$_gtr_config_file")"
 }
 
+__FUNC___hooks_repo_identity() {
+__SHELL_PRELUDE__
+  local _gtr_repo_root="$1"
+  local _gtr_common_dir _gtr_identity
+  _gtr_common_dir="$(git -C "$_gtr_repo_root" rev-parse --git-common-dir 2>/dev/null)" || return 1
+  _gtr_common_dir="$(cd "$_gtr_repo_root" && cd "$_gtr_common_dir" && pwd -P)" || return 1
+  _gtr_identity="$(LC_ALL=C stat -c '%d:%i:%W' "$_gtr_common_dir" 2>/dev/null)" ||
+    _gtr_identity="$(LC_ALL=C stat -f '%d:%i:%B' "$_gtr_common_dir" 2>/dev/null)" || return 1
+  [ -n "$_gtr_identity" ] || return 1
+  printf '%s\n%s\n' "$_gtr_common_dir" "$_gtr_identity"
+}
+
 __FUNC___hooks_current_trust_key() {
 __SHELL_PRELUDE__
   local _gtr_config_file="$1"
-  local _gtr_hook_hash _gtr_repo_root
+  local _gtr_hook_hash _gtr_repo_root _gtr_repo_identity
   _gtr_hook_hash="$(__FUNC___hooks_current_content_hash "$_gtr_config_file" 2>/dev/null)" || return 1
   _gtr_repo_root="$(__FUNC___hooks_repo_root "$_gtr_config_file" 2>/dev/null)" || return 1
-  printf '%s\n%s\n' "$_gtr_repo_root" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
+  _gtr_repo_identity="$(__FUNC___hooks_repo_identity "$_gtr_repo_root" 2>/dev/null)" || return 1
+  printf 'v2\n%s\n%s\n%s\n' "$_gtr_repo_root" "$_gtr_repo_identity" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
 }
 
 __FUNC___hooks_marker_matches_config() {
@@ -200,13 +213,28 @@ function __FUNC___hooks_canonical_config_path
   printf '%s/%s\n' "$_gtr_repo_root" (basename "$_gtr_config_file")
 end
 
+function __FUNC___hooks_repo_identity
+  # Keep the identity algorithm identical to the CLI and POSIX wrappers.
+  command sh -c '
+    common_dir=$(git -C "$1" rev-parse --git-common-dir 2>/dev/null) || exit 1
+    common_dir=$(cd "$1" && cd "$common_dir" && pwd -P) || exit 1
+    identity=$(LC_ALL=C stat -c "%d:%i:%W" "$common_dir" 2>/dev/null) ||
+      identity=$(LC_ALL=C stat -f "%d:%i:%B" "$common_dir" 2>/dev/null) || exit 1
+    [ -n "$identity" ] || exit 1
+    printf "%s\\n%s\\n" "$common_dir" "$identity"
+  ' sh "$argv[1]"
+end
+
 function __FUNC___hooks_current_trust_key
   set -l _gtr_config_file "$argv[1]"
   set -l _gtr_hook_hash (__FUNC___hooks_current_content_hash "$_gtr_config_file" 2>/dev/null)
   test -n "$_gtr_hook_hash"; or return 1
   set -l _gtr_repo_root (__FUNC___hooks_repo_root "$_gtr_config_file" 2>/dev/null)
   test -n "$_gtr_repo_root"; or return 1
-  printf '%s\n%s\n' "$_gtr_repo_root" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
+  set -l _gtr_repo_identity (__FUNC___hooks_repo_identity "$_gtr_repo_root" 2>/dev/null | string collect)
+  test $pipestatus[1] -eq 0; or return 1
+  test -n "$_gtr_repo_identity"; or return 1
+  printf 'v2\n%s\n%s\n%s\n' "$_gtr_repo_root" "$_gtr_repo_identity" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
 end
 
 function __FUNC___hooks_marker_matches_config

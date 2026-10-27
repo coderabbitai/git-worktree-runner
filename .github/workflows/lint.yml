@@ -44,8 +44,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install BATS
-        run: sudo apt-get update && sudo apt-get install -y bats
+      - name: Install BATS and shells for integration tests
+        run: sudo apt-get update && sudo apt-get install -y bats fish zsh
 
       - name: Run tests
         run: bats tests/
