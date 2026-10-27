@@ -40,6 +40,17 @@ teardown() {
   [ "$(git config branch.feature/from-pr.merge)" = "refs/heads/feature/from-pr" ]
 }
 
+@test "cmd_pr treats an option-shaped remote as a fetch operand" {
+  # Configure the name directly because `git remote add` rejects leading dashes.
+  git config remote.--all.url "$TEST_REMOTE_REPO"
+
+  run cmd_pr 123 --remote --all --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ -d "$TEST_WORKTREES_DIR/feature-from-pr" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+}
+
 @test "cmd_pr supports custom local branch and folder" {
   cmd_pr 123 --branch review/pr-123 --folder review-123 --remote origin --no-copy --no-hooks --yes
 

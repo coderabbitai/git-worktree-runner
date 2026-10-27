@@ -28,6 +28,37 @@ _cmd_create_capture_stdout() {
   [ -d "$TEST_WORKTREES_DIR/new-feature" ]
 }
 
+@test "cmd_create treats untrusted defaults.remote as a fetch operand" {
+  # Every remote is local; --all must not cause an unrelated remote to be fetched.
+  git remote add origin "$TEST_REPO"
+  git remote add unrelated "$TEST_REPO"
+  git config -f .gtrconfig defaults.remote --all
+  git add .gtrconfig
+  git commit -m "shared remote default" --quiet
+  [ ! -d "$_GTR_TRUST_DIR" ]
+
+  run "$PROJECT_ROOT/bin/gtr" new remote-operand --from HEAD --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ -d "$TEST_WORKTREES_DIR/remote-operand" ]
+  [[ "$output" == *"Could not fetch from --all"* ]]
+  run git for-each-ref --format='%(refname)' refs/remotes/
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "cmd_create fetches the configured remote from untrusted defaults.remote" {
+  git remote add upstream "$TEST_REPO"
+  git branch remote-source HEAD
+  git config -f .gtrconfig defaults.remote upstream
+
+  run "$PROJECT_ROOT/bin/gtr" new normal-remote --from HEAD --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ -d "$TEST_WORKTREES_DIR/normal-remote" ]
+  [ "$(git rev-parse refs/remotes/upstream/remote-source)" = "$(git rev-parse HEAD)" ]
+}
+
 @test "_create_print_porcelain escapes record values" {
   local result expected
   result=$(_create_print_porcelain $'/tmp/a\tb\nc\\d' $'feature/a\tb' partial)

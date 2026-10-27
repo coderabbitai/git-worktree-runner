@@ -340,7 +340,7 @@ cmd_pr() {
     native_checkout=1
   else
     log_step "Fetching pull request #$pr_number..."
-    if ! git fetch "$fetch_source" "refs/pull/$pr_number/head"; then
+    if ! git fetch -- "$fetch_source" "refs/pull/$pr_number/head"; then
       log_error "Could not fetch pull request #$pr_number from $fetch_source"
       exit 1
     fi

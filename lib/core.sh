@@ -836,7 +836,8 @@ create_worktree() {
 
   if [ "$skip_fetch" -eq 0 ]; then
     log_step "Fetching remote branches..."
-    git fetch "$remote" 2>/dev/null || log_warn "Could not fetch from $remote"
+    # Shared config can supply the remote; keep it out of option parsing.
+    git fetch -- "$remote" 2>/dev/null || log_warn "Could not fetch from $remote"
   fi
 
   _check_branch_refs "$branch_name" "$remote"
