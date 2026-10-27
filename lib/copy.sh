@@ -307,6 +307,69 @@ _directory_exclude_suffix() {
   return 1
 }
 
+# Check each directory component before entering an exclusion root.
+# Do not resolve symlinks: even an in-tree link can redirect a later removal.
+# Usage: _exclude_root_is_safe <dest_parent> <dir_path>
+_exclude_root_is_safe() {
+  local current="$1" remaining="$2" component
+
+  _is_unsafe_path "$remaining" && return 1
+  while [ -n "$remaining" ]; do
+    component="${remaining%%/*}"
+    case "$remaining" in
+      */*) remaining="${remaining#*/}" ;;
+      *) remaining="" ;;
+    esac
+    case "$component" in
+      ""|.) continue ;;
+      .git) return 1 ;;
+    esac
+    current="$current/$component"
+    [ -L "$current" ] && return 1
+  done
+  [ -d "$current" ]
+}
+
+# Expand one glob component at a time so expansion never traverses symlinks.
+# Runs inside the exclusion subshell with nullglob/dotglob enabled.
+# Sets the caller's removed_any flag when at least one removal succeeds.
+# Usage: _remove_directory_exclude_matches <parent> <pattern>
+_remove_directory_exclude_matches() {
+  local parent="$1" pattern="$2" component suffix="" matched_path name
+  component="${pattern%%/*}"
+  case "$pattern" in
+    */*) suffix="${pattern#*/}" ;;
+  esac
+
+  # Empty components (repeated slashes) do not change the current directory.
+  if [ -z "$component" ]; then
+    [ -n "$suffix" ] && _remove_directory_exclude_matches "$parent" "$suffix"
+    return 0
+  fi
+
+  # Disable word splitting while retaining glob expansion, including spaces.
+  local IFS=""
+  # shellcheck disable=SC2086
+  for matched_path in "$parent"/$component; do
+    name="${matched_path##*/}"
+    # Also reject glob spellings of dot, dot-dot, and Git metadata.
+    case "$name" in
+      .|..|.git) continue ;;
+    esac
+    if [ -n "$suffix" ]; then
+      if [ -d "$matched_path" ] && [ ! -L "$matched_path" ]; then
+        _remove_directory_exclude_matches "$matched_path" "$suffix"
+      fi
+    elif [ -e "$matched_path" ] || [ -L "$matched_path" ]; then
+      # A leaf symlink is safe to unlink; never append a slash to it.
+      if rm -rf -- "$matched_path" 2>/dev/null; then
+        removed_any=1
+      fi
+    fi
+  done
+  return 0
+}
+
 # Remove excluded subdirectories from a copied directory.
 # Supports patterns like "node_modules/.cache", "*/.cache", "node_modules/*", "*/.*"
 # Usage: _apply_directory_excludes <dest_parent> <dir_path> <excludes>
@@ -338,30 +401,23 @@ _apply_directory_excludes() {
       continue
     fi
 
-    local exclude_old_pwd
-    exclude_old_pwd=$(pwd)
-    cd "$dest_parent/$dir_path" 2>/dev/null || continue
-
-    local exclude_shopt_save
-    exclude_shopt_save="$(shopt -p dotglob 2>/dev/null || true)"
-    shopt -s dotglob 2>/dev/null || true
+    if ! _exclude_root_is_safe "$dest_parent" "$dir_path"; then
+      log_warn "Skipping excludes through unsafe directory path: $dir_path"
+      continue
+    fi
 
     local removed_any=0
-    # shellcheck disable=SC2086
-    for matched_path in $pattern_suffix; do
-      if [ -e "$matched_path" ]; then
-        # Never remove .git directory via exclude patterns
-        case "$matched_path" in
-          .git|.git/*) continue ;;
-        esac
-        if rm -rf "$matched_path" 2>/dev/null; then
-          removed_any=1
-        fi
-      fi
-    done
-
-    eval "$exclude_shopt_save" 2>/dev/null || true
-    cd "$exclude_old_pwd" || true
+    # Keep cwd and shell option changes local, and prevent inherited globstar
+    # from recursively expanding a component before we can check symlinks.
+    if (
+      cd "$dest_parent/$dir_path" || exit 1
+      shopt -s nullglob dotglob
+      shopt -u globstar 2>/dev/null || true
+      _remove_directory_exclude_matches "." "$pattern_suffix"
+      [ "$removed_any" -eq 1 ]
+    ); then
+      removed_any=1
+    fi
 
     if [ "$removed_any" -eq 1 ]; then
       log_info "Excluded subdirectory $exclude_pattern"

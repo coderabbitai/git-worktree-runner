@@ -161,3 +161,23 @@ _cmd_create_capture_stdout() {
   cmd_create feature/deep --from HEAD --no-fetch --yes
   [ -d "$TEST_WORKTREES_DIR/feature-deep" ]
 }
+
+@test "cmd_create confines untrusted config exclusions around committed symlinks" {
+  # Both the repository and the external sentinel live in disposable fixtures.
+  local outside="$TEST_WORKTREES_DIR/external-fixture"
+  mkdir -p "$outside/cache" "$TEST_REPO/deps/nested"
+  echo "sentinel" > "$outside/cache/keep"
+  echo "remove" > "$TEST_REPO/deps/nested/remove"
+  ln -s "$outside" "$TEST_REPO/deps/nested/link"
+  git config -f "$TEST_REPO/.gtrconfig" --add copy.includeDirs deps
+  git config -f "$TEST_REPO/.gtrconfig" --add copy.excludeDirs 'deps/*/link/*/*'
+  git config -f "$TEST_REPO/.gtrconfig" --add copy.excludeDirs 'deps/nested/remove'
+  git add .gtrconfig deps
+  git commit -m "fixture copy configuration and symlink" --quiet
+
+  cmd_create confined-copy --from HEAD --no-fetch --yes --no-hooks
+
+  [ "$(cat "$outside/cache/keep")" = sentinel ]
+  [ -L "$TEST_WORKTREES_DIR/confined-copy/deps/nested/link" ]
+  [ ! -e "$TEST_WORKTREES_DIR/confined-copy/deps/nested/remove" ]
+}

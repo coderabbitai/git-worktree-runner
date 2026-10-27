@@ -318,6 +318,11 @@ git gtr config add gtr.copy.excludeDirs "node_modules/.*"      # Exclude all hid
 git gtr config add gtr.copy.excludeDirs "*/.cache"             # Exclude .cache at any level
 ```
 
+Directory exclusions never descend through symlinks. An exclusion matching a
+symlink itself removes only the link, including when the pattern ends in `/`;
+the link target is preserved. Exclusions are skipped when the copied directory
+or one of its path components is a symlink.
+
 > [!WARNING]
 > Dependency directories may contain sensitive files (credentials, tokens, cached secrets). Always use `gtr.copy.excludeDirs` to exclude sensitive subdirectories if needed.
 

@@ -434,3 +434,74 @@ teardown() {
   [ "$(printf '%s\n' "$resolved" | grep -c '^./one/deep/cache$')" -eq 1 ]
   [ "$(printf '%s\n' "$resolved" | wc -l | tr -d ' ')" -eq 2 ]
 }
+
+@test "directory excludes never traverse copied symlinks" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" outside="$_test_tmpdir/outside"
+  mkdir -p "$src/deps/nested" "$dst" "$outside/cache"
+  echo "sentinel" > "$outside/cache/keep"
+  echo "remove" > "$src/deps/nested/remove"
+  ln -s "$outside" "$src/deps/nested/link"
+
+  copy_directories "$src" "$dst" deps $'deps/*/link/*/*\ndeps/nested/remove'
+
+  [ "$(cat "$outside/cache/keep")" = sentinel ]
+  [ -L "$dst/deps/nested/link" ]
+  [ ! -e "$dst/deps/nested/remove" ]
+}
+
+@test "directory excludes reject symlinks in the exclusion root" {
+  _test_tmpdir=$(mktemp -d)
+  local dest="$_test_tmpdir/dest" outside="$_test_tmpdir/outside"
+  mkdir -p "$dest" "$outside/deps"
+  echo "sentinel" > "$outside/deps/keep"
+  ln -s "$outside" "$dest/vendor"
+  ln -s "$outside/deps" "$dest/deps"
+
+  _apply_directory_excludes "$dest" vendor/deps 'vendor/deps/*'
+  _apply_directory_excludes "$dest" deps 'deps/*'
+
+  [ "$(cat "$outside/deps/keep")" = sentinel ]
+}
+
+@test "directory excludes can unlink leaf symlinks including dangling links" {
+  _test_tmpdir=$(mktemp -d)
+  local dest="$_test_tmpdir/dest" outside="$_test_tmpdir/outside"
+  mkdir -p "$dest/deps" "$outside"
+  echo "sentinel" > "$outside/keep"
+  ln -s "$outside" "$dest/deps/link"
+  ln -s "$outside/missing" "$dest/deps/dangling"
+
+  _apply_directory_excludes "$dest" deps $'deps/link/\ndeps/dangling'
+
+  [ ! -L "$dest/deps/link" ]
+  [ ! -L "$dest/deps/dangling" ]
+  [ "$(cat "$outside/keep")" = sentinel ]
+}
+
+@test "directory excludes reject glob spellings of parent traversal and metadata" {
+  _test_tmpdir=$(mktemp -d)
+  local dest="$_test_tmpdir/dest"
+  mkdir -p "$dest/deps/.git" "$dest/sibling"
+  echo "metadata" > "$dest/deps/.git/config"
+  echo "sentinel" > "$dest/sibling/keep"
+
+  _apply_directory_excludes "$dest" deps $'deps/[.][.]/*\ndeps/[.]git/*\ndeps/./*'
+
+  [ "$(cat "$dest/sibling/keep")" = sentinel ]
+  [ "$(cat "$dest/deps/.git/config")" = metadata ]
+}
+
+@test "directory excludes preserve spaces and shell options" {
+  _test_tmpdir=$(mktemp -d)
+  local dest="$_test_tmpdir/dest"
+  mkdir -p "$dest/deps/cache space/remove" "$dest/deps/cache space/keep"
+  local options_before
+  options_before=$(shopt -p nullglob dotglob globstar 2>/dev/null || true)
+
+  _apply_directory_excludes "$dest" deps 'deps/cache space/remove'
+
+  [ ! -e "$dest/deps/cache space/remove" ]
+  [ -d "$dest/deps/cache space/keep" ]
+  [ "$(shopt -p nullglob dotglob globstar 2>/dev/null || true)" = "$options_before" ]
+}
