@@ -178,12 +178,14 @@ __SHELL_PRELUDE__
 __FUNC___hooks_repo_identity() {
 __SHELL_PRELUDE__
   local _gtr_repo_root="$1"
-  local _gtr_common_dir _gtr_identity
+  local _gtr_common_dir _gtr_identity _gtr_birth_time
   _gtr_common_dir="$(git -C "$_gtr_repo_root" rev-parse --git-common-dir 2>/dev/null)" || return 1
   _gtr_common_dir="$(cd "$_gtr_repo_root" && cd "$_gtr_common_dir" && pwd -P)" || return 1
-  _gtr_identity="$(LC_ALL=C stat -c '%d:%i:%.9W' "$_gtr_common_dir" 2>/dev/null)" ||
+  _gtr_identity="$(LC_ALL=C TZ=UTC stat -c '%d:%i:%W:%w' "$_gtr_common_dir" 2>/dev/null)" ||
     _gtr_identity="$(LC_ALL=C stat -f '%d:%i:%.9FB' "$_gtr_common_dir" 2>/dev/null)" || return 1
-  case "${_gtr_identity##*:}" in
+  _gtr_birth_time="${_gtr_identity#*:*:}"
+  _gtr_birth_time="${_gtr_birth_time%%:*}"
+  case "$_gtr_birth_time" in
     ''|0|0.*|*[!0-9.]*) return 1 ;;
   esac
   printf '%s\n%s\n' "$_gtr_common_dir" "$_gtr_identity"
@@ -277,9 +279,11 @@ function __FUNC___hooks_repo_identity
   command sh -c '
     common_dir=$(git -C "$1" rev-parse --git-common-dir 2>/dev/null) || exit 1
     common_dir=$(cd "$1" && cd "$common_dir" && pwd -P) || exit 1
-    identity=$(LC_ALL=C stat -c "%d:%i:%.9W" "$common_dir" 2>/dev/null) ||
+    identity=$(LC_ALL=C TZ=UTC stat -c "%d:%i:%W:%w" "$common_dir" 2>/dev/null) ||
       identity=$(LC_ALL=C stat -f "%d:%i:%.9FB" "$common_dir" 2>/dev/null) || exit 1
-    case "${identity##*:}" in
+    birth_time="${identity#*:*:}"
+    birth_time="${birth_time%%:*}"
+    case "$birth_time" in
       ""|0|0.*|*[!0-9.]*) exit 1 ;;
     esac
     printf "%s\\n%s\\n" "$common_dir" "$identity"

@@ -93,15 +93,18 @@ _hooks_repo_root() {
 # Use the common Git directory so normal commits and linked worktrees do not
 # invalidate approval. Require a known birth time and preserve nanoseconds to
 # distinguish rapid inode reuse. Filesystems without birth times fail closed.
+# GNU %W is whole seconds even with precision; %w retains birth nanoseconds.
 # Do not use a repository-controlled config value or file as an identity token.
 _hooks_repo_identity() {
   local repo_root="$1"
-  local common_dir identity
+  local common_dir identity birth_time
   common_dir=$(git -C "$repo_root" rev-parse --git-common-dir 2>/dev/null) || return 1
   common_dir=$(cd "$repo_root" && cd "$common_dir" && pwd -P) || return 1
-  identity=$(LC_ALL=C stat -c '%d:%i:%.9W' "$common_dir" 2>/dev/null) ||
+  identity=$(LC_ALL=C TZ=UTC stat -c '%d:%i:%W:%w' "$common_dir" 2>/dev/null) ||
     identity=$(LC_ALL=C stat -f '%d:%i:%.9FB' "$common_dir" 2>/dev/null) || return 1
-  case "${identity##*:}" in
+  birth_time="${identity#*:*:}"
+  birth_time="${birth_time%%:*}"
+  case "$birth_time" in
     ''|0|0.*|*[!0-9.]*) return 1 ;;
   esac
   printf '%s\n%s\n' "$common_dir" "$identity"

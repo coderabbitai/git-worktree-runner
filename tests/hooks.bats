@@ -460,3 +460,17 @@ EOF
   _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
   [ "$(cfg_default_trusted_file gtr.ai.default '' fallback defaults.ai)" = fallback ]
 }
+
+@test "GNU repository identity retains birth nanoseconds within the same second" {
+  local birth_fraction=123456789 first second
+  stat() {
+    case "$*" in
+      *%W:%w*) printf '1:2:1793140000:2026-10-27 23:00:00.%s +0000\n' "$birth_fraction" ;;
+      *) printf '1:2:1793140000.000000000\n' ;;
+    esac
+  }
+  first=$(_hooks_repo_identity "$TEST_REPO")
+  birth_fraction=987654321
+  second=$(_hooks_repo_identity "$TEST_REPO")
+  [ "$first" != "$second" ]
+}
