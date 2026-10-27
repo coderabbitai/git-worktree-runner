@@ -614,3 +614,15 @@ teardown() {
   [ -x "$dst/tools/run" ]
   [ "$("$dst/tools/run")" = executable ]
 }
+
+@test "staged file copies respect a restrictive umask" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src" "$dst"
+  echo secret > "$src/.env"
+  chmod 644 "$src/.env"
+  (umask 077; copy_patterns "$src" "$dst" .env '')
+  local mode
+  mode=$(stat -c '%a' "$dst/.env" 2>/dev/null) || mode=$(stat -f '%Lp' "$dst/.env")
+  [ "$mode" = 600 ]
+}
