@@ -182,7 +182,13 @@ _fast_copy_dir() {
       ;;
   esac
   # Never introduce Git control files, including nested repositories.
-  find "$staging" -iname .git -prune -exec rm -rf -- {} +
+  find "$staging" -iname .git -prune -exec rm -rf -- {} + 2>/dev/null || true
+  local remaining_git
+  if ! remaining_git=$(find "$staging" -iname .git -print -quit 2>/dev/null) ||
+    [ -n "$remaining_git" ]; then
+    rm -rf -- "$staging"
+    return 1
+  fi
   if mv -- "${staging:?}/${src##*/}" "$target"; then
     rmdir "$staging"
   else

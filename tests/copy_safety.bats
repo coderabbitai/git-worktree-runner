@@ -676,3 +676,36 @@ teardown() {
   _apply_directory_excludes "$dst" nested 'nested/.GiT'
   [ "$(cat "$dst/nested/.GiT/config")" = keep ]
 }
+
+@test "directory staging is rejected if Git metadata removal fails" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" mock_bin="$_test_tmpdir/bin"
+  mkdir -p "$src/cache/.git" "$dst" "$mock_bin"
+  echo metadata > "$src/cache/.git/config"
+  cat > "$mock_bin/rm" <<'SH'
+#!/usr/bin/env bash
+for arg in "$@"; do
+  case "$arg" in */.git) exit 1 ;; esac
+done
+exec /bin/rm "$@"
+SH
+  chmod +x "$mock_bin/rm"
+  PATH="$mock_bin:$PATH" run _fast_copy_dir "$src/cache" "$dst/"
+  [ "$status" -ne 0 ]
+  [ ! -e "$dst/cache" ]
+  [ "$(find "$dst" -name '.gtr-copy.*' | wc -l | tr -d ' ')" -eq 0 ]
+}
+
+@test "directory staging is rejected when metadata verification cannot scan it" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/cache" "$dst"
+  echo value > "$src/cache/file"
+  find() {
+    case "$*" in *'-print -quit'*) return 1 ;; esac
+    command find "$@"
+  }
+  run _fast_copy_dir "$src/cache" "$dst/"
+  [ "$status" -ne 0 ]
+  [ ! -e "$dst/cache" ]
+}
