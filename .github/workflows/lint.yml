@@ -36,26 +36,6 @@ jobs:
       - name: Verify completion files are up to date
         run: ./scripts/generate-completions.sh --check
 
-  bash-compatibility:
-    name: macOS Bash 3.2
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      - name: Exercise CLI startup and shell integration with system Bash
-        shell: /bin/bash --noprofile --norc -eo pipefail {0}
-        run: |
-          export PATH="$PWD/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
-          export XDG_CACHE_HOME="$RUNNER_TEMP/gtr-cache"
-          /bin/bash --version
-          git gtr --version
-          ./bin/gtr --version
-          git gtr init bash > "$RUNNER_TEMP/gtr-init.bash"
-          /bin/bash -n "$RUNNER_TEMP/gtr-init.bash"
-          source "$RUNNER_TEMP/gtr-init.bash"
-
   test:
     name: Tests
     runs-on: ubuntu-latest

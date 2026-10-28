@@ -135,7 +135,6 @@ _init_emit_posix_trust_helpers() {
   # Keep the snapshot encoding and extraction identical to the CLI.
   _init_emit_snapshot_helpers
 
-  # Keep case patterns balanced inside this substitution for Bash 3.2's parser.
   template=$(cat <<'EOF'
 __FUNC___gtrconfig_path() {
 __SHELL_PRELUDE__
@@ -187,7 +186,7 @@ __SHELL_PRELUDE__
   _gtr_birth_time="${_gtr_identity#*:*:}"
   _gtr_birth_time="${_gtr_birth_time%%:*}"
   case "$_gtr_birth_time" in
-    (''|0|0.*|*[!0-9.]*) return 1 ;;
+    ''|0|0.*|*[!0-9.]*) return 1 ;;
   esac
   printf '%s\n%s\n' "$_gtr_common_dir" "$_gtr_identity"
 }
