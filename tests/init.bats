@@ -577,7 +577,7 @@ CFG
   )
 
   no_shasum_path=$(path_without_command "$root/bin" shasum)
-  run env PATH="$no_shasum_path" bash -c 'eval "$1" && gtr_hooks_are_trusted "$2" "$3"' \
+  run env PATH="$no_shasum_path" bash -c 'eval "$1" && gtr_hooks_are_trusted "$2" "$3" "$(gtr_hooks_read_definitions "$2")"' \
     _ "$(cmd_init bash)" "$repo/.gtrconfig" "$xdg/gtr/trusted"
   rm -rf "$root"
 
