@@ -350,10 +350,10 @@ run_generated_replacement_repo_hooks() (
   [[ "$output" == *'init trust help version'* ]]
 }
 
-@test "bash output uses git gtr list --porcelain for cd completion" {
+@test "bash cd completion uses native git worktree list, not gtr list" {
   run cmd_init bash
   [ "$status" -eq 0 ]
-  [[ "$output" == *"git gtr list --porcelain"* ]]
+  [[ "$output" == *'worktrees="1 $(git worktree list --porcelain 2>/dev/null | sed -n'* ]]
 }
 
 @test "generated wrappers resolve .gtrconfig from the git common dir" {
@@ -384,10 +384,10 @@ run_generated_replacement_repo_hooks() (
   [[ "$output" == *"cd:Change directory to worktree"* ]]
 }
 
-@test "zsh output uses git gtr list --porcelain for cd completion" {
+@test "zsh cd completion uses native git worktree list, not gtr list" {
   run cmd_init zsh
   [ "$status" -eq 0 ]
-  [[ "$output" == *"git gtr list --porcelain"* ]]
+  [[ "$output" == *'worktrees=("1" ${(f)"$(git worktree list --porcelain'* ]]
 }
 
 @test "zsh output validates trust marker contents" {
@@ -410,10 +410,10 @@ run_generated_replacement_repo_hooks() (
   [[ "$output" == *"-a trust -d"* ]]
 }
 
-@test "fish output uses git gtr list --porcelain for cd completion" {
+@test "fish cd completion uses native git worktree list, not gtr list" {
   run cmd_init fish
   [ "$status" -eq 0 ]
-  [[ "$output" == *"git gtr list --porcelain"* ]]
+  [[ "$output" == *"using_subcommand cd' -a '(echo 1; git worktree list --porcelain"* ]]
 }
 
 @test "fish output validates trust marker contents" {
