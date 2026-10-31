@@ -57,12 +57,26 @@ _hooks_snapshot_is_trusted() {
   _hooks_marker_matches_config "$trust_path" "$config_file"
 }
 
+# Print the SHA-256 hex digest of stdin.
+# Falls back to sha256sum where Perl's shasum is not installed
+# (for example Alpine or minimal Fedora/RHEL images).
+# Usage: printf '%s' "$data" | _hooks_sha256
+_hooks_sha256() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | cut -d' ' -f1
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | cut -d' ' -f1
+  else
+    return 1
+  fi
+}
+
 # Compute a content hash for trusted command definitions.
 # Usage: _hooks_content_hash <hook_content>
 _hooks_content_hash() {
   local hook_content="$1"
   [ -n "$hook_content" ] || return 1
-  printf '%s\n' "$hook_content" | shasum -a 256 | cut -d' ' -f1
+  printf '%s\n' "$hook_content" | _hooks_sha256
 }
 
 # Compute a content hash of all current trusted command entries in a .gtrconfig file.
@@ -131,7 +145,7 @@ _hooks_reviewed_trust_key() {
   if [ -z "$repo_identity" ]; then
     repo_identity=$(_hooks_repo_identity "$repo_root") || return 1
   fi
-  printf 'v3\n%s\n%s\n%s\n' "$repo_root" "$repo_identity" "$hash" | shasum -a 256 | cut -d' ' -f1
+  printf 'v3\n%s\n%s\n%s\n' "$repo_root" "$repo_identity" "$hash" | _hooks_sha256
 }
 
 # Compute the repo-scoped trust key for the current trusted command content

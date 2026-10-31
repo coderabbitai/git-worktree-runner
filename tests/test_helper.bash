@@ -108,3 +108,23 @@ SCRIPT
   chmod +x "$MOCK_BIN_DIR/$name"
   export PATH="$MOCK_BIN_DIR:$PATH"
 }
+
+# Mirror every command on PATH into a new directory, leaving out one command,
+# so tests can simulate systems where that command is not installed.
+# Usage: path_without_command <bin_dir> <command>
+# Prints: the directory to use as PATH
+path_without_command() {
+  local bin_dir="$1" omitted="$2" dir entry name
+  mkdir -p "$bin_dir"
+  local IFS=:
+  for dir in $PATH; do
+    [ -d "$dir" ] || continue
+    for entry in "$dir"/*; do
+      [ -e "$entry" ] || continue
+      name="${entry##*/}"
+      [ "$name" = "$omitted" ] && continue
+      [ -e "$bin_dir/$name" ] || ln -s "$entry" "$bin_dir/$name"
+    done
+  done
+  printf "%s" "$bin_dir"
+}

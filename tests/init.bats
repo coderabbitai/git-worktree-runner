@@ -112,13 +112,15 @@ SCRIPT
 
 run_generated_fish_gtrconfig_post_cd_hooks() {
   local trust_state="$1"
-  local root repo wt xdg init_file
+  local without_shasum="${2:-0}"
+  local root repo wt xdg init_file fish_path
 
   root=$(mktemp -d)
   repo="$root/repo"
   wt="$root/wt"
   xdg="$root/xdg"
   init_file="$root/gtr.fish"
+  fish_path="$PATH"
 
   git init --quiet "$repo"
   git -C "$repo" config user.name "Test User"
@@ -145,7 +147,11 @@ CFG
     )
   fi
 
-  XDG_CONFIG_HOME="$xdg" fish -c '
+  if [ "$without_shasum" -eq 1 ]; then
+    fish_path=$(path_without_command "$root/bin" shasum)
+  fi
+
+  PATH="$fish_path" XDG_CONFIG_HOME="$xdg" fish -c '
     source "$argv[1]"
     set -l wt "$argv[2]"
     set -l root "$argv[3]"
@@ -390,6 +396,34 @@ run_generated_replacement_repo_hooks() (
   [[ "$output" == *"git gtr list --porcelain"* ]]
 }
 
+@test "generated bash wrapper recognizes trust markers when shasum is not installed" {
+  local root repo xdg no_shasum_path
+  command -v sha256sum >/dev/null 2>&1 || skip "sha256sum is not installed"
+  root=$(mktemp -d)
+  repo="$root/repo"
+  xdg="$root/xdg"
+
+  git init --quiet "$repo"
+  cat > "$repo/.gtrconfig" <<'CFG'
+[hooks]
+  postCd = echo hi
+CFG
+
+  (
+    export XDG_CONFIG_HOME="$xdg"
+    # shellcheck disable=SC1091
+    . "$PROJECT_ROOT/lib/hooks.sh"
+    _hooks_mark_trusted "$repo/.gtrconfig"
+  )
+
+  no_shasum_path=$(path_without_command "$root/bin" shasum)
+  run env PATH="$no_shasum_path" bash -c 'eval "$1" && gtr_hooks_are_trusted "$2" "$3" "$(gtr_hooks_read_definitions "$2")"' \
+    _ "$(cmd_init bash)" "$repo/.gtrconfig" "$xdg/gtr/trusted"
+  rm -rf "$root"
+
+  [ "$status" -eq 0 ]
+}
+
 @test "zsh output validates trust marker contents" {
   run cmd_init zsh
   [ "$status" -eq 0 ]
@@ -472,6 +506,18 @@ run_generated_replacement_repo_hooks() (
   hook_pwd_line=$(printf '%s\n' "$output" | sed -n 's/^HOOK_PWD=//p')
   [ "$pwd_line" = "$wt_line" ]
   [ "$hook_pwd_line" = "$wt_line" ]
+}
+
+@test "fish generated postCd trusts gtrconfig hooks when shasum is unavailable" {
+  require_runtime_shell fish
+  command -v sha256sum >/dev/null 2>&1 || skip "sha256sum is not installed"
+
+  run run_generated_fish_gtrconfig_post_cd_hooks trusted 1
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"RC=0"* ]]
+  [[ "$output" == *"HOOK_ORDER=second"* ]]
+  [[ "$output" == *"STDERR="* ]]
 }
 
 # ── new/pr --cd wrapper support ─────────────────────────────────────────────
