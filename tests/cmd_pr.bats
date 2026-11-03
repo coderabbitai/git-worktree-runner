@@ -66,6 +66,11 @@ teardown() {
   [ "$(_pr_remote_for_url https://github.com/base/example.git)" = "upstream" ]
 }
 
+@test "_pr_normalize_repo_url maps scp-style SSH and HTTPS URLs to the same host/path" {
+  [ "$(_pr_normalize_repo_url git@github.com:base/example.git)" = "github.com/base/example" ]
+  [ "$(_pr_normalize_repo_url https://github.com/base/example.git)" = "github.com/base/example" ]
+}
+
 @test "cmd_pr fetches through an existing SSH base remote by default" {
   git config url."$TEST_REMOTE_REPO".insteadOf git@github.com:base/example.git
   git remote add upstream git@github.com:base/example.git

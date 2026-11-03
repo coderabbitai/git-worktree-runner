@@ -106,7 +106,8 @@ _pr_normalize_repo_url() {
   case "$repo_url" in
     git@*:*)
       repo_url="${repo_url#git@}"
-      repo_url="${repo_url/:/\/}"
+      # Bash 3.2 keeps the backslash in "${var/:/\/}", so split on the colon instead.
+      repo_url="${repo_url%%:*}/${repo_url#*:}"
       ;;
     *://*)
       repo_url="${repo_url#*://}"
