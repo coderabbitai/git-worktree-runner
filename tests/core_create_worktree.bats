@@ -166,6 +166,31 @@ teardown() {
   [ -d "$wt_path" ]
 }
 
+@test "create_worktree preserves empty dotted and spaced folder prefixes" {
+  local prefix wt_path index=0
+  for prefix in "" "dev-" "." ".." "my team-"; do
+    wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "$prefix" "prefix-$index" "HEAD" "none" "1")
+    [ "$wt_path" = "$TEST_WORKTREES_DIR/${prefix}prefix-$index" ]
+    [ -f "$wt_path/.git" ]
+    index=$((index + 1))
+  done
+}
+
+@test "create_worktree rejects prefix path separators before creating directories or branches" {
+  # Even a regression can only create destinations inside this disposable repo.
+  local base_dir="$TEST_REPO/prefix-fixture/trees" prefix
+  mkdir -p "$TEST_REPO/prefix-fixture"
+  for prefix in "../planted-" "group/../../planted-" "group/dev-" "/absolute-" \
+      '..\planted-' 'group\dev-' 'C:\dev-'; do
+    run create_worktree "$base_dir" "$prefix" "rejected-prefix" "HEAD" "none" "1"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Invalid gtr.worktrees.prefix"* ]]
+    [ ! -e "$base_dir" ]
+    [ ! -e "$TEST_REPO/prefix-fixture/planted-rejected-prefix" ]
+    ! git show-ref --verify --quiet refs/heads/rejected-prefix
+  done
+}
+
 @test "create_worktree applies custom name suffix" {
   local wt_path
   wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" "feature" "HEAD" "none" "1" "0" "backend")

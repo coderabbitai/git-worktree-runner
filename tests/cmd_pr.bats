@@ -75,6 +75,44 @@ teardown() {
   [ "$(git config branch.review/pr-123.merge)" = "refs/heads/feature/from-pr" ]
 }
 
+@test "cmd_pr fallback applies an ordinary folder prefix" {
+  git config -f .gtrconfig worktrees.prefix dev-
+
+  cmd_pr 123 --remote origin --no-copy --no-hooks --yes
+
+  [ -f "$TEST_WORKTREES_DIR/dev-feature-from-pr/.git" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/dev-feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+}
+
+@test "cmd_pr rejects traversal prefixes before native checkout or fallback fetch" {
+  git config gtr.worktrees.dir "$TEST_REPO/prefix-fixture/trees"
+  git config -f .gtrconfig worktrees.prefix ../planted-
+  export TEST_GH_LOG="$TEST_MOCK_BIN/gh.log"
+  cat > "$TEST_MOCK_BIN/gh" <<'SCRIPT'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$TEST_GH_LOG"
+if [ "$1" = "pr" ] && [ "$2" = "checkout" ] && [ "$3" = "--help" ]; then
+  printf '      --worktree path\n'
+elif [ "$1" = "pr" ] && [ "$2" = "view" ]; then
+  printf '123\tfeature/from-pr\tocto\texample\thttps://github.com/base/example/pull/123\ttrue\ttrue\n'
+fi
+SCRIPT
+  local mode
+  for mode in native fallback; do
+    local args=()
+    [ "$mode" = "fallback" ] && args=(--remote origin)
+
+    run "$PROJECT_ROOT/bin/gtr" pr 123 "${args[@]}" --no-copy --no-hooks --yes
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Invalid gtr.worktrees.prefix"* ]]
+    [ ! -e "$TEST_GH_LOG" ]
+    [ ! -e "$TEST_REPO/prefix-fixture" ]
+    [ ! -e "$TEST_REPO/.git/FETCH_HEAD" ]
+    ! git show-ref --verify --quiet refs/heads/feature/from-pr
+  done
+}
+
 @test "cmd_pr reuses ssh remote matching resolved PR base repository" {
   git remote add upstream git@github.com:base/example.git
 
@@ -130,6 +168,7 @@ SCRIPT
 }
 
 @test "cmd_pr delegates worktree creation to gh when supported" {
+  git config gtr.worktrees.prefix dev-
   export TEST_GH_LOG="$TEST_MOCK_BIN/gh.log"
   cat > "$TEST_MOCK_BIN/gh" <<'SCRIPT'
 #!/usr/bin/env bash
@@ -159,12 +198,12 @@ SCRIPT
 
   cmd_pr 123 --no-copy --no-hooks --yes
 
-  [ -d "$TEST_WORKTREES_DIR/feature-from-pr" ]
+  [ -d "$TEST_WORKTREES_DIR/dev-feature-from-pr" ]
   local logged_path logged_branch
   IFS=$'\t' read -r logged_path logged_branch < "$TEST_GH_LOG"
-  [ "${logged_path##*/}" = "feature-from-pr" ]
+  [ "${logged_path##*/}" = "dev-feature-from-pr" ]
   [ "$logged_branch" = "feature/from-pr" ]
-  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/dev-feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
 }
 
 @test "cmd_pr fetches the resolved PR base repository by default" {

@@ -28,6 +28,78 @@ _cmd_create_capture_stdout() {
   [ -d "$TEST_WORKTREES_DIR/new-feature" ]
 }
 
+@test "cmd_create accepts an untrusted folder prefix with sanitized branch and custom names" {
+  git config -f .gtrconfig worktrees.prefix dev-
+  [ ! -d "$_GTR_TRUST_DIR" ]
+
+  run "$PROJECT_ROOT/bin/gtr" new feature/auth --name backend --from HEAD --no-fetch --no-copy --no-hooks --yes
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_WORKTREES_DIR/dev-feature-auth-backend/.git" ]
+
+  run "$PROJECT_ROOT/bin/gtr" new review --folder chosen --from HEAD --no-fetch --no-copy --no-hooks --yes
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_WORKTREES_DIR/dev-chosen/.git" ]
+  [ ! -d "$_GTR_TRUST_DIR" ]
+}
+
+@test "cmd_create rejects traversal prefixes from shared local global and environment config" {
+  local source base_dir="$TEST_REPO/prefix-fixture/trees"
+  mkdir -p "$TEST_REPO/prefix-fixture"
+  git config gtr.worktrees.dir "$base_dir"
+  export GIT_CONFIG_GLOBAL="$TEST_REPO/prefix-global-config"
+  for source in shared local global environment; do
+    case "$source" in
+      shared)
+        git config -f .gtrconfig worktrees.prefix ../planted-
+        git add .gtrconfig
+        git commit -m "shared prefix" --quiet
+        ;;
+      local) git config gtr.worktrees.prefix ../planted- ;;
+      global) git config --global gtr.worktrees.prefix ../planted- ;;
+      environment) export GTR_WORKTREES_PREFIX=../planted- ;;
+    esac
+
+    run "$PROJECT_ROOT/bin/gtr" new rejected-prefix --from HEAD --no-fetch --no-copy --no-hooks --yes
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Invalid gtr.worktrees.prefix"* ]]
+    [ ! -e "$base_dir" ]
+    [ ! -e "$TEST_REPO/prefix-fixture/planted-rejected-prefix" ]
+    ! git show-ref --verify --quiet refs/heads/rejected-prefix
+    [ ! -d "$_GTR_TRUST_DIR" ]
+
+    case "$source" in
+      shared) git config -f .gtrconfig --unset worktrees.prefix ;;
+      local) git config --unset gtr.worktrees.prefix ;;
+      global) git config --global --unset gtr.worktrees.prefix ;;
+      environment) unset GTR_WORKTREES_PREFIX ;;
+    esac
+  done
+}
+
+@test "cmd_create validates the effective prefix after config precedence" {
+  git config -f .gtrconfig worktrees.prefix ../planted-
+  git config gtr.worktrees.prefix dev-
+
+  run "$PROJECT_ROOT/bin/gtr" new safe-override --from HEAD --no-fetch --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_WORKTREES_DIR/dev-safe-override/.git" ]
+}
+
+@test "cmd_create rejects invalid prefixes without emitting porcelain records" {
+  git config gtr.worktrees.dir "$TEST_REPO/prefix-fixture/trees"
+  git config gtr.worktrees.prefix '../planted-'
+  local stdout_file="$TEST_REPO/prefix-stdout" stderr_file="$TEST_REPO/prefix-stderr"
+
+  run bash -c '"$1" new rejected-prefix --from HEAD --no-fetch --porcelain >"$2" 2>"$3"' \
+    _ "$PROJECT_ROOT/bin/gtr" "$stdout_file" "$stderr_file"
+
+  [ "$status" -eq 1 ]
+  [ ! -s "$stdout_file" ]
+  grep -q "Invalid gtr.worktrees.prefix" "$stderr_file"
+  ! git show-ref --verify --quiet refs/heads/rejected-prefix
+}
+
 @test "cmd_create treats untrusted defaults.remote as a fetch operand" {
   # Every remote is local; --all must not cause an unrelated remote to be fetched.
   git remote add origin "$TEST_REPO"

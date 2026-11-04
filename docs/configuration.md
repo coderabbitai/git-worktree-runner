@@ -97,7 +97,7 @@ gtr.worktrees.dir = .worktrees
 # Home directory (tilde expansion)
 gtr.worktrees.dir = ~/worktrees/my-project
 
-# Folder prefix (default: "")
+# Folder name prefix, without / or \ (default: "")
 gtr.worktrees.prefix = dev-
 
 # Default branch (default: auto-detect)
@@ -106,6 +106,13 @@ gtr.defaultBranch = main
 # Default remote for fetches, tracking, and default base refs (default: origin)
 gtr.defaultRemote = upstream
 ```
+
+The prefix is prepended literally to the sanitized folder name: `dev-` and
+`feature/auth` produce `dev-feature-auth`. Empty prefixes are supported. Prefixes
+containing `/` or `\` are rejected from every configuration source, including
+`.gtrconfig` and `GTR_WORKTREES_PREFIX`. Use `gtr.worktrees.dir` to select a parent
+directory; for example, replace a `team/dev-` prefix with a `dev-` prefix and a
+base directory ending in `team`.
 
 > [!IMPORTANT]
 > If storing worktrees inside the repository, add the directory to `.gitignore`.
