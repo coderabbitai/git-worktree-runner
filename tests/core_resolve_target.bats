@@ -52,6 +52,16 @@ teardown() {
   [[ "$result" == "0"$'\t'"$TEST_WORKTREES_DIR/wt-prefixed"* ]]
 }
 
+@test "resolve_target rejects traversal prefixes even when the destination exists" {
+  local base_dir="$TEST_REPO/prefix-fixture/trees"
+  mkdir -p "$base_dir" "$TEST_REPO/prefix-fixture/planted-feature"
+
+  run resolve_target "feature" "$TEST_REPO" "$base_dir" "../planted-"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Invalid gtr.worktrees.prefix"* ]]
+}
+
 @test "unpack_target parses TSV into context globals" {
   local tsv="0"$'\t'"/some/path"$'\t'"my-branch"
   unpack_target "$tsv"

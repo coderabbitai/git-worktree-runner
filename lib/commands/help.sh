@@ -752,7 +752,7 @@ WORKFLOW EXAMPLES:
 CONFIGURATION OPTIONS:
 
   gtr.worktrees.dir        Worktrees base directory
-  gtr.worktrees.prefix     Worktree folder prefix (default: "")
+  gtr.worktrees.prefix     Folder name prefix, no / or \ (default: "")
   gtr.defaultBranch        Default branch (default: auto)
   gtr.defaultRemote        Default remote (default: origin)
   gtr.editor.default       Default editor

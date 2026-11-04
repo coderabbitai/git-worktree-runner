@@ -483,6 +483,8 @@ git gtr config set gtr.ui.color never
 
 **Adapter safety:** Generic `gtr.editor.default` and `gtr.ai.default` values must resolve to safe PATH commands. Filesystem paths such as `./tool` and shell wrapper forms such as `sh -c ...` are rejected. Override-backed adapters like `claude`, `cursor`, and `nano` may include additional flags, for example `claude --continue` or `nano -w`.
 
+**Worktree naming:** `gtr.worktrees.prefix` is a folder-name prefix, such as `dev-`, and cannot contain `/` or `\`. Set `gtr.worktrees.dir` to choose the parent directory. See [worktree settings](docs/configuration.md#worktree-settings).
+
 **Configuration precedence** (highest to lowest):
 
 1. `git config --local` (`.git/config`) - personal overrides

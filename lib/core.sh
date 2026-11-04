@@ -35,6 +35,18 @@ sanitize_branch_name() {
   printf "%s" "$branch" | sed -e 's/[\/\\ :*?"<>|#]/-/g' -e 's/^-*//' -e 's/-*$//'
 }
 
+# Prefixes name folders; worktrees.dir selects their parent directory.
+# Reject both POSIX and Windows separators instead of changing configured names.
+_validate_worktree_prefix() {
+  case "$1" in
+    */*|*\\*)
+      log_error "Invalid gtr.worktrees.prefix: path separators are not allowed; use gtr.worktrees.dir for directories"
+      return 1
+      ;;
+  esac
+  return 0
+}
+
 # Canonicalize a path to its absolute form, resolving symlinks
 # Usage: canonicalize_path path
 # Returns: canonical path or empty string on failure
@@ -412,6 +424,8 @@ resolve_target() {
   local base_dir="$3"
   local prefix="$4"
   local path branch sanitized_name
+
+  _validate_worktree_prefix "$prefix" || return 1
 
   # Special case: ID 1 is always the repo root
   if [ "$identifier" = "1" ]; then
@@ -819,6 +833,8 @@ create_worktree() {
   local no_checkout="${11:-0}"
   local add_source="${12:-}"
 
+  _validate_worktree_prefix "$prefix" || return 1
+
   local sanitized_name
   sanitized_name=$(_resolve_folder_name "$branch_name" "$custom_name" "$folder_override") || return 1
 
@@ -949,6 +965,7 @@ resolve_repo_context() {
   _ctx_repo_root=$(discover_repo_root) || return 1
   _ctx_base_dir=$(resolve_base_dir "$_ctx_repo_root")
   _ctx_prefix=$(cfg_default gtr.worktrees.prefix GTR_WORKTREES_PREFIX "")
+  _validate_worktree_prefix "$_ctx_prefix" || return 1
 }
 
 # List all worktree branch names (excluding main repo)

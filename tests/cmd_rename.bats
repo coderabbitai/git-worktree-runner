@@ -32,6 +32,33 @@ teardown() {
   [ "$status" -ne 0 ]
 }
 
+@test "cmd_rename preserves an ordinary folder prefix" {
+  git config gtr.worktrees.prefix dev-
+  create_worktree "$TEST_WORKTREES_DIR" "dev-" "old-name" "HEAD" "none" "1" >/dev/null
+
+  cmd_rename old-name feature/renamed --yes
+
+  [ -f "$TEST_WORKTREES_DIR/dev-feature-renamed/.git" ]
+  [ ! -e "$TEST_WORKTREES_DIR/dev-old-name" ]
+  [ "$(get_current_branch "$TEST_WORKTREES_DIR/dev-feature-renamed")" = "feature/renamed" ]
+}
+
+@test "cmd_rename rejects traversal prefixes without moving the worktree or renaming its branch" {
+  create_test_worktree "old-name"
+  local old_path="$TEST_WT_PATH"
+  git config gtr.worktrees.dir "$TEST_REPO/prefix-fixture/trees"
+  git config -f .gtrconfig worktrees.prefix ../planted-
+
+  run "$PROJECT_ROOT/bin/gtr" mv old-name renamed --yes
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Invalid gtr.worktrees.prefix"* ]]
+  [ -f "$old_path/.git" ]
+  [ "$(get_current_branch "$old_path")" = "old-name" ]
+  [ ! -e "$TEST_REPO/prefix-fixture" ]
+  ! git show-ref --verify --quiet refs/heads/renamed
+}
+
 # ── Error cases ──────────────────────────────────────────────────────────────
 
 @test "cmd_rename fails with insufficient args" {
