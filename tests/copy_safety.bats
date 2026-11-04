@@ -670,7 +670,8 @@ teardown() {
   echo private > "$outside/secret"
   echo replacement > "$src/vendor/cache/secret"
   ln -s "$outside" "$dst/vendor/cache"
-  copy_directories "$src" "$dst" vendor ''
+  run copy_directories "$src" "$dst" vendor ''
+  [ "$status" -ne 0 ]
   [ "$(cat "$outside/secret")" = private ]
 }
 
@@ -827,4 +828,64 @@ SH
   run _fast_copy_dir "$src/cache" "$dst/"
   [ "$status" -ne 0 ]
   [ ! -e "$dst/cache" ]
+}
+
+@test "directory publication does not follow a symlink inserted at the move boundary" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/source space" dst="$_test_tmpdir/destination space"
+  local outside="$_test_tmpdir/outside"
+  mkdir -p "$src/cache" "$dst" "$outside"
+  echo value > "$src/cache/file"
+  echo sentinel > "$outside/keep"
+  # Deterministically schedule the other writer after all pre-copy checks.
+  # The actual system mv still performs the move with the production options.
+  mv() {
+    ln -s "$outside" "$dst/cache"
+    command mv "$@"
+  }
+
+  run _fast_copy_dir "$src/cache" "$dst/"
+
+  [ "$status" -ne 0 ]
+  [ -L "$dst/cache" ]
+  [ ! -e "$outside/cache" ]
+  [ "$(cat "$outside/keep")" = sentinel ]
+  [ "$(find "$dst" -name '.gtr-copy.*' | wc -l | tr -d ' ')" -eq 0 ]
+}
+
+@test "directory copy failures reach the caller and restore its working directory" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/cache" "$dst"
+  echo value > "$src/cache/file"
+  mv() { return 1; }
+  local before result=0
+  before=$(pwd)
+
+  copy_directories "$src" "$dst" cache '' || result=$?
+
+  [ "$result" -ne 0 ]
+  [ "$(pwd)" = "$before" ]
+  [ ! -e "$dst/cache" ]
+  [ "$(find "$dst" -name '.gtr-copy.*' | wc -l | tr -d ' ')" -eq 0 ]
+}
+
+@test "staged leaf publication replaces a raced symlink without writing its referent" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  local outside="$_test_tmpdir/outside"
+  mkdir -p "$src" "$dst" "$outside"
+  echo value > "$src/file"
+  echo sentinel > "$outside/leaf"
+  mv() {
+    ln -s "$outside" "$dst/file"
+    command mv "$@"
+  }
+
+  _copy_tree_entry "$src/file" "$dst/file"
+
+  [ ! -L "$dst/file" ]
+  [ "$(cat "$dst/file")" = value ]
+  [ "$(cat "$outside/leaf")" = sentinel ]
+  [ "$(find "$dst" -name '.gtr-copy.*' | wc -l | tr -d ' ')" -eq 0 ]
 }

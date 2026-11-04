@@ -65,6 +65,18 @@ teardown() {
   [ ! -e "$TEST_WORKTREES_DIR/copy-target/cache" ]
 }
 
+@test "cmd_copy propagates a directory publication failure" {
+  mkdir -p "$TEST_REPO/deps"
+  echo value > "$TEST_REPO/deps/file"
+  git config --add gtr.copy.includeDirs deps
+  mv() { return 1; }
+
+  run cmd_copy copy-target
+
+  [ "$status" -ne 0 ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target/deps" ]
+}
+
 @test "cmd_copy dry-run does not copy configured includeDirs" {
   mkdir -p "$TEST_REPO/.zed"
   echo "settings" > "$TEST_REPO/.zed/settings.json"
