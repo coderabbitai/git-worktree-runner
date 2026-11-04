@@ -136,9 +136,13 @@ check_generated_policy_hooks() {
   "$PROJECT_ROOT/bin/gtr" init "$shell_name" > "$POLICY_INIT"
 
   unset POLICY_TRUSTED_EXPORT POLICY_UNTRUSTED_EXPORT
+  local shell_args=()
+  if [ "$shell_name" = zsh ]; then
+    shell_args=(-f)
+  fi
   case "$shell_name" in
     bash|zsh)
-      run "$shell_name" -c '
+      run "$shell_name" "${shell_args[@]}" -c '
         set -e
         # Completion registration is outside this non-interactive hook fixture.
         compdef() { :; }
@@ -168,6 +172,10 @@ check_generated_policy_hooks() {
 }
 
 @test "zsh generated postCd runs Git hooks while untrusted file hooks stay blocked" {
+  # The helper shell must skip user startup files that could replace fixture config.
+  export ZDOTDIR="$POLICY_FIXTURE/zsh-startup"
+  mkdir -p "$ZDOTDIR"
+  printf 'exit 99\n' > "$ZDOTDIR/.zshenv"
   check_generated_policy_hooks zsh
 }
 
