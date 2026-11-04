@@ -432,6 +432,86 @@ _copy_test_mode() {
   ! _fast_copy_dir "/nonexistent/path" "$_test_tmpdir/"
 }
 
+@test "file copy statuses distinguish success, exclusions, and I/O failures" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/nested" "$dst/conflict"
+  echo value > "$src/file"
+  echo value > "$src/excluded"
+  echo value > "$src/conflict"
+  echo value > "$src/nested/file"
+  echo blocker > "$dst/nested"
+  cd "$src"
+
+  run _copy_pattern_file file "$dst" '' true false
+  [ "$status" -eq 0 ]
+  [ "$(cat "$dst/file")" = value ]
+  run _copy_pattern_file excluded "$dst" excluded true false
+  [ "$status" -eq 1 ]
+  [ ! -e "$dst/excluded" ]
+  run _copy_pattern_file conflict "$dst" '' true false
+  [ "$status" -eq 2 ]
+  [ -d "$dst/conflict" ]
+  run _copy_pattern_file nested/file "$dst" '' true false
+  [ "$status" -eq 2 ]
+  [ "$(cat "$dst/nested")" = blocker ]
+}
+
+@test "both pattern expansion paths retain failures alongside successful and excluded files" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" pattern
+  mkdir -p "$src" "$dst/a-fail.txt"
+  echo value > "$src/a-fail.txt"
+  echo keep > "$src/b-keep.txt"
+  echo excluded > "$src/c-skip.txt"
+  cd "$src"
+
+  # Plain globs exercise the native loop on every Bash; ** forces the 3.2 fallback.
+  for pattern in '*.txt' '**/*.txt'; do
+    run _expand_and_copy_pattern "$pattern" "$dst" 'c-skip.txt' true false 0
+    [ "$status" -eq 1 ]
+    [ "$output" = 1 ]
+    [ "$(cat "$dst/b-keep.txt")" = keep ]
+    [ ! -e "$dst/c-skip.txt" ]
+  done
+}
+
+@test "copy_patterns succeeds when every match is intentionally skipped" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src" "$dst"
+  echo value > "$src/excluded"
+  echo metadata > "$src/.git"
+
+  run copy_patterns "$src" "$dst" $'excluded\n.git\n../outside\nmissing*' excluded
+
+  [ "$status" -eq 0 ]
+  [ ! -e "$dst/excluded" ]
+  [ ! -e "$dst/.git" ]
+}
+
+@test "copy_patterns retains earlier failures and restores cwd and shell options" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/nested" "$dst"
+  echo value > "$src/nested/file"
+  echo keep > "$src/keep"
+  echo excluded > "$src/excluded"
+  echo blocker > "$dst/nested"
+  local before options_before result=0
+  before=$(pwd)
+  options_before=$(shopt -p nullglob dotglob globstar 2>/dev/null || true)
+
+  copy_patterns "$src" "$dst" $'nested/file\nkeep\nexcluded\nmissing*' excluded || result=$?
+
+  [ "$result" -eq 1 ]
+  [ "$(pwd)" = "$before" ]
+  [ "$(shopt -p nullglob dotglob globstar 2>/dev/null || true)" = "$options_before" ]
+  [ "$(cat "$dst/keep")" = keep ]
+  [ "$(cat "$dst/nested")" = blocker ]
+  [ ! -e "$dst/excluded" ]
+}
+
 # --- _expand_and_copy_pattern find-fallback tests ---
 # These test the Bash 3.2 fallback path (have_globstar=0)
 

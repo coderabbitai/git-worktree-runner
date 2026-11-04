@@ -55,6 +55,27 @@ teardown() {
   [[ "$output" == *"copying failed"* ]]
 }
 
+@test "pr CLI stops before hooks and success output after a file copy fails" {
+  mkdir -p "$TEST_REPO/config"
+  echo tracked > "$TEST_REPO/config/keep"
+  git add config/keep
+  git commit -m "directory at copy destination" --quiet
+  git push origin HEAD:refs/pull/123/head --quiet
+  rm -rf "$TEST_REPO/config"
+  echo local > "$TEST_REPO/config"
+  git config gtr.copy.include config
+  git config gtr.hook.postCreate 'touch hook-marker'
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --remote origin --yes
+
+  [ "$status" -eq 1 ]
+  [ -f "$TEST_WORKTREES_DIR/feature-from-pr/config/keep" ]
+  [ ! -e "$TEST_WORKTREES_DIR/feature-from-pr/hook-marker" ]
+  [[ "$output" == *"copying failed"* ]]
+  [[ "$output" != *"Worktree created:"* ]]
+  [[ "$output" != *"Next steps:"* ]]
+}
+
 @test "cmd_pr treats an option-shaped remote as a fetch operand" {
   # Configure the name directly because `git remote add` rejects leading dashes.
   git config remote.--all.url "$TEST_REMOTE_REPO"

@@ -33,8 +33,9 @@ Progress messages, warnings, and hook output go to stderr. `--porcelain` implies
 | `skipped-untrusted` | Only untrusted `.gtrconfig` hooks were configured, so none ran. |
 | `partial` | Trusted hooks ran, while untrusted `.gtrconfig` hooks were skipped. |
 
-A non-zero exit means creation or a post-create hook failed. No success records
-are emitted in that case.
+A non-zero exit means creation, configured copying, or a post-create hook failed.
+No success records are emitted in that case. If copying fails, the worktree may
+already exist with partially copied files; post-create hooks and tools are not started.
 
 ## Restricting side effects
 
