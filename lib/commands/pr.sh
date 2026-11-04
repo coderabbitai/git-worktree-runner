@@ -396,7 +396,10 @@ cmd_pr() {
   fi
 
   if [ "$skip_copy" -eq 0 ]; then
-    _post_create_copy "$repo_root" "$worktree_path"
+    if ! _post_create_copy "$repo_root" "$worktree_path"; then
+      log_error "Worktree created at $worktree_path, but copying failed; hooks and tools were not started"
+      return 1
+    fi
   fi
 
   if [ "$skip_hooks" -eq 0 ]; then

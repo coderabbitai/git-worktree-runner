@@ -40,6 +40,21 @@ teardown() {
   [ "$(git config branch.feature/from-pr.merge)" = "refs/heads/feature/from-pr" ]
 }
 
+@test "cmd_pr does not run postCreate after a directory copy fails" {
+  mkdir -p "$TEST_REPO/deps"
+  echo value > "$TEST_REPO/deps/file"
+  git config --add gtr.copy.includeDirs deps
+  git config --add gtr.hook.postCreate 'touch hook-marker'
+  mv() { return 1; }
+
+  run cmd_pr 123 --remote origin --yes
+
+  [ "$status" -ne 0 ]
+  [ -d "$TEST_WORKTREES_DIR/feature-from-pr" ]
+  [ ! -e "$TEST_WORKTREES_DIR/feature-from-pr/hook-marker" ]
+  [[ "$output" == *"copying failed"* ]]
+}
+
 @test "cmd_pr treats an option-shaped remote as a fetch operand" {
   # Configure the name directly because `git remote add` rejects leading dashes.
   git config remote.--all.url "$TEST_REMOTE_REPO"

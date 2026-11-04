@@ -351,6 +351,16 @@ symlink itself removes only the link, including when the pattern ends in `/`;
 the link target is preserved. Exclusions are skipped when the copied directory
 or one of its path components is a symlink.
 
+If directory copying fails, `git gtr new` and `git gtr pr` stop before running
+post-create hooks or automatically launching tools. The created worktree is
+left in place for inspection and cleanup.
+
+Keep copy sources, destination worktrees, and their parent directories writable
+only by trusted users. A user who can replace a worktree path or modify a copied
+tool can change what a hook executes. Hook approval covers command definitions;
+it does not pin the contents of delegated scripts or dependencies. Copy path
+checks cannot isolate execution from other users who can mutate those paths.
+
 > [!WARNING]
 > Dependency directories may contain sensitive files (credentials, tokens, cached secrets). Always use `gtr.copy.excludeDirs` to exclude sensitive subdirectories if needed.
 

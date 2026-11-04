@@ -129,6 +129,47 @@ _cmd_create_capture_stdout() {
   [ ! -s "$stdout_file" ]
 }
 
+@test "cmd_create stops before hooks when a directory publication races with a symlink" {
+  mkdir -p "$TEST_REPO/deps" "$TEST_REPO/outside"
+  printf 'echo expected > hook-marker\n' > "$TEST_REPO/deps/tool"
+  printf 'echo redirected > hook-marker\n' > "$TEST_REPO/outside/tool"
+  git config --add gtr.copy.includeDirs deps
+  git config --add gtr.hook.postCreate 'sh deps/tool'
+  local race_worktree="$TEST_WORKTREES_DIR/copy-race"
+  local stdout_file="$TEST_REPO/create-stdout"
+  mv() {
+    local last
+    for last in "$@"; do :; done
+    if [ "$last" = "$race_worktree/deps" ]; then
+      ln -s "$TEST_REPO/outside" "$race_worktree/deps"
+    fi
+    command mv "$@"
+  }
+
+  run _cmd_create_capture_stdout "$stdout_file" copy-race --from HEAD --no-fetch --porcelain
+
+  [ "$status" -ne 0 ]
+  [ -L "$race_worktree/deps" ]
+  [ ! -e "$race_worktree/hook-marker" ]
+  [ ! -e "$TEST_REPO/outside/deps" ]
+  [ ! -s "$stdout_file" ]
+  [[ "$output" == *"copying failed"* ]]
+}
+
+@test "cmd_create runs a copied tool once after successful directory publication" {
+  mkdir -p "$TEST_REPO/deps"
+  printf 'echo expected >> hook-marker\n' > "$TEST_REPO/deps/tool"
+  git config --add gtr.copy.includeDirs deps
+  git config --add gtr.hook.postCreate 'sh deps/tool'
+
+  run cmd_create copy-success --from HEAD --no-fetch --porcelain
+
+  [ "$status" -eq 0 ]
+  [ ! -L "$TEST_WORKTREES_DIR/copy-success/deps" ]
+  [ "$(cat "$TEST_WORKTREES_DIR/copy-success/hook-marker")" = expected ]
+  [[ "$output" == *$'hook_status\tran'* ]]
+}
+
 @test "cmd_create creates worktree with --track none" {
   cmd_create track-none --from HEAD --track none --no-fetch --yes
   [ -d "$TEST_WORKTREES_DIR/track-none" ]
