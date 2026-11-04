@@ -346,6 +346,14 @@ git gtr config add gtr.copy.excludeDirs "node_modules/.*"      # Exclude all hid
 git gtr config add gtr.copy.excludeDirs "*/.cache"             # Exclude .cache at any level
 ```
 
+File exclusions in `gtr.copy.exclude` also apply inside directories selected by
+`gtr.copy.includeDirs`, for both `git gtr new` and `git gtr copy`. They match
+repository-relative file paths using the same rules as file-pattern copying.
+For example, `*.pem` skips PEM files throughout an included directory. Files
+are skipped before copying; existing excluded files in the destination are
+left unchanged. File exclusions do not exclude directories with matching names;
+use `gtr.copy.excludeDirs` to skip a whole directory.
+
 Directory exclusions never descend through symlinks. An exclusion matching a
 symlink itself removes only the link, including when the pattern ends in `/`;
 the link target is preserved. Exclusions are skipped when the copied directory
@@ -362,7 +370,7 @@ it does not pin the contents of delegated scripts or dependencies. Copy path
 checks cannot isolate execution from other users who can mutate those paths.
 
 > [!WARNING]
-> Dependency directories may contain sensitive files (credentials, tokens, cached secrets). Always use `gtr.copy.excludeDirs` to exclude sensitive subdirectories if needed.
+> Dependency directories may contain sensitive files (credentials, tokens, cached secrets). Use `gtr.copy.excludeDirs` to exclude sensitive subdirectories and `gtr.copy.exclude` to exclude files.
 
 **Use cases:**
 

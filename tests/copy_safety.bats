@@ -540,6 +540,51 @@ teardown() {
   [ "$(cat "$outside/marker")" = sentinel ]
 }
 
+@test "copy_directories applies file exclusions before copying leaves and preserves existing files" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" copy_log="$_test_tmpdir/copy.log"
+  mkdir -p "$src/vendor space/sub" "$src/vendor space/assets.pem" "$dst/vendor space/sub"
+  echo excluded > "$src/vendor space/root.pem"
+  echo excluded > "$src/vendor space/sub/nested.pem"
+  echo excluded > "$src/vendor space/sub/.private"
+  echo keep > "$src/vendor space/sub/keep.txt"
+  echo keep > "$src/vendor space/assets.pem/keep.txt"
+  echo sentinel > "$dst/vendor space/sub/nested.pem"
+  echo sentinel > "$dst/vendor space/sub/destination-only.pem"
+
+  cp() {
+    printf '%s\n' "$@" >> "$copy_log"
+    command cp "$@"
+  }
+
+  copy_directories "$src" "$dst" 'vendor space' '' false $'*.pem\nvendor space/sub/.private'
+
+  [ ! -e "$dst/vendor space/root.pem" ]
+  [ ! -e "$dst/vendor space/sub/.private" ]
+  [ "$(cat "$dst/vendor space/sub/nested.pem")" = sentinel ]
+  [ "$(cat "$dst/vendor space/sub/destination-only.pem")" = sentinel ]
+  [ "$(cat "$dst/vendor space/sub/keep.txt")" = keep ]
+  [ "$(cat "$dst/vendor space/assets.pem/keep.txt")" = keep ]
+  ! grep -q 'root.pem\|nested.pem\|/\.private' "$copy_log"
+}
+
+@test "copy_directories file exclusions do not follow symlinks or remove their targets" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" outside="$_test_tmpdir/outside"
+  mkdir -p "$src/vendor/sub" "$dst" "$outside"
+  echo sentinel > "$outside/marker"
+  ln -s "$outside" "$src/vendor/sub/link.pem"
+  ln -s "$outside" "$src/vendor/sub/keep-link"
+  echo keep > "$src/vendor/sub/keep.txt"
+
+  copy_directories "$src" "$dst" vendor '' false '*.pem'
+
+  [ ! -L "$dst/vendor/sub/link.pem" ]
+  [ -L "$dst/vendor/sub/keep-link" ]
+  [ "$(cat "$outside/marker")" = sentinel ]
+  [ "$(cat "$dst/vendor/sub/keep.txt")" = keep ]
+}
+
 @test "literal directory patterns do not invoke find" {
   _test_tmpdir=$(mktemp -d)
   local src="$_test_tmpdir/src" find_log="$_test_tmpdir/find.log"

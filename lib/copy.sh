@@ -577,9 +577,10 @@ EOF
 
 # Copy a directory one direct child at a time, skipping excluded child subtrees
 # before they are copied. Deeper excludes are still removed after copy.
-# Usage: _selective_copy_dir <dir_path> <dst_root> <excludes>
+# Usage: _selective_copy_dir <dir_path> <dst_root> <excludes> [file_excludes]
 _selective_copy_dir() {
   local dir_path="$1" dst_root="$2" excludes="$3"
+  local file_excludes="${4:-}"
   local dest_dir="$dst_root/$dir_path"
 
   _copy_components_safe "." "$dir_path" || return 1
@@ -607,9 +608,12 @@ _selective_copy_dir() {
       continue
     fi
     if [ -d "$child_path" ] && [ ! -L "$child_path" ]; then
-      _selective_copy_dir "$child_rel" "$dst_root" "$excludes" || return 1
-    elif ! _fast_copy_dir "$child_path" "$dest_dir/"; then
-      return 1
+      _selective_copy_dir "$child_rel" "$dst_root" "$excludes" "$file_excludes" || return 1
+    else
+      # File exclusions use repo-relative paths, just like copy_patterns.
+      # Skip before copying; never remove pre-existing destination files.
+      is_excluded "$child_rel" "$file_excludes" && continue
+      _fast_copy_dir "$child_path" "$dest_dir/" || return 1
     fi
   done <<EOF
 $find_results
@@ -721,7 +725,7 @@ EOF
 }
 
 # Copy already-resolved directories from a source root.
-# Usage: _copy_resolved_directories src_root dst_root resolved_dirs excludes [dry_run]
+# Usage: _copy_resolved_directories src_root dst_root resolved_dirs excludes [dry_run] [file_excludes]
 # Returns nonzero if any directory copy fails; callers must guard the status.
 _copy_resolved_directories() {
   local src_root="$1"
@@ -729,6 +733,7 @@ _copy_resolved_directories() {
   local resolved_dirs="$3"
   local excludes="$4"
   local dry_run="${5:-false}"
+  local file_excludes="${6:-}"
 
   if [ -z "$resolved_dirs" ]; then
     return 0
@@ -770,8 +775,8 @@ _copy_resolved_directories() {
       continue
     fi
 
-    if { if _has_subdir_excludes "$dir_path" "$excludes"; then
-           _selective_copy_dir "$dir_path" "$dst_root" "$excludes"
+    if { if [ -n "$file_excludes" ] || _has_subdir_excludes "$dir_path" "$excludes"; then
+           _selective_copy_dir "$dir_path" "$dst_root" "$excludes" "$file_excludes"
          else
            _fast_copy_dir "$dir_path" "$dest_parent/"
          fi; }; then
@@ -799,19 +804,21 @@ EOF
 }
 
 # Copy directories matching patterns (typically git-ignored directories like node_modules)
-# Usage: copy_directories src_root dst_root dir_patterns excludes [dry_run]
+# Usage: copy_directories src_root dst_root dir_patterns excludes [dry_run] [file_excludes]
 # dir_patterns: newline-separated repo-relative paths or glob patterns
 # excludes: newline-separated directory patterns to exclude (supports globs like "node_modules/.cache")
+# file_excludes: newline-separated file patterns, matched against repo-relative leaf paths
 # WARNING: This copies entire directories including potentially sensitive files.
-#          Use gtr.copy.excludeDirs to exclude sensitive directories.
+#          Use gtr.copy.excludeDirs for directories and gtr.copy.exclude for files.
 copy_directories() {
   local src_root="$1"
   local dst_root="$2"
   local dir_patterns="$3"
   local excludes="$4"
   local dry_run="${5:-false}"
+  local file_excludes="${6:-}"
 
   local resolved_dirs
   resolved_dirs=$(_resolve_directory_patterns "$src_root" "$dir_patterns") || return 1
-  _copy_resolved_directories "$src_root" "$dst_root" "$resolved_dirs" "$excludes" "$dry_run"
+  _copy_resolved_directories "$src_root" "$dst_root" "$resolved_dirs" "$excludes" "$dry_run" "$file_excludes"
 }

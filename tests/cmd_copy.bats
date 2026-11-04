@@ -138,6 +138,30 @@ teardown() {
   [ ! -e "$TEST_WORKTREES_DIR/copy-target/.zed/cache/token" ]
 }
 
+@test "cmd_copy --all applies file exclusions inside configured includeDirs" {
+  create_test_worktree "copy-target-2"
+  mkdir -p "$TEST_REPO/vendor/sub"
+  echo fixture > "$TEST_REPO/vendor/root.pem"
+  echo fixture > "$TEST_REPO/vendor/sub/nested.pem"
+  echo keep > "$TEST_REPO/vendor/sub/keep.txt"
+  git config gtr.copy.includeDirs vendor
+  git config gtr.copy.exclude '*.pem'
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all --dry-run
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target/vendor" ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target-2/vendor" ]
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all
+  [ "$status" -eq 0 ]
+  local target
+  for target in copy-target copy-target-2; do
+    [ "$(cat "$TEST_WORKTREES_DIR/$target/vendor/sub/keep.txt")" = keep ]
+    [ ! -e "$TEST_WORKTREES_DIR/$target/vendor/root.pem" ]
+    [ ! -e "$TEST_WORKTREES_DIR/$target/vendor/sub/nested.pem" ]
+  done
+}
+
 # ── --all flag ───────────────────────────────────────────────────────────────
 
 @test "cmd_copy --all copies to all worktrees" {
