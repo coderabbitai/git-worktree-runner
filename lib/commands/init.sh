@@ -80,8 +80,8 @@ cmd_init() {
   local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gtr"
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 9 adds filesystem checks before using native Git configuration.
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-9}"
+  # Schema 10 replaces shell-expanded Bash cd candidates with literal filtering.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-10}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # Return cached output if version matches
@@ -523,10 +523,16 @@ ___FUNC___completion() {
     # First argument: cd + all git-gtr subcommands
     COMPREPLY=($(compgen -W "cd new pr go run copy editor ai rm mv rename ls list clean doctor adapter config completion init trust help version" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "cd" ] && [ "$COMP_CWORD" -eq 2 ]; then
-    # Worktree names for cd
-    local worktrees
-    worktrees="1 $(git gtr list --porcelain 2>/dev/null | cut -f2 | tr '\n' ' ')"
-    COMPREPLY=($(compgen -W "$worktrees" -- "$cur"))
+    # Keep branch names literal: compgen -W evaluates shell expansions in its word list.
+    local worktrees worktree
+    worktrees="1"$'\n'"$(git gtr list --porcelain 2>/dev/null | cut -f2)" || true
+    COMPREPLY=()
+    while IFS= read -r worktree; do
+      [ -n "$worktree" ] || continue
+      case "$worktree" in
+        "$cur"*) COMPREPLY+=("$worktree") ;;
+      esac
+    done <<< "$worktrees"
   elif { [ "${COMP_WORDS[1]}" = "new" ] || [ "${COMP_WORDS[1]}" = "pr" ]; } && [[ "$cur" == -* ]]; then
     if type _git_gtr &>/dev/null; then
       ___FUNC___delegate_completion
