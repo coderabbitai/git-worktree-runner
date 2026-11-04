@@ -53,8 +53,9 @@ isolate users sharing writable Git configuration.
 `git gtr trust` approves executable `.gtrconfig` entries (hooks and editor/AI
 defaults). Other settings do not require that approval. Most single-value
 settings use the precedence above, and multi-valued copy settings merge across
-scopes. UI color is an exception: `.gtrconfig` `ui.color` is not read, and a
-nonempty `NO_COLOR` overrides Git configuration (see [UI Settings](#ui-settings)).
+scopes. UI color is an exception: `.gtrconfig` `ui.color` is not used for runtime
+color, and a nonempty `NO_COLOR` overrides Git configuration
+(see [UI Settings](#ui-settings)).
 For example, `worktrees.dir` selects the worktree destination; honoring this
 path does not approve `.gtrconfig` hooks.
 
@@ -490,7 +491,7 @@ Control color output behavior.
 
 | Git Config Key | `.gtrconfig` Key | Description       | Values                              |
 | -------------- | ---------------- | ----------------- | ----------------------------------- |
-| `gtr.ui.color` | Not read         | Color output mode | `auto` (default), `always`, `never` |
+| `gtr.ui.color` | `ui.color` (not used for runtime color) | Color output mode | `auto` (default), `always`, `never` |
 
 ```bash
 # Disable color output
@@ -502,8 +503,10 @@ git gtr config set gtr.ui.color always
 
 Color is initialized from `GTR_COLOR`: `always` enables it, `never` disables it,
 and `auto` uses TTY detection. Then `gtr.ui.color` is read using Git's native
-configuration precedence, without reading `.gtrconfig`. A value of `always` or
-`never` overrides the initial mode; `auto` leaves the initial mode unchanged.
+configuration precedence. A value of `always` or `never` overrides the initial
+mode; `auto` leaves the initial mode unchanged. The `.gtrconfig` value is not
+used for runtime color, but `git gtr config get gtr.ui.color` and
+`git gtr config list` can still display it.
 
 A nonempty `NO_COLOR` environment variable ([no-color.org](https://no-color.org))
 disables color regardless of either source.
