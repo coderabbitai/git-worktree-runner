@@ -131,12 +131,12 @@ prompt_yes_no() {
 
 # Prompt for text input
 # Usage: prompt_input "Question text" [variable_name]
-# If variable_name provided, sets it, otherwise echoes result
+# Prompts on stderr; sets variable_name if provided, otherwise prints result on stdout
 prompt_input() {
   local question="$1"
   local var_name="$2"
 
-  log_question "$question "
+  log_question "$question " >&2
   read -r input
 
   if [ -n "$var_name" ]; then
