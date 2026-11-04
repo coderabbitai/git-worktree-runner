@@ -37,6 +37,18 @@ All configuration is stored via `git config`, making it easy to manage per-repos
 5. Environment variables
 6. Default values
 
+Git configuration is a trusted input: GTR runs hooks from local, global, and
+system Git configuration without a separate `git gtr trust` approval. Anyone
+who can modify that configuration can affect commands run by both GTR and Git
+itself. Keep `.git/config` and any files it includes writable only by people you
+trust to run commands as your user. The `.gtrconfig` approval gate does not
+isolate users sharing writable Git configuration.
+
+`git gtr trust` approves executable `.gtrconfig` entries (hooks and editor/AI
+defaults). Other settings follow the precedence above without that approval.
+For example, `worktrees.dir` selects the worktree destination; honoring this
+path does not approve `.gtrconfig` hooks.
+
 For the CLI, a bare repository's root is the bare Git directory itself, including
 when a command is run from one of its linked worktrees. `.gtrconfig`,
 `.worktreeinclude`, relative worktree locations, and the default copy source use
