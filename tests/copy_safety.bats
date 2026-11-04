@@ -106,6 +106,28 @@ teardown() {
   [ "$(cat "$dst/mydir/sub/file.txt")" = "hello" ]
 }
 
+@test "_fast_copy_dir keeps trailing-slash sources under their basename" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" suffix
+  mkdir -p "$src/my dir"
+  echo replacement > "$src/my dir/marker"
+
+  for suffix in '' / ///; do
+    rm -rf "$dst"
+    mkdir -p "$dst"
+    echo sentinel > "$dst/marker"
+    _fast_copy_dir "$src/my dir$suffix" "$dst/"
+    [ "$(cat "$dst/marker")" = sentinel ]
+    [ "$(cat "$dst/my dir/marker")" = replacement ]
+
+    # Exercise merging as well as the staging path for a new directory.
+    echo keep > "$dst/my dir/destination-only"
+    _fast_copy_dir "$src/my dir$suffix" "$dst/"
+    [ "$(cat "$dst/marker")" = sentinel ]
+    [ "$(cat "$dst/my dir/destination-only")" = keep ]
+  done
+}
+
 @test "_fast_copy_dir preserves symlinks" {
   _test_tmpdir=$(mktemp -d)
   local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
@@ -341,6 +363,103 @@ teardown() {
   [ -f "$dst/vendor/bundle/gems/spec" ]
   [ ! -e "$dst/vendor/bundle/cache" ]
   ! grep -qx "vendor/bundle/cache" "$copy_log"
+}
+
+@test "directory includes preserve their destination with or without trailing slashes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" dir suffix
+  for dir in vendor 'packages/vendor space'; do
+    mkdir -p "$src/$dir"
+    echo replacement > "$src/$dir/marker"
+    for suffix in '' / ///; do
+      rm -rf "$dst"
+      mkdir -p "$dst/packages"
+      echo sentinel > "$dst/marker"
+      echo parent-sentinel > "$dst/packages/marker"
+
+      copy_directories "$src" "$dst" "$dir$suffix" ''
+
+      [ "$(cat "$dst/$dir/marker")" = replacement ]
+      [ "$(cat "$dst/marker")" = sentinel ]
+      [ "$(cat "$dst/packages/marker")" = parent-sentinel ]
+    done
+  done
+}
+
+@test "directory self exclusions match trailing-slash includes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" suffix exclude
+  mkdir -p "$src/vendor" "$dst"
+  echo excluded > "$src/vendor/marker"
+  echo sentinel > "$dst/marker"
+
+  for suffix in '' / ///; do
+    for exclude in vendor vendor/ vendor/// 'ven*/'; do
+      copy_directories "$src" "$dst" "vendor$suffix" "$exclude"
+      [ ! -e "$dst/vendor" ]
+      [ "$(cat "$dst/marker")" = sentinel ]
+    done
+  done
+}
+
+@test "directory content exclusions keep the included directory itself" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/vendor/cache" "$dst"
+  echo excluded > "$src/vendor/cache/marker"
+
+  copy_directories "$src" "$dst" vendor/ 'vendor/*'
+
+  [ -d "$dst/vendor" ]
+  [ ! -e "$dst/vendor/cache" ]
+  [ ! -e "$dst/cache" ]
+}
+
+@test "directory child exclusions match trailing-slash includes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" suffix exclude
+  mkdir -p "$src/vendor/cache" "$src/vendor/keep"
+  echo excluded > "$src/vendor/cache/marker"
+  echo keep > "$src/vendor/keep/marker"
+
+  for suffix in '' / ///; do
+    for exclude in vendor/cache vendor/cache/ '*/cache' '*/cache/'; do
+      rm -rf "$dst"
+      mkdir -p "$dst"
+      copy_directories "$src" "$dst" "vendor$suffix" "$exclude"
+      [ "$(cat "$dst/vendor/keep/marker")" = keep ]
+      [ ! -e "$dst/vendor/cache" ]
+      [ ! -e "$dst/cache" ]
+      [ ! -e "$dst/keep" ]
+    done
+  done
+}
+
+@test "directory discovery treats trailing slashes consistently for literals and globs" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" pattern expected suffix
+  mkdir -p "$src/vendor" "$src/packages/a/generated" "$src/packages/a/cache"
+  for pattern in vendor 'vendor*' 'packages/*/generated' '**/cache' cache; do
+    expected=$(_resolve_directory_patterns "$src" "$pattern")
+    [ -n "$expected" ]
+    for suffix in / ///; do
+      [ "$(_resolve_directory_patterns "$src" "$pattern$suffix")" = "$expected" ]
+    done
+  done
+}
+
+@test "trailing-slash includes still reject unsafe paths and source links" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" outside="$_test_tmpdir/outside"
+  mkdir -p "$src/.git" "$dst" "$outside"
+  echo sentinel > "$outside/marker"
+  echo metadata > "$src/.git/config"
+  ln -s "$outside" "$src/link"
+
+  copy_directories "$src" "$dst" $'/\n///\n../outside/\n[.][.]/outside/\nlink/\n.git/' ''
+
+  [ -z "$(find "$dst" -mindepth 1 -print)" ]
+  [ "$(cat "$outside/marker")" = sentinel ]
 }
 
 @test "literal directory patterns do not invoke find" {
