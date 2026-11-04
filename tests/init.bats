@@ -114,7 +114,7 @@ run_generated_fish_gtrconfig_post_cd_hooks() {
   local trust_state="$1"
   local root repo wt xdg init_file
 
-  root=$(mktemp -d)
+  root=$(cd -P "$(mktemp -d)" && pwd)
   repo="$root/repo"
   wt="$root/wt"
   xdg="$root/xdg"
@@ -231,6 +231,76 @@ run_generated_replacement_repo_hooks() (
 @test "fish generated hooks reject replacement repo with identical definitions" {
   require_runtime_shell fish
   run run_generated_replacement_repo_hooks fish
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Untrusted .gtrconfig hooks skipped"* ]]
+}
+
+# Freeze PR207's v2 approval format (2e414ca), including its original stat
+# format and line-based definition hash. Do not derive it from current helpers:
+# both the serialization and GNU birth-time representation changed in PR211.
+mark_pr207_commands_trusted() {
+  local config_file="$1" repo_root common_dir identity definitions hash key
+  repo_root=$(cd "$(dirname "$config_file")" && pwd -P)
+  common_dir=$(git -C "$repo_root" rev-parse --git-common-dir)
+  common_dir=$(cd "$repo_root" && cd "$common_dir" && pwd -P)
+  identity=$(LC_ALL=C stat -c '%d:%i:%.9W' "$common_dir" 2>/dev/null) ||
+    identity=$(LC_ALL=C stat -f '%d:%i:%.9FB' "$common_dir") || return 1
+  definitions=$(git config -f "$config_file" --get-regexp '^hooks\.|^defaults\.editor$|^defaults\.ai$')
+  hash=$(printf '%s\n' "$definitions" | shasum -a 256 | cut -d' ' -f1)
+  key=$(printf 'v2\n%s\n%s\n%s\n%s\n' "$repo_root" "$common_dir" "$identity" "$hash" |
+    shasum -a 256 | cut -d' ' -f1)
+  mkdir -p "$XDG_CONFIG_HOME/gtr/trusted"
+  printf '%s/.gtrconfig\n' "$repo_root" > "$XDG_CONFIG_HOME/gtr/trusted/$key"
+}
+
+run_generated_v2_trust_upgrade() (
+  set -e
+  local shell_name="$1" fixture
+  fixture=$(mktemp -d)
+  trap 'rm -rf "$fixture"' EXIT
+  export REPO_FIXTURE="$fixture/repo with spaces" INIT_FIXTURE="$fixture/init.$shell_name"
+  export XDG_CONFIG_HOME="$fixture/config" XDG_DATA_HOME="$fixture/data"
+  git init --quiet "$REPO_FIXTURE"
+  git -C "$REPO_FIXTURE" -c user.name=Fixture -c user.email=fixture@example.test \
+    commit --allow-empty --quiet -m init
+  git config -f "$REPO_FIXTURE/.gtrconfig" hooks.postCd 'sh "$REPO_ROOT/bootstrap.sh"'
+  printf 'echo original > "$REPO_ROOT/hook-result"\n' > "$REPO_FIXTURE/bootstrap.sh"
+  mark_pr207_commands_trusted "$REPO_FIXTURE/.gtrconfig"
+  # Preserve the repository path, .git identity and command definition.
+  printf 'echo replacement > "$REPO_ROOT/hook-result"\n' > "$REPO_FIXTURE/bootstrap.sh"
+  cmd_init "$shell_name" > "$INIT_FIXTURE"
+  "$shell_name" -c 'source "$INIT_FIXTURE"; gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+  [ ! -f "$REPO_FIXTURE/hook-result" ]
+  source "$PROJECT_ROOT/lib/hooks.sh"
+  _hooks_mark_trusted "$REPO_FIXTURE/.gtrconfig"
+  "$shell_name" -c 'source "$INIT_FIXTURE"; gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+  [ "$(cat "$REPO_FIXTURE/hook-result")" = replacement ]
+  # Current trust still approves delegated code, rather than pinning its bytes.
+  printf 'echo updated > "$REPO_ROOT/hook-result"\n' > "$REPO_FIXTURE/bootstrap.sh"
+  "$shell_name" -c 'source "$INIT_FIXTURE"; gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+  [ "$(cat "$REPO_FIXTURE/hook-result")" = updated ]
+  rm "$REPO_FIXTURE/hook-result"
+  git config -f "$REPO_FIXTURE/.gtrconfig" hooks.postCd 'echo changed > "$REPO_ROOT/hook-result"'
+  "$shell_name" -c 'source "$INIT_FIXTURE"; gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+  [ ! -f "$REPO_FIXTURE/hook-result" ]
+)
+
+@test "fresh bash helpers reject v2 approval and accept explicit v3 approval" {
+  run run_generated_v2_trust_upgrade bash
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Untrusted .gtrconfig hooks skipped"* ]]
+}
+
+@test "fresh zsh helpers reject v2 approval and accept explicit v3 approval" {
+  require_runtime_shell zsh
+  run run_generated_v2_trust_upgrade zsh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Untrusted .gtrconfig hooks skipped"* ]]
+}
+
+@test "fresh fish helpers reject v2 approval and accept explicit v3 approval" {
+  require_runtime_shell fish
+  run run_generated_v2_trust_upgrade fish
   [ "$status" -eq 0 ]
   [[ "$output" == *"Untrusted .gtrconfig hooks skipped"* ]]
 }
@@ -1004,29 +1074,75 @@ run_generated_replacement_repo_hooks() (
   [[ "$stamp" == *"init=2"* ]]
 }
 
-@test "cache invalidates old default shell integration schema" {
+@test "init invalidates schema 6 and PR207 schema 7 at the same CLI version" {
+  local shell_name func_name schema cache_file
   mkdir -p "$XDG_CACHE_HOME/gtr"
-  printf '%s\n%s\n' '# gtr-cache: version=test init=6 func=gtr shell=bash' old-cache > "$XDG_CACHE_HOME/gtr/init-gtr.bash"
-
-  run cmd_init bash
-
-  [ "$status" -eq 0 ]
-  [ "$output" != "old-cache" ]
-  local stamp
-  stamp="$(head -1 "$XDG_CACHE_HOME/gtr/init-gtr.bash")"
-  [[ "$stamp" == *"init=7"* ]]
+  for shell_name in bash zsh fish; do
+    for func_name in gtr gwtr; do
+      for schema in 7 6; do
+        cache_file="$XDG_CACHE_HOME/gtr/init-$func_name.$shell_name"
+        printf '# gtr-cache: version=test init=%s func=%s shell=%s\nold-cache\n' \
+          "$schema" "$func_name" "$shell_name" > "$cache_file"
+        run cmd_init "$shell_name" --as "$func_name"
+        [ "$status" -eq 0 ]
+        [[ "$output" != *old-cache* ]]
+        [[ "$(head -1 "$cache_file")" == *"init=8"* ]]
+      done
+    done
+  done
 }
 
-@test "documented bash setup regenerates old schema cache" {
+# Execute the published setup itself, so docs cannot silently bypass cmd_init's
+# version/schema check. Include a future upgrade with the same schema as well.
+run_documented_init_upgrade() (
+  set -e
+  local shell_name="$1" heading="$2" source_file snippet schema version cache_file cli_version
+  export PATH="$PROJECT_ROOT/bin:$PATH"
+  export XDG_CONFIG_HOME="$XDG_CACHE_HOME/config" XDG_DATA_HOME="$XDG_CACHE_HOME/data"
+  export STALE_CACHE_MARKER="$XDG_CACHE_HOME/stale-executed"
+  cache_file="$XDG_CACHE_HOME/gtr/init-gtr.$shell_name"
   mkdir -p "$XDG_CACHE_HOME/gtr"
-  local _gtr_init="$XDG_CACHE_HOME/gtr/init-gtr.bash"
-  printf '%s\n%s\n' '# gtr-cache: version=test init=6 func=gtr shell=bash' old-cache > "$_gtr_init"
+  cli_version=$(git gtr --version)
+  cli_version="${cli_version##* }"
+  for source_file in README.md lib/commands/help.sh; do
+    snippet=$(awk -v heading="$heading" '
+      index($0, "# " heading " (add to ") { capture=1; next }
+      capture && /^[[:space:]]*$/ { exit }
+      capture { print }
+    ' "$PROJECT_ROOT/$source_file")
+    [ -n "$snippet" ]
+    # Non-interactive zsh has no completion system; the setup only registers it.
+    if [ "$shell_name" = zsh ]; then
+      snippet='compdef() { :; }'$'\n'"$snippet"
+    fi
+    for schema in 6 7 8; do
+      version="$cli_version"
+      [ "$schema" != 8 ] || version=old-version
+      printf '# gtr-cache: version=%s init=%s func=gtr shell=%s\n' \
+        "$version" "$schema" "$shell_name" > "$cache_file"
+      printf '%s\n' 'echo stale > "$STALE_CACHE_MARKER"' >> "$cache_file"
+      "$shell_name" -c "$snippet"
+      [ ! -f "$STALE_CACHE_MARKER" ]
+      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=8 "* ]]
+    done
+  done
+)
 
-  cmd_init bash >/dev/null
+@test "documented bash setup checks installed version and schema before loading cache" {
+  run run_documented_init_upgrade bash Bash
+  [ "$status" -eq 0 ]
+}
 
-  local stamp
-  stamp="$(head -1 "$_gtr_init")"
-  [[ "$stamp" == *"init=7"* ]]
+@test "documented zsh setup checks installed version and schema before loading cache" {
+  require_runtime_shell zsh
+  run run_documented_init_upgrade zsh Zsh
+  [ "$status" -eq 0 ]
+}
+
+@test "documented fish setup checks installed version and schema before loading cache" {
+  require_runtime_shell fish
+  run run_documented_init_upgrade fish Fish
+  [ "$status" -eq 0 ]
 }
 
 @test "cache uses --as func name in cache key" {
