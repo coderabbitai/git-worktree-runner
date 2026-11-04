@@ -55,6 +55,18 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+@test "git gtr run does not execute in a colliding or stray directory" {
+  create_test_worktree "feat-login"
+  mkdir -p "$TEST_WORKTREES_DIR/stray"
+  local identifier
+  for identifier in feat/login stray; do
+    run "$PROJECT_ROOT/bin/gtr" run "$identifier" touch marker
+    [ "$status" -eq 1 ]
+  done
+  [ ! -e "$TEST_WORKTREES_DIR/feat-login/marker" ]
+  [ ! -e "$TEST_WORKTREES_DIR/stray/marker" ]
+}
+
 # ── Flag-like args in command ────────────────────────────────────────────────
 
 @test "cmd_run passes flags to inner command" {

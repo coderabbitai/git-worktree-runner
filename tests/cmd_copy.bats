@@ -146,3 +146,36 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"No files copied"* ]]
 }
+
+@test "git gtr copy skips colliding and stray targets without writing files" {
+  create_test_worktree "feat-login"
+  mkdir -p "$TEST_WORKTREES_DIR/stray"
+
+  run "$PROJECT_ROOT/bin/gtr" copy feat/login stray -- .env
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No files copied"* ]]
+  [ ! -e "$TEST_WORKTREES_DIR/feat-login/.env" ]
+  [ ! -e "$TEST_WORKTREES_DIR/stray/.env" ]
+}
+
+@test "git gtr copy cannot overwrite a parent through dot targets" {
+  local base="$BATS_TEST_TMPDIR/targets"
+  mkdir -p "$base"
+  git config gtr.worktrees.dir "$base"
+  echo keep > "$BATS_TEST_TMPDIR/.env"
+
+  run "$PROJECT_ROOT/bin/gtr" copy .. . -- .env
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No files copied"* ]]
+  [ "$(cat "$BATS_TEST_TMPDIR/.env")" = keep ]
+  [ ! -e "$base/.env" ]
+}
+
+@test "git gtr copy rejects an unregistered source" {
+  mkdir -p "$TEST_WORKTREES_DIR/stray"
+  echo fixture > "$TEST_WORKTREES_DIR/stray/source.txt"
+
+  run "$PROJECT_ROOT/bin/gtr" copy copy-target --from stray -- source.txt
+  [ "$status" -eq 1 ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target/source.txt" ]
+}

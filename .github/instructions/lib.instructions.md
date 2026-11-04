@@ -15,7 +15,7 @@ applyTo: lib/**/*.sh
 ## Key Functions & Responsibilities
 
 - `resolve_base_dir`: config/env/default selection; warn if inside repo & not ignored.
-- `resolve_target`: ID `1` + branch/current + sanitized path scan; returns TSV.
+- `resolve_target`: ID `1`, then exact registered branch, then literal registered folder alias; returns TSV.
 - `create_worktree`: decides remote/local/new; respects `--force` + `--name` safety.
 - `cfg_default`: precedence local git config → `.gtrconfig` → global/system git config → `GTR_*` env var → fallback (do not reorder). `cfg_default_trusted_file` uses the same order but ignores `.gtrconfig` values until `git gtr trust` approves them.
 - `sanitize_branch_name`: branch name → folder name; the only place that logic lives.
