@@ -406,7 +406,50 @@ _editor_define_terminal() {
   }
 }
 
-# Resolve workspace file for VS Code/Cursor/Antigravity editors
+# Validate a relative workspace file against the physical worktree root.
+# Follow internal symlinks without requiring readlink -f (unavailable on macOS).
+# Return the original path so workspace-relative editor settings keep their meaning.
+# Returns 1 for missing files, link cycles, absolute config paths or escapes.
+_workspace_file_within_worktree() {
+  local worktree_path="$1" relative_path="$2" root path parent target os
+  local links=0
+  os=$(detect_os)
+  # Windows accepts backslashes as separators, including in traversal paths.
+  if [ "$os" = windows ]; then relative_path="${relative_path//\\//}"; fi
+  case "$relative_path" in
+    /*|[a-zA-Z]:*|\\*) return 1 ;;
+  esac
+  # Sentinels preserve trailing newlines in physical directory/link names.
+  root=$(canonicalize_path "$worktree_path" && printf '.') || return 1
+  root="${root%$'\n.'}"
+  path="${root%/}/$relative_path"
+
+  while :; do
+    parent=$(canonicalize_path "${path%/*}" && printf '.') || return 1
+    parent="${parent%$'\n.'}"
+    path="${parent%/}/${path##*/}"
+    [ -L "$path" ] || break
+    [ "$links" -lt 40 ] || return 1
+    links=$((links + 1))
+    target=$(readlink "$path" && printf '.') || return 1
+    target="${target%$'\n.'}"
+    if [ "$os" = windows ]; then target="${target//\\//}"; fi
+    path="${parent%/}/$target"
+    case "$target" in
+      /*) path="$target" ;;
+      [a-zA-Z]:/*) if [ "$os" = windows ]; then path="$target"; fi ;;
+    esac
+  done
+
+  [ -f "$path" ] || return 1
+  case "$path" in
+    "${root%/}/"*) printf '%s\n' "$worktree_path/$relative_path" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Resolve workspace file for VS Code/Cursor/Antigravity editors.
+# Workspace data is not command-trust-gated; confine it for every config source.
 # Returns the workspace file path if found, empty otherwise
 resolve_workspace_file() {
   local worktree_path="$1"
@@ -421,10 +464,7 @@ resolve_workspace_file() {
   fi
 
   if [ -n "$configured" ]; then
-    local full_path="$worktree_path/$configured"
-    if [ -f "$full_path" ]; then
-      echo "$full_path"
-    fi
+    _workspace_file_within_worktree "$worktree_path" "$configured" || true
     # Explicit config set - don't fall through to auto-detect
     return 0
   fi
@@ -433,7 +473,7 @@ resolve_workspace_file() {
   local ws_file
   ws_file=$(find "$worktree_path" -maxdepth 1 -name "*.code-workspace" -type f 2>/dev/null | head -1)
   if [ -n "$ws_file" ]; then
-    echo "$ws_file"
+    _workspace_file_within_worktree "$worktree_path" "${ws_file##*/}" || true
   fi
 }
 

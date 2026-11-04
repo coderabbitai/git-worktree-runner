@@ -88,6 +88,8 @@ Usage: git gtr editor <branch> [--editor <name>]
 
 Opens the specified worktree in your configured editor. Uses the default
 editor from gtr.editor.default config, or the --editor flag to override.
+Configured workspace files must resolve inside the worktree, including symlinks.
+Invalid workspace paths fall back to opening the worktree folder.
 
 Options:
   --editor <name>     Override the default editor for this invocation
@@ -756,7 +758,7 @@ CONFIGURATION OPTIONS:
                            nvim, pycharm, sublime, vim, vscode, webstorm,
                            zed, none (legacy: atom)
   gtr.editor.workspace     Workspace file for VS Code/Cursor/Antigravity
-                           (relative path, auto-detects, or "none")
+                           (path inside worktree, auto-detects, or "none")
   gtr.ai.default           Default AI tool
                            Options: antigravity, aider, auggie, claude,
                            codex, copilot, cursor, gemini, opencode, none

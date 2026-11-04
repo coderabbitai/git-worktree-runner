@@ -194,10 +194,24 @@ gtr.editor.workspace = project.code-workspace
 
 VS Code, Cursor, and Antigravity support `.code-workspace` files for multi-root workspaces, custom settings, and recommended extensions. When opening a worktree:
 
-1. If `gtr.editor.workspace` is set to a path, opens that file (relative to worktree root)
+1. If `gtr.editor.workspace` is set to a path, opens that file (relative to and contained within the worktree root)
 2. If set to `none`, disables workspace lookup (always opens folder)
 3. Otherwise, auto-detects any `*.code-workspace` file in the worktree root
-4. Falls back to opening the folder if no workspace file is found
+4. Falls back to opening the folder if no valid workspace file is found
+
+Workspace paths from every config source must resolve to a file inside the selected
+worktree. Nested paths, spaces, and symlinks that resolve inside the worktree are
+supported. Absolute configured paths and paths or symlinks that resolve outside
+the worktree are ignored. An invalid or missing explicit path opens the folder;
+it does not trigger auto-detection. Previously accepted outside-worktree paths
+now open the folder instead.
+
+The shared `.gtrconfig` `editor.workspace` setting is workspace data and does not
+require command approval. Selecting an editor through `.gtrconfig`
+`defaults.editor` still requires `git gtr trust`; a local/global editor default
+or an explicit `--editor` can also select the editor. Containment applies to the
+workspace file itself, not the folders or settings described inside it. The
+editor remains responsible for its own workspace trust checks.
 
 ---
 
