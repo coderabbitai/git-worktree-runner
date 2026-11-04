@@ -104,7 +104,7 @@ cmd_editor() → resolve_target() → load_editor_adapter() → editor_open()
 
 **Special ID `1`**: Always refers to the main repository in `go`, `editor`, `ai`, `run`, etc.
 
-**`resolve_target()`** (lib/core.sh): Resolves branch names/IDs to worktree paths. Checks: special ID → current branch in main → sanitized path match → full scan. Returns TSV: `is_main\tpath\tbranch`.
+**`resolve_target()`** (lib/core.sh): Resolves targets from Git's worktree registry. Checks: special ID `1` → exact branch (main first, then conventional path) → literal registered folder alias. Sanitization never establishes branch identity; unregistered directories and `.`/`..` are rejected. Returns TSV: `is_main\tpath\tbranch`.
 
 **`resolve_base_dir()`** (lib/core.sh): Determines worktree storage location. Empty → `<repo>-worktrees` sibling; relative → from repo root; absolute → as-is; tilde → expanded.
 

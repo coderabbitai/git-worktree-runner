@@ -402,7 +402,7 @@ _print_resolved_target() {
   printf "%s\t%s\t%s\n" "$is_main" "$(_tsv_escape_field "$path")" "$(_tsv_escape_field "$branch")"
 }
 
-# Resolve a worktree target from branch name or special ID '1' for main repo
+# Resolve a registered worktree by branch, literal folder alias, or main repo ID '1'.
 # Usage: resolve_target identifier repo_root base_dir prefix
 # Returns: tab-separated "is_main\tpath\tbranch" with escaped fields on success (is_main: 1 for main repo, 0 for worktrees)
 # Exit code: 0 on success, 1 if not found
@@ -411,53 +411,56 @@ resolve_target() {
   local repo_root="$2"
   local base_dir="$3"
   local prefix="$4"
-  local path branch sanitized_name
+  local branch sanitized_name preferred_path alias_path=""
+
+  case "$identifier" in
+    "" | . | ..)
+      log_error "Worktree not found for branch: $identifier"
+      return 1
+      ;;
+  esac
 
   # Special case: ID 1 is always the repo root
   if [ "$identifier" = "1" ]; then
-    path="$repo_root"
-    branch=$(get_current_branch "$repo_root")
-    _print_resolved_target "1" "$path" "$branch"
+    branch=$(get_current_branch "$repo_root") || return 1
+    _print_resolved_target "1" "$repo_root" "$branch"
     return 0
   fi
 
-  # For all other identifiers, treat as branch name
-  # First check if it's the current branch in repo root (if not ID 1)
-  branch=$(get_current_branch "$repo_root")
-  if [ "$branch" = "$identifier" ]; then
-    _print_resolved_target "1" "$repo_root" "$identifier"
-    return 0
-  fi
-
-  # Try direct path match with sanitized branch name
+  # A sanitized name is only a preference among exact branch matches, never
+  # evidence of branch identity or worktree membership.
+  base_dir=$(canonicalize_path "$base_dir" || printf "%s" "$base_dir")
   sanitized_name=$(sanitize_branch_name "$identifier")
-  path="$base_dir/${prefix}${sanitized_name}"
-  if [ -d "$path" ]; then
-    branch=$(current_branch "$path")
-    _print_resolved_target "0" "$path" "$branch"
-    return 0
-  fi
+  preferred_path="$base_dir/${prefix}${sanitized_name}"
 
-  # Search worktree directories for matching branch (fallback)
-  if [ -d "$base_dir" ]; then
-    for dir in "$base_dir/${prefix}"*; do
-      [ -d "$dir" ] || continue
-      branch=$(current_branch "$dir")
-      if [ "$branch" = "$identifier" ]; then
-        _print_resolved_target "0" "$dir" "$branch"
-        return 0
-      fi
-    done
-  fi
+  # Preserve --folder/--name and sanitized folder aliases, but only when the
+  # user supplied the literal folder name. In particular, feat/login must not
+  # fall back to the folder for the different branch feat-login.
+  case "$identifier" in
+    */* | *\\*) ;;
+    *) alias_path="$base_dir/${prefix}${identifier}" ;;
+  esac
 
-  # Last resort: ask git for all worktrees (catches non-gtr-managed worktrees)
+  # Git's registry is authoritative, including external and nested worktrees.
+  # Save an alias match until every record has been checked for an exact branch.
+  local branch_target="" alias_target=""
   local is_main="" wt_path="" wt_branch="" line
   while IFS= read -r line; do
     case "$line" in
       "")
-        if [ "$wt_branch" = "$identifier" ]; then
-          _print_resolved_target "$is_main" "$wt_path" "$wt_branch"
-          return 0
+        if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
+          if [ "$wt_branch" = "$identifier" ]; then
+            if [ "$is_main" = "1" ]; then
+              _print_resolved_target "$is_main" "$wt_path" "$wt_branch"
+              return 0
+            fi
+            if [ -z "$branch_target" ] || [ "$wt_path" = "$preferred_path" ]; then
+              branch_target=$(_print_resolved_target "$is_main" "$wt_path" "$wt_branch")
+            fi
+          fi
+          if [ "$wt_path" = "$alias_path" ]; then
+            alias_target=$(_print_resolved_target "$is_main" "$wt_path" "$wt_branch")
+          fi
         fi
         is_main=""
         wt_path=""
@@ -475,10 +478,15 @@ resolve_target() {
     esac
   done <<EOF
 $(list_worktree_records "$repo_root")
+
 EOF
 
-  if [ "$wt_branch" = "$identifier" ]; then
-    _print_resolved_target "$is_main" "$wt_path" "$wt_branch"
+  if [ -n "$branch_target" ]; then
+    printf "%s\n" "$branch_target"
+    return 0
+  fi
+  if [ -n "$alias_target" ]; then
+    printf "%s\n" "$alias_target"
     return 0
   fi
 

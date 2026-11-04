@@ -164,6 +164,15 @@ git gtr new feature-auth --force --name tests     # Creates: feature-auth-tests/
 # The --name flag is required with --force to distinguish worktrees
 ```
 
+Commands that target a worktree resolve exact checked-out branch names first.
+If no branch matches, a literal folder name under the configured worktrees
+directory (without the configured prefix) can select a registered worktree,
+including a `--name` variant or a custom `--folder`. For example,
+`git gtr go feature-auth-backend` selects the named variant above. A slash branch
+such as `feature/auth` never selects a different branch just because its folder
+is named `feature-auth`. Unregistered directories and `.`/`..` targets are rejected;
+ID `1` always selects the main repository.
+
 ### Best Practices
 
 - Always provide a descriptive `--name` (backend, frontend, tests, ci, etc.)

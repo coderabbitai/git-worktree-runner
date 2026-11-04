@@ -35,6 +35,13 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+@test "git gtr go rejects a sanitized collision" {
+  create_test_worktree "feat-login"
+  run "$PROJECT_ROOT/bin/gtr" go feat/login
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Worktree not found"* ]]
+}
+
 @test "cmd_go resolves slashed branch" {
   create_test_worktree "feature/nav"
   run cmd_go "feature/nav"

@@ -41,6 +41,29 @@ teardown() {
   [ -d "$TEST_REPO" ]
 }
 
+@test "git gtr rm --force preserves a colliding worktree and skips its hooks" {
+  create_test_worktree "feat-login"
+  echo keep > "$TEST_WORKTREES_DIR/feat-login/untracked"
+  git config gtr.hook.preRemove 'touch hook-ran'
+
+  run "$PROJECT_ROOT/bin/gtr" rm feat/login --force --delete-branch --yes
+  [ "$status" -eq 1 ]
+  [ "$(cat "$TEST_WORKTREES_DIR/feat-login/untracked")" = keep ]
+  [ ! -e "$TEST_WORKTREES_DIR/feat-login/hook-ran" ]
+  git show-ref --verify --quiet refs/heads/feat-login
+}
+
+@test "git gtr rm rejects parent targets before running hooks" {
+  git config gtr.worktrees.dir "$TEST_REPO/worktrees"
+  mkdir -p "$TEST_REPO/worktrees"
+  git config gtr.hook.preRemove 'touch hook-ran'
+
+  run "$PROJECT_ROOT/bin/gtr" rm .. --force
+  [ "$status" -eq 1 ]
+  [ -d "$TEST_REPO/.git" ]
+  [ ! -e "$TEST_REPO/hook-ran" ]
+}
+
 @test "cmd_remove handles multiple worktrees" {
   create_test_worktree "multi-a"
   create_test_worktree "multi-b"
