@@ -37,6 +37,13 @@ All configuration is stored via `git config`, making it easy to manage per-repos
 5. Environment variables
 6. Default values
 
+For the CLI, a bare repository's root is the bare Git directory itself, including
+when a command is run from one of its linked worktrees. `.gtrconfig`,
+`.worktreeinclude`, relative worktree locations, and the default copy source use
+that root, never its parent directory. The default worktree location is a sibling
+named `<bare-directory-name>-worktrees`. Files stored only in Git history are not
+copy sources; use `git gtr copy --from <worktree>` to copy from a checkout.
+
 ---
 
 ## Team Configuration (.gtrconfig)

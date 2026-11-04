@@ -14,6 +14,9 @@ Creates a new git worktree with the given branch name. The worktree folder
 is named after the branch (slashes and special chars become hyphens, e.g.,
 feature/user-auth becomes folder "feature-user-auth").
 
+For bare repositories, configuration and copied files come from the bare Git
+directory itself. The default worktree directory is its sibling <name>-worktrees.
+
 Options:
   --from <ref>        Create from a specific ref (default: default branch)
   --from-current      Create from the current branch (for parallel variants)
