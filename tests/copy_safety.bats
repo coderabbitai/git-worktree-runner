@@ -91,6 +91,65 @@ teardown() {
   ! is_excluded "src/app.js" "$excludes"
 }
 
+@test "leading globstar exclusions match zero or more directory levels" {
+  is_excluded "note.txt" "**/note.txt"
+  is_excluded "data/note.txt" "**/note.txt"
+  is_excluded "data/deep/note.txt" "**/note.txt"
+  run is_excluded "other.txt" "**/note.txt"
+  [ "$status" -eq 1 ]
+  run is_excluded "data/note.txt.bak" "**/note.txt"
+  [ "$status" -eq 1 ]
+}
+
+@test "leading globstar exclusions preserve suffix globs and spaces" {
+  local excludes=$'\n**/.env\n**/secrets.[ab]?\n**/private note.txt\n'
+  is_excluded ".env" "$excludes"
+  is_excluded "data/.env" "$excludes"
+  is_excluded "secrets.a1" "$excludes"
+  is_excluded "data/secrets.b2" "$excludes"
+  is_excluded "private note.txt" "$excludes"
+  is_excluded "data/private note.txt" "$excludes"
+  run is_excluded ".env.example" "$excludes"
+  [ "$status" -eq 1 ]
+  run is_excluded "secrets.c1" "$excludes"
+  [ "$status" -eq 1 ]
+}
+
+@test "leading globstar exclusions retain explicit suffix directories" {
+  is_excluded "data/note.txt" "**/data/note.txt"
+  is_excluded "src/data/note.txt" "**/data/note.txt"
+  run is_excluded "note.txt" "**/data/note.txt"
+  [ "$status" -eq 1 ]
+  run is_excluded "other/note.txt" "**/data/note.txt"
+  [ "$status" -eq 1 ]
+}
+
+@test "repeated leading globstar exclusions can each match zero directories" {
+  is_excluded "note.txt" "**/**/note.txt"
+  is_excluded "data/note.txt" "**/**/note.txt"
+  is_excluded "data/deep/note.txt" "**/**/note.txt"
+}
+
+@test "literal exclusions remain relative paths rather than basename matches" {
+  is_excluded "note.txt" "note.txt"
+  run is_excluded "data/note.txt" "note.txt"
+  [ "$status" -eq 1 ]
+  is_excluded "data/note.txt" "data/note.txt"
+  run is_excluded "src/data/note.txt" "data/note.txt"
+  [ "$status" -eq 1 ]
+}
+
+@test "ordinary exclusion wildcards retain slash matching behavior" {
+  is_excluded "data/deep/note.txt" "*.txt"
+  is_excluded "data/deep/note.txt" "data/*"
+  is_excluded "data/note.txt" "*/note.txt"
+  run is_excluded "note.txt" "*/note.txt"
+  [ "$status" -eq 1 ]
+  is_excluded "file[1].txt" 'file\[1\].txt'
+  run is_excluded "file1.txt" 'file\[1\].txt'
+  [ "$status" -eq 1 ]
+}
+
 # --- _fast_copy_dir tests ---
 
 @test "_fast_copy_dir copies directory contents" {
@@ -202,6 +261,25 @@ teardown() {
   [ "$count" -eq 2 ]
   [ -f "$dst/CLAUDE.md" ]
   [ -f "$dst/config/CLAUDE.md" ]
+}
+
+@test "find fallback: globstar exclusions skip root and nested files" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" dir
+  mkdir -p "$src/data/deep" "$dst"
+  for dir in "$src" "$src/data" "$src/data/deep"; do
+    echo "excluded fixture" > "$dir/note.txt"
+    echo "included fixture" > "$dir/keep.txt"
+  done
+
+  cd "$src"
+  local count
+  count=$(_expand_and_copy_pattern "**/*.txt" "$dst" "**/note.txt" "true" "false" "0")
+  [ "$count" -eq 3 ]
+  for dir in "$dst" "$dst/data" "$dst/data/deep"; do
+    [ ! -e "$dir/note.txt" ]
+    [ "$(cat "$dir/keep.txt")" = "included fixture" ]
+  done
 }
 
 @test "_apply_directory_excludes supports node_modules/* patterns" {
