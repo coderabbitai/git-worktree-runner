@@ -12,12 +12,31 @@
 
 # Resolve the main repo root from the current git context.
 # Works from the main repo root, a subdirectory, or a linked worktree.
+# A bare repository is its own root; its parent is not a checkout.
 # Returns: absolute path to main repo root or empty on failure
 _resolve_main_repo_root() {
-  local git_common_dir repo_root
+  local git_common_dir repo_root is_bare
   git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || return 1
 
   [ -n "$git_common_dir" ] || return 1
+
+  # Query the common directory, not the current worktree: a linked worktree
+  # reports false even when its main repository is bare. Do not infer this
+  # from the directory name (a bare repository can itself be named .git).
+  # GIT_WORK_TREE and GIT_COMMON_DIR can force a false result. Discovery above
+  # already resolved the common directory; ignore these only for this probe.
+  is_bare=$(
+    unset GIT_WORK_TREE GIT_COMMON_DIR
+    git --git-dir="$git_common_dir" rev-parse --is-bare-repository 2>/dev/null
+  ) || return 1
+  if [ "$is_bare" = "true" ]; then
+    repo_root=$(
+      unset CDPATH
+      cd -P -- "$git_common_dir" 2>/dev/null && pwd -P
+    ) || return 1
+    printf "%s" "$repo_root"
+    return
+  fi
 
   case "$git_common_dir" in
     /*)

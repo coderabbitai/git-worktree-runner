@@ -420,6 +420,9 @@ Trust requires a known filesystem birth time for the Git directory. If `stat` ca
 
 All configuration is stored via `git config`. For team settings, create a `.gtrconfig` file in your repository root.
 
+The CLI uses the bare Git directory itself as the root for bare repositories; see
+[configuration sources](docs/configuration.md#configuration-sources) for config and copy locations.
+
 ### Quick Setup
 
 ```bash

@@ -4,6 +4,7 @@
 # Each _help_<command>() provides detailed help for a single command.
 # Dispatched by cmd_help when a command argument is provided.
 
+# Print usage, options, examples, and repository-root semantics for git gtr new.
 _help_new() {
   cat <<'EOF'
 git gtr new - Create a new worktree
@@ -13,6 +14,9 @@ Usage: git gtr new <branch> [options]
 Creates a new git worktree with the given branch name. The worktree folder
 is named after the branch (slashes and special chars become hyphens, e.g.,
 feature/user-auth becomes folder "feature-user-auth").
+
+For bare repositories, configuration and copied files come from the bare Git
+directory itself. The default worktree directory is its sibling <name>-worktrees.
 
 Options:
   --from <ref>        Create from a specific ref (default: default branch)
