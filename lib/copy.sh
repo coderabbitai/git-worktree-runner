@@ -157,6 +157,9 @@ _fast_copy_os=""
 
 _fast_copy_dir() {
   local src="$1" dest="$2" target staging os
+  # A trailing slash must not turn the basename into an empty merge target.
+  while [ "${src%/}" != "$src" ]; do src="${src%/}"; done
+  [ -n "$src" ] || return 1
   target="${dest%/}/${src##*/}"
   if [ -e "$target" ] || [ -L "$target" ] || [ ! -d "$src" ] || [ -L "$src" ]; then
     _copy_tree_entry "$src" "$target"
@@ -635,6 +638,10 @@ _resolve_directory_patterns() {
       continue
     fi
 
+    # Includes always name directories, not their contents. Normalize before
+    # discovery so both literal/glob matches and later exclusions use that name.
+    while [ "${pattern%/}" != "$pattern" ]; do pattern="${pattern%/}"; done
+
     local find_results=""
     case "$pattern" in
       *[\*\?\[]*)
@@ -702,6 +709,10 @@ _copy_resolved_directories() {
   if [ -z "$resolved_dirs" ]; then
     return 0
   fi
+
+  # Match directory excludes using the same spelling as normalized includes.
+  # Strip only trailing separators: vendor/* must still exclude contents only.
+  excludes=$(printf '%s\n' "$excludes" | sed 's:/*$::')
 
   local old_pwd
   old_pwd=$(pwd)

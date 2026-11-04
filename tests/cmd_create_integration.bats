@@ -212,3 +212,23 @@ _cmd_create_capture_stdout() {
   [ -L "$TEST_WORKTREES_DIR/confined-copy/deps/nested/link" ]
   [ ! -e "$TEST_WORKTREES_DIR/confined-copy/deps/nested/remove" ]
 }
+
+@test "cmd_create normalizes trailing-slash directory includes from shared config" {
+  mkdir -p "$TEST_REPO/vendor/cache"
+  echo replacement > "$TEST_REPO/vendor/marker"
+  echo excluded > "$TEST_REPO/vendor/cache/marker"
+  echo sentinel > "$TEST_REPO/marker"
+  echo vendor/ > "$TEST_REPO/.gitignore"
+  git config -f "$TEST_REPO/.gtrconfig" copy.includeDirs vendor///
+  git config -f "$TEST_REPO/.gtrconfig" copy.excludeDirs vendor/cache/
+  git add .gtrconfig .gitignore marker
+  git commit -m "fixture directory copy configuration" --quiet
+
+  run "$PROJECT_ROOT/bin/gtr" new normalized-copy --from HEAD --no-fetch --yes --no-hooks
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_WORKTREES_DIR/normalized-copy/marker")" = sentinel ]
+  [ "$(cat "$TEST_WORKTREES_DIR/normalized-copy/vendor/marker")" = replacement ]
+  [ ! -e "$TEST_WORKTREES_DIR/normalized-copy/vendor/cache" ]
+  [ ! -e "$TEST_WORKTREES_DIR/normalized-copy/cache" ]
+}

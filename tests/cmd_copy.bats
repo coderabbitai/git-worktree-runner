@@ -47,14 +47,33 @@ teardown() {
   [ -f "$TEST_WORKTREES_DIR/copy-target/.zed/settings.json" ]
 }
 
+@test "cmd_copy keeps trailing-slash includeDirs and their exclusions under the directory" {
+  mkdir -p "$TEST_REPO/vendor/cache"
+  echo replacement > "$TEST_REPO/vendor/marker"
+  echo excluded > "$TEST_REPO/vendor/cache/marker"
+  echo sentinel > "$TEST_WORKTREES_DIR/copy-target/marker"
+  git config -f "$TEST_REPO/.gtrconfig" copy.includeDirs vendor/
+  git config -f "$TEST_REPO/.gtrconfig" copy.excludeDirs vendor/cache
+
+  # Run the CLI so the regression is also exercised with set -e enabled.
+  run "$PROJECT_ROOT/bin/gtr" copy copy-target
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_WORKTREES_DIR/copy-target/marker")" = sentinel ]
+  [ "$(cat "$TEST_WORKTREES_DIR/copy-target/vendor/marker")" = replacement ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target/vendor/cache" ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target/cache" ]
+}
+
 @test "cmd_copy dry-run does not copy configured includeDirs" {
   mkdir -p "$TEST_REPO/.zed"
   echo "settings" > "$TEST_REPO/.zed/settings.json"
-  git config --add gtr.copy.includeDirs ".zed"
+  git config --add gtr.copy.includeDirs ".zed/"
 
   run cmd_copy copy-target --dry-run
   [ "$status" -eq 0 ]
   [ ! -d "$TEST_WORKTREES_DIR/copy-target/.zed" ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target/settings.json" ]
 }
 
 @test "cmd_copy applies configured excludeDirs" {
