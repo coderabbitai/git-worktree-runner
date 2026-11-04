@@ -354,6 +354,13 @@ are skipped before copying; existing excluded files in the destination are
 left unchanged. File exclusions do not exclude directories with matching names;
 use `gtr.copy.excludeDirs` to skip a whole directory.
 
+When exclusions require selective copying, new destination directories stay
+owner-only until their contents are copied successfully. Missing ancestors of
+nested directory selections stay private until all selected directories finish.
+Their final permission bits come from the corresponding source directory,
+restricted by your umask. Existing destination directory permissions are left
+unchanged.
+
 Directory exclusions never descend through symlinks. An exclusion matching a
 symlink itself removes only the link, including when the pattern ends in `/`;
 the link target is preserved. Exclusions are skipped when the copied directory

@@ -575,8 +575,20 @@ EOF
   return 1
 }
 
+# Print the permission bits for a new directory, restricted by the caller's umask.
+# Usage: _copy_directory_mode <source_directory>
+_copy_directory_mode() {
+  local source_mode copy_umask
+  source_mode=$(stat -c '%a' "$1" 2>/dev/null) ||
+    source_mode=$(stat -f '%Lp' "$1" 2>/dev/null) || return 1
+  copy_umask=$(umask)
+  printf '%o' "$((8#$source_mode & 0777 & ~8#$copy_umask))"
+}
+
 # Copy a directory one direct child at a time, skipping excluded child subtrees
 # before they are copied. Deeper excludes are still removed after copy.
+# New directories stay owner-only until complete, then receive the source's
+# permission bits masked by the caller's umask. Existing directory modes stay intact.
 # Usage: _selective_copy_dir <dir_path> <dst_root> <excludes> [file_excludes]
 _selective_copy_dir() {
   local dir_path="$1" dst_root="$2" excludes="$3"
@@ -585,16 +597,23 @@ _selective_copy_dir() {
 
   _copy_components_safe "." "$dir_path" || return 1
   _copy_components_safe "$dst_root" "$dir_path" || return 1
-  mkdir -p "$dest_dir" || return 1
+  local final_mode=""
+  if [ ! -d "$dest_dir" ]; then
+    final_mode=$(_copy_directory_mode "$dir_path") || return 1
+    # Explicit owner write access also permits populating read-only sources.
+    # Do not use -p here: an existing directory must never be reclassified as new.
+    mkdir -m 700 "$dest_dir" || return 1
+  fi
 
   local find_results
-  find_results=$(find "$dir_path" -mindepth 1 -maxdepth 1 -print0 2>/dev/null | _copy_discovery_records)
+  find_results=$(set -o pipefail; find "$dir_path" -mindepth 1 -maxdepth 1 -print0 2>/dev/null |
+    _copy_discovery_records) || return 1
 
   local child_path child_name child_rel
   while IFS= read -r child_path; do
     [ -z "$child_path" ] && continue
 
-    child_name=$(basename "$child_path")
+    child_name="${child_path##*/}"
     child_rel="$dir_path/$child_name"
 
     if is_excluded "$child_rel" "$excludes" || is_excluded "$child_rel/" "$excludes"; then
@@ -619,7 +638,13 @@ _selective_copy_dir() {
 $find_results
 EOF
 
-  _apply_directory_excludes "$dst_root" "$dir_path" "$excludes"
+  _apply_directory_excludes "$dst_root" "$dir_path" "$excludes" || return 1
+  if [ -n "$final_mode" ]; then
+    # Recheck before chmod so a replacement symlink cannot redirect it.
+    _copy_components_safe "$dst_root" "$dir_path" || return 1
+    chmod "$final_mode" "$dest_dir" || return 1
+  fi
+  return 0
 }
 
 # Return the number of path components in a directory pattern.
@@ -748,6 +773,9 @@ _copy_resolved_directories() {
   cd "$src_root" || return 1
 
   local copied_count=0 failed=0
+  # Missing ancestors of nested selections must remain private across all
+  # selections, including siblings under a read-only source parent.
+  local -a parent_paths=() parent_modes=()
   local dir_path
   while IFS= read -r dir_path; do
     [ -z "$dir_path" ] && continue
@@ -770,8 +798,41 @@ _copy_resolved_directories() {
       continue
     fi
 
-    if ! mkdir -p "$dest_parent"; then
+    if [ ! -d "$dst_root" ] && ! mkdir -p "$dst_root"; then
       failed=1
+      log_warn "Failed to prepare destination root $dst_root"
+      continue
+    fi
+    local parent_path="" remaining component parent_mode parents_ready=1
+    case "$dir_path" in
+      */*) remaining="${dir_path%/*}" ;;
+      *) remaining="" ;;
+    esac
+    while [ -n "$remaining" ]; do
+      component="${remaining%%/*}"
+      case "$remaining" in
+        */*) remaining="${remaining#*/}" ;;
+        *) remaining="" ;;
+      esac
+      case "$component" in ""|.) continue ;; esac
+      parent_path="${parent_path:+$parent_path/}$component"
+      if ! _copy_components_safe "$dst_root" "$parent_path"; then
+        parents_ready=0
+        break
+      fi
+      if [ ! -d "$dst_root/$parent_path" ]; then
+        if ! parent_mode=$(_copy_directory_mode "$parent_path") ||
+          ! mkdir -m 700 "$dst_root/$parent_path"; then
+          parents_ready=0
+          break
+        fi
+        parent_paths+=("$parent_path")
+        parent_modes+=("$parent_mode")
+      fi
+    done
+    if [ "$parents_ready" -eq 0 ]; then
+      failed=1
+      log_warn "Failed to prepare parent directories for $dir_path"
       continue
     fi
 
@@ -789,6 +850,21 @@ _copy_resolved_directories() {
   done <<EOF
 $resolved_dirs
 EOF
+
+  # Finalize deepest-first only after every selected directory has completed.
+  # On failure, leave the newly created ancestors private around partial data.
+  local parent_index=${#parent_paths[@]}
+  if [ "$failed" -eq 0 ]; then
+    while [ "$parent_index" -gt 0 ]; do
+      parent_index=$((parent_index - 1))
+      if ! _copy_components_safe "$dst_root" "${parent_paths[$parent_index]}" ||
+        ! chmod "${parent_modes[$parent_index]}" "$dst_root/${parent_paths[$parent_index]}"; then
+        log_warn "Failed to finalize parent directory ${parent_paths[$parent_index]}"
+        failed=1
+        break
+      fi
+    done
+  fi
 
   cd "$old_pwd" || return 1
 
