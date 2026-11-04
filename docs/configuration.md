@@ -46,10 +46,11 @@ team value.
 Git configuration is a trusted input: GTR runs hooks from local, global, and
 system Git configuration without a separate `git gtr trust` approval. Anyone
 who can modify that configuration can affect commands run by both GTR and Git
-itself. Keep local, global, and system Git configuration files, and any files
-they include, writable only by people you trust to run commands as your user.
-The `.gtrconfig` approval gate does not isolate users sharing writable Git
-configuration.
+itself. Keep local, global, and system Git configuration files, their included
+files, and any symlink targets writable only by people you trust to run commands
+as your user. Protect their parent directories as well, so untrusted users
+cannot replace files or links. The `.gtrconfig` approval gate does not isolate
+users sharing writable Git configuration.
 
 `git gtr trust` approves executable `.gtrconfig` entries (hooks and editor/AI
 defaults). Other settings do not require that approval. Most single-value
