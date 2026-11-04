@@ -68,7 +68,9 @@ cmd_init() {
   # Generate output (cached to ~/.cache/gtr/, auto-invalidates on shell integration changes)
   local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gtr"
   local cache_file="$cache_dir/init-${func_name}.${shell}"
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-7}"
+  # Bump when generated helpers change, even if GTR_VERSION is unchanged.
+  # Schema 7 can contain PR207's v2 trust helpers; schema 8 requires v3 snapshots.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-8}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # Return cached output if version matches
@@ -233,10 +235,10 @@ EOF
 
 _init_emit_fish_trust_helpers() {
   local snapshot_helpers
-  snapshot_helpers=$(_init_emit_snapshot_helpers | sed 's/__FUNC___hooks_/_hooks_/g')
-  # Quote the helper source for a Fish single-quoted string.
-  snapshot_helpers="${snapshot_helpers//\\/\\\\}"
-  snapshot_helpers="${snapshot_helpers//\'/\\\'}"
+  # Quote for a Fish single-quoted string. Bash 3.2's parameter substitution
+  # over-escapes single quotes here, so use sed for consistent generated code.
+  snapshot_helpers=$(_init_emit_snapshot_helpers |
+    sed -e 's/__FUNC___hooks_/_hooks_/g; s/\\/\\\\/g' -e "s/'/\\\\'/g")
   printf "function __FUNC___hooks_read_definitions\n  command bash -c '%s\n_hooks_read_definitions \"\$1\"' bash \"\$argv[1]\"\nend\n" "$snapshot_helpers"
   printf "function __FUNC___hooks_definitions_get\n  command bash -c '%s\n_hooks_definitions_get \"\$1\" \"\$2\"' bash \"\$argv[1]\" \"\$argv[2]\"\nend\n" "$snapshot_helpers"
   cat <<'FISH'

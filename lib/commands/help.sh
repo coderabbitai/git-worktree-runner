@@ -413,10 +413,12 @@ Generates shell functions for enhanced features like 'gtr cd <branch>',
 current shell directory.
 Add to your shell configuration.
 
-Output is cached to ~/.cache/gtr/ for fast shell startup (~1ms vs ~60ms).
-The cache refreshes the next time 'git gtr init <shell>' runs (checks version).
-With the recommended setup below, it regenerates when the cache file is missing.
-To force-regenerate: rm -rf ~/.cache/gtr
+Output is cached under ${XDG_CACHE_HOME:-$HOME/.cache}/gtr/.
+Each invocation checks the installed version and shell integration schema,
+regenerating outdated helpers before returning them.
+Replace older setup snippets that source a cache directly or check a hard-coded
+'init=' value, then restart your shell or run the matching setup command below.
+Upgrades to the v3 trust format require reviewing commands with 'git gtr trust'.
 
 Supported shells: bash, zsh, fish
 
@@ -424,21 +426,15 @@ Options:
   --as <name>   Set custom function name (default: gtr)
                 Useful if 'gtr' conflicts with another command (e.g., GNU tr)
 
-Setup (sources cached output directly for fast startup):
+Setup (validates the cache on each shell startup):
   # Bash (add to ~/.bashrc)
-  _gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.bash"
-  [[ -f "$_gtr_init" ]] && head -n 1 "$_gtr_init" | grep -q ' init=6 ' || eval "$(git gtr init bash)" || true
-  source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
+  eval "$(git gtr init bash)"
 
   # Zsh (add to ~/.zshrc)
-  _gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.zsh"
-  [[ -f "$_gtr_init" ]] && head -n 1 "$_gtr_init" | grep -q ' init=6 ' || eval "$(git gtr init zsh)" || true
-  source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
+  eval "$(git gtr init zsh)"
 
   # Fish (add to ~/.config/fish/config.fish)
-  set -l _gtr_init (test -n "$XDG_CACHE_HOME" && echo $XDG_CACHE_HOME || echo $HOME/.cache)/gtr/init-gtr.fish
-  test -f "$_gtr_init"; and head -n 1 "$_gtr_init" | string match -q '* init=6 *'; or git gtr init fish >/dev/null 2>&1
-  source "$_gtr_init" 2>/dev/null
+  git gtr init fish | source
 
   # Custom function name (avoids conflict with coreutils gtr)
   eval "$(git gtr init zsh --as gwtr)"

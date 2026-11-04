@@ -271,19 +271,13 @@ cd "$(git gtr go 1)"             # Navigate to main repo
 
 ```bash
 # Bash (add to ~/.bashrc)
-_gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.bash"
-[[ -f "$_gtr_init" ]] && head -n 1 "$_gtr_init" | grep -q ' init=6 ' || eval "$(git gtr init bash)" || true
-source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
+eval "$(git gtr init bash)"
 
 # Zsh (add to ~/.zshrc)
-_gtr_init="${XDG_CACHE_HOME:-$HOME/.cache}/gtr/init-gtr.zsh"
-[[ -f "$_gtr_init" ]] && head -n 1 "$_gtr_init" | grep -q ' init=6 ' || eval "$(git gtr init zsh)" || true
-source "$_gtr_init" 2>/dev/null || true; unset _gtr_init
+eval "$(git gtr init zsh)"
 
 # Fish (add to ~/.config/fish/config.fish)
-set -l _gtr_init (test -n "$XDG_CACHE_HOME" && echo $XDG_CACHE_HOME || echo $HOME/.cache)/gtr/init-gtr.fish
-test -f "$_gtr_init"; and head -n 1 "$_gtr_init" | string match -q '* init=6 *'; or git gtr init fish >/dev/null 2>&1
-source "$_gtr_init" 2>/dev/null
+git gtr init fish | source
 
 # Then navigate with:
 gtr new my-feature --cd  # Create and land in the new worktree
@@ -293,7 +287,7 @@ gtr cd my-feature
 gtr cd 1
 ```
 
-The cache generates on first run and refreshes the next time `git gtr init <shell>` runs. To force-regenerate: `rm -rf ~/.cache/gtr`
+`git gtr init <shell>` reuses cached output only when both the installed version and shell integration schema match. Keep the invocation in your shell configuration so upgrades refresh the helpers automatically. If your existing setup sources a cache file directly or checks a hard-coded `init=` value, replace it with the setup above, then restart your shell or run the matching setup command in the current shell. Upgrades to the v3 trust format require reviewing commands again with `git gtr trust`.
 
 With [fzf](https://github.com/junegunn/fzf) installed, `gtr cd` (no arguments) opens a command palette with git log preview and keybindings: `ctrl-e` editor, `ctrl-a` AI, `ctrl-d` delete, `ctrl-y` copy, `ctrl-r` refresh.
 
