@@ -8,9 +8,235 @@ setup() {
 }
 
 teardown() {
+  # Read-only permission fixtures still need to be removable after assertions fail.
+  local readonly_path
+  for readonly_path in "${_readonly_copy_paths[@]}"; do
+    [ -d "$readonly_path" ] && [ ! -L "$readonly_path" ] && chmod u+rwx "$readonly_path"
+  done
   if [ -n "${_test_tmpdir:-}" ]; then
     rm -rf "$_test_tmpdir"
   fi
+}
+
+_copy_test_mode() {
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
+}
+
+@test "selective copy keeps new directories private until complete and preserves source modes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" mode
+  mkdir -p "$src/vendor/sub/cache" "$dst"
+  echo keep > "$src/vendor/sub/keep.txt"
+  echo excluded > "$src/vendor/sub/skip.pem"
+  echo excluded > "$src/vendor/sub/cache/marker"
+  chmod 700 "$src/vendor"
+  chmod 750 "$src/vendor/sub"
+
+  cp() {
+    [ "$(_copy_test_mode "$dst/$mode/vendor")" = 700 ] || return 1
+    [ "$(_copy_test_mode "$dst/$mode/vendor/sub")" = 700 ] || return 1
+    command cp "$@"
+  }
+
+  # Exercise both triggers for selective traversal.
+  for mode in files directories; do
+    mkdir "$dst/$mode"
+    if [ "$mode" = files ]; then
+      (umask 022; copy_directories "$src" "$dst/$mode" vendor '' false '*.pem')
+      [ ! -e "$dst/$mode/vendor/sub/skip.pem" ]
+    else
+      (umask 022; copy_directories "$src" "$dst/$mode" vendor 'vendor/sub/cache')
+      [ ! -e "$dst/$mode/vendor/sub/cache" ]
+    fi
+    [ "$(cat "$dst/$mode/vendor/sub/keep.txt")" = keep ]
+    [ "$(_copy_test_mode "$dst/$mode/vendor")" = 700 ]
+    [ "$(_copy_test_mode "$dst/$mode/vendor/sub")" = 750 ]
+  done
+}
+
+@test "selective copy applies the caller umask to new directory modes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/vendor/sub" "$dst"
+  echo keep > "$src/vendor/sub/keep.txt"
+  chmod 777 "$src/vendor"
+  chmod 755 "$src/vendor/sub"
+
+  (umask 077; copy_directories "$src" "$dst" vendor '' false '*.pem')
+
+  [ "$(cat "$dst/vendor/sub/keep.txt")" = keep ]
+  [ "$(_copy_test_mode "$dst/vendor")" = 700 ]
+  [ "$(_copy_test_mode "$dst/vendor/sub")" = 700 ]
+}
+
+@test "selective copy populates read-only source directories before restoring their modes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/vendor/sub" "$dst"
+  echo keep > "$src/vendor/sub/keep.txt"
+  chmod 500 "$src/vendor"
+  chmod 550 "$src/vendor/sub"
+  _readonly_copy_paths=("$src/vendor" "$src/vendor/sub" "$dst/vendor" "$dst/vendor/sub")
+
+  (umask 022; copy_directories "$src" "$dst" vendor '' false '*.pem')
+
+  [ "$(cat "$dst/vendor/sub/keep.txt")" = keep ]
+  [ "$(_copy_test_mode "$dst/vendor")" = 500 ]
+  [ "$(_copy_test_mode "$dst/vendor/sub")" = 550 ]
+}
+
+@test "selective copy keeps partial directories private when a leaf copy fails" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/vendor/sub" "$dst"
+  echo keep > "$src/vendor/sub/keep.txt"
+  chmod 755 "$src/vendor" "$src/vendor/sub"
+
+  cp() {
+    command cp "$@" || return 1
+    return 1
+  }
+
+  cd "$src"
+  run _selective_copy_dir vendor "$dst" '' '*.pem'
+  [ "$status" -ne 0 ]
+  [ "$(_copy_test_mode "$dst/vendor")" = 700 ]
+  [ "$(_copy_test_mode "$dst/vendor/sub")" = 700 ]
+}
+
+@test "selective copy preserves existing destination directory modes and files" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/vendor/sub" "$dst/vendor/sub"
+  echo keep > "$src/vendor/sub/keep.txt"
+  echo sentinel > "$dst/vendor/sub/existing"
+  chmod 755 "$src/vendor" "$src/vendor/sub"
+  chmod 710 "$dst/vendor"
+  chmod 700 "$dst/vendor/sub"
+
+  (umask 022; copy_directories "$src" "$dst" vendor '' false '*.pem')
+
+  [ "$(cat "$dst/vendor/sub/keep.txt")" = keep ]
+  [ "$(cat "$dst/vendor/sub/existing")" = sentinel ]
+  [ "$(_copy_test_mode "$dst/vendor")" = 710 ]
+  [ "$(_copy_test_mode "$dst/vendor/sub")" = 700 ]
+}
+
+@test "selective copy keeps new directories private when discovery fails" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/vendor" "$dst"
+  chmod 755 "$src/vendor"
+  find() { return 1; }
+
+  cd "$src"
+  run _selective_copy_dir vendor "$dst" '' '*.pem'
+
+  [ "$status" -ne 0 ]
+  [ "$(_copy_test_mode "$dst/vendor")" = 700 ]
+}
+
+@test "selective copy never finalizes directory permissions through a replacement symlink" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" outside="$_test_tmpdir/outside"
+  mkdir -p "$src/vendor" "$dst" "$outside"
+  echo sentinel > "$outside/marker"
+  chmod 755 "$src/vendor"
+  chmod 700 "$outside"
+  _apply_directory_excludes() {
+    rmdir "$dst/vendor"
+    ln -s "$outside" "$dst/vendor"
+  }
+
+  cd "$src"
+  run _selective_copy_dir vendor "$dst" '' '*.pem'
+
+  [ "$status" -ne 0 ]
+  [ "$(_copy_test_mode "$outside")" = 700 ]
+  [ "$(cat "$outside/marker")" = sentinel ]
+}
+
+@test "nested directory selections preserve restrictive missing source ancestors" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" mode
+  mkdir -p "$src/private space/vendor/bundle/cache" "$dst"
+  echo keep > "$src/private space/vendor/bundle/keep.txt"
+  echo excluded > "$src/private space/vendor/bundle/cache/marker"
+  chmod 700 "$src/private space"
+  chmod 710 "$src/private space/vendor"
+  chmod 755 "$src/private space/vendor/bundle"
+  cp() {
+    [ "$(_copy_test_mode "$dst/$mode/private space")" = 700 ] || return 1
+    [ "$(_copy_test_mode "$dst/$mode/private space/vendor")" = 700 ] || return 1
+    command cp "$@"
+  }
+
+  for mode in files directories fast; do
+    mkdir "$dst/$mode"
+    case "$mode" in
+      files)
+        (umask 022; copy_directories "$src" "$dst/$mode" 'private space/vendor/bundle' '' false '*.pem')
+        ;;
+      directories)
+        (umask 022; copy_directories "$src" "$dst/$mode" 'private space/vendor/bundle' 'private space/vendor/bundle/cache')
+        ;;
+      fast)
+        (umask 022; copy_directories "$src" "$dst/$mode" 'private space/vendor/bundle' '')
+        ;;
+    esac
+    [ "$(cat "$dst/$mode/private space/vendor/bundle/keep.txt")" = keep ]
+    [ "$(_copy_test_mode "$dst/$mode/private space")" = 700 ]
+    [ "$(_copy_test_mode "$dst/$mode/private space/vendor")" = 710 ]
+  done
+}
+
+@test "nested directory selections populate siblings before restoring a read-only parent" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/private/a" "$src/private/b" "$dst"
+  echo first > "$src/private/a/keep.txt"
+  echo second > "$src/private/b/keep.txt"
+  chmod 500 "$src/private"
+  _readonly_copy_paths=("$src/private" "$dst/private")
+
+  (umask 022; copy_directories "$src" "$dst" $'private/a\nprivate/b' '' false '*.pem')
+
+  [ "$(cat "$dst/private/a/keep.txt")" = first ]
+  [ "$(cat "$dst/private/b/keep.txt")" = second ]
+  [ "$(_copy_test_mode "$dst/private")" = 500 ]
+}
+
+@test "nested directory selections leave missing ancestors private after a copy failure" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/private/vendor" "$dst"
+  echo keep > "$src/private/vendor/keep.txt"
+  chmod 755 "$src/private" "$src/private/vendor"
+  cp() { return 1; }
+
+  local result=0
+  (umask 022; copy_directories "$src" "$dst" private/vendor '' false '*.pem') || result=$?
+
+  [ "$result" -ne 0 ]
+  [ "$(_copy_test_mode "$dst/private")" = 700 ]
+  [ "$(_copy_test_mode "$dst/private/vendor")" = 700 ]
+}
+
+@test "nested directory selections propagate permission finalization failures" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/private/vendor" "$dst"
+  echo keep > "$src/private/vendor/keep.txt"
+  chmod() {
+    [ "$2" = "$dst/private" ] && return 1
+    command chmod "$@"
+  }
+
+  run copy_directories "$src" "$dst" private/vendor '' false '*.pem'
+
+  [ "$status" -ne 0 ]
+  [ "$(_copy_test_mode "$dst/private")" = 700 ]
+  [ "$(cat "$dst/private/vendor/keep.txt")" = keep ]
 }
 
 # --- _is_unsafe_path tests ---
@@ -538,6 +764,51 @@ teardown() {
 
   [ -z "$(find "$dst" -mindepth 1 -print)" ]
   [ "$(cat "$outside/marker")" = sentinel ]
+}
+
+@test "copy_directories applies file exclusions before copying leaves and preserves existing files" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" copy_log="$_test_tmpdir/copy.log"
+  mkdir -p "$src/vendor space/sub" "$src/vendor space/assets.pem" "$dst/vendor space/sub"
+  echo excluded > "$src/vendor space/root.pem"
+  echo excluded > "$src/vendor space/sub/nested.pem"
+  echo excluded > "$src/vendor space/sub/.private"
+  echo keep > "$src/vendor space/sub/keep.txt"
+  echo keep > "$src/vendor space/assets.pem/keep.txt"
+  echo sentinel > "$dst/vendor space/sub/nested.pem"
+  echo sentinel > "$dst/vendor space/sub/destination-only.pem"
+
+  cp() {
+    printf '%s\n' "$@" >> "$copy_log"
+    command cp "$@"
+  }
+
+  copy_directories "$src" "$dst" 'vendor space' '' false $'*.pem\nvendor space/sub/.private'
+
+  [ ! -e "$dst/vendor space/root.pem" ]
+  [ ! -e "$dst/vendor space/sub/.private" ]
+  [ "$(cat "$dst/vendor space/sub/nested.pem")" = sentinel ]
+  [ "$(cat "$dst/vendor space/sub/destination-only.pem")" = sentinel ]
+  [ "$(cat "$dst/vendor space/sub/keep.txt")" = keep ]
+  [ "$(cat "$dst/vendor space/assets.pem/keep.txt")" = keep ]
+  ! grep -q 'root.pem\|nested.pem\|/\.private' "$copy_log"
+}
+
+@test "copy_directories file exclusions do not follow symlinks or remove their targets" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" outside="$_test_tmpdir/outside"
+  mkdir -p "$src/vendor/sub" "$dst" "$outside"
+  echo sentinel > "$outside/marker"
+  ln -s "$outside" "$src/vendor/sub/link.pem"
+  ln -s "$outside" "$src/vendor/sub/keep-link"
+  echo keep > "$src/vendor/sub/keep.txt"
+
+  copy_directories "$src" "$dst" vendor '' false '*.pem'
+
+  [ ! -L "$dst/vendor/sub/link.pem" ]
+  [ -L "$dst/vendor/sub/keep-link" ]
+  [ "$(cat "$outside/marker")" = sentinel ]
+  [ "$(cat "$dst/vendor/sub/keep.txt")" = keep ]
 }
 
 @test "literal directory patterns do not invoke find" {

@@ -24,7 +24,7 @@ _post_create_copy() {
 
   if [ -n "$dir_includes" ]; then
     log_step "Copying directories..."
-    copy_directories "$repo_root" "$worktree_path" "$dir_includes" "$dir_excludes" || return 1
+    copy_directories "$repo_root" "$worktree_path" "$dir_includes" "$dir_excludes" "false" "$excludes" || return 1
   fi
 }
 

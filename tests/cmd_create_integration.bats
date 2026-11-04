@@ -360,3 +360,35 @@ _cmd_create_capture_stdout() {
   [ ! -e "$TEST_WORKTREES_DIR/normalized-copy/vendor/cache" ]
   [ ! -e "$TEST_WORKTREES_DIR/normalized-copy/cache" ]
 }
+
+@test "cmd_create applies file exclusions inside ignored includeDirs" {
+  mkdir -p "$TEST_REPO/vendor/sub" "$TEST_REPO/vendor/cache"
+  echo fixture > "$TEST_REPO/vendor/root.pem"
+  echo fixture > "$TEST_REPO/vendor/sub/nested.pem"
+  echo keep > "$TEST_REPO/vendor/sub/keep.txt"
+  echo excluded > "$TEST_REPO/vendor/cache/marker"
+  echo vendor/ > "$TEST_REPO/.gitignore"
+  git config -f "$TEST_REPO/.gtrconfig" copy.exclude '*.pem'
+  git config -f "$TEST_REPO/.gtrconfig" copy.excludeDirs vendor/cache/
+  git add .gitignore .gtrconfig
+  git commit -m "fixture copy exclusions" --quiet
+  git check-ignore vendor/root.pem vendor/sub/nested.pem
+  [ -z "$(git ls-files vendor)" ]
+
+  # File-pattern copying is the control; both paths must honor copy.exclude.
+  local mode
+  for mode in files directories; do
+    if [ "$mode" = files ]; then
+      git config gtr.copy.include 'vendor/**/*'
+    else
+      git config --unset gtr.copy.include
+      git config gtr.copy.includeDirs vendor
+    fi
+    run "$PROJECT_ROOT/bin/gtr" new "$mode" --from HEAD --no-fetch --no-hooks --porcelain
+    [ "$status" -eq 0 ]
+    [ "$(cat "$TEST_WORKTREES_DIR/$mode/vendor/sub/keep.txt")" = keep ]
+    [ ! -e "$TEST_WORKTREES_DIR/$mode/vendor/root.pem" ]
+    [ ! -e "$TEST_WORKTREES_DIR/$mode/vendor/sub/nested.pem" ]
+  done
+  [ ! -e "$TEST_WORKTREES_DIR/directories/vendor/cache" ]
+}
