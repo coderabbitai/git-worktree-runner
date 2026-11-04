@@ -43,6 +43,37 @@ teardown() {
   done
 }
 
+@test "bare root probe ignores GIT_WORK_TREE without changing the caller environment" {
+  export GIT_DIR=. GIT_WORK_TREE=.
+  [ "$(git rev-parse --is-bare-repository)" = false ]
+
+  # Call directly so a global unset cannot be hidden by command substitution.
+  _resolve_main_repo_root > "$TEST_FIXTURE/resolved-root"
+
+  [ "$(cat "$TEST_FIXTURE/resolved-root")" = "$TEST_BARE" ]
+  [ "$(_gtrconfig_path)" = "$TEST_BARE/.gtrconfig" ]
+  [ "$GIT_DIR" = . ]
+  [ "$GIT_WORK_TREE" = . ]
+  [ "$(git rev-parse --show-toplevel)" = "$TEST_BARE" ]
+}
+
+@test "new with GIT_DIR and GIT_WORK_TREE uses bare config and copy source" {
+  local worktrees="$TEST_FIXTURE/worktrees"
+  git config gtr.worktrees.dir "$worktrees"
+  git config -f "$TEST_PARENT/.gtrconfig" copy.include secret.txt
+  git config -f "$TEST_BARE/.gtrconfig" copy.include own.txt
+  printf 'benign parent fixture\n' > "$TEST_PARENT/secret.txt"
+  printf 'bare fixture\n' > "$TEST_BARE/own.txt"
+
+  run env GIT_DIR=. GIT_WORK_TREE=. \
+    "$PROJECT_ROOT/bin/gtr" new env-isolated --from HEAD --no-fetch --porcelain
+
+  [ "$status" -eq 0 ]
+  [ -f "$worktrees/env-isolated/.git" ]
+  [ ! -e "$worktrees/env-isolated/secret.txt" ]
+  [ "$(cat "$worktrees/env-isolated/own.txt")" = "bare fixture" ]
+}
+
 @test "bare repositories named .git keep their own root from linked worktrees" {
   local bare="$TEST_PARENT/.git" linked="$TEST_FIXTURE/linked"
   git clone --bare --quiet "$TEST_FIXTURE/seed" "$bare"

@@ -4,6 +4,7 @@
 # Each _help_<command>() provides detailed help for a single command.
 # Dispatched by cmd_help when a command argument is provided.
 
+# Print usage, options, examples, and repository-root semantics for git gtr new.
 _help_new() {
   cat <<'EOF'
 git gtr new - Create a new worktree
