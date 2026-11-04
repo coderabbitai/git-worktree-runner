@@ -5,6 +5,7 @@
 # shellcheck disable=SC2016,SC2030,SC2031
 load test_helper
 
+# Create an isolated repository and configuration/cache paths for each test.
 setup() {
   POLICY_FIXTURE=$(cd -P "$(mktemp -d)" && pwd)
   export XDG_CONFIG_HOME="$POLICY_FIXTURE/config"
@@ -18,12 +19,15 @@ setup() {
   source_gtr_commands
 }
 
+# Remove registered worktrees before deleting the test's configuration fixtures.
 teardown() {
   teardown_integration_repo
   rm -rf "$POLICY_FIXTURE"
 }
 
-# Write globals by explicit filename so fixture setup cannot modify user config.
+# Configure marker hooks for a phase in Git config and unapproved .gtrconfig.
+# Usage: configure_policy_hooks <phase>
+# Writes globals by explicit filename so setup cannot modify user config.
 configure_policy_hooks() {
   local phase="$1"
   git config -f "$GIT_CONFIG_GLOBAL" --add "gtr.hook.$phase" \
@@ -34,6 +38,9 @@ configure_policy_hooks() {
     "printf '%s\\n' 'untrusted.$phase' >> \"\$POLICY_EVENTS\""
 }
 
+# Verify destination precedence and hook trust across real CLI create/remove.
+# Usage: check_policy_lifecycle <local|global>
+# Asserts that Git hooks run, file hooks stay blocked, and no approval is stored.
 check_policy_lifecycle() {
   local scope="$1" destination="$POLICY_FIXTURE/worktrees with spaces"
   local phase result
@@ -103,16 +110,53 @@ check_policy_lifecycle() {
   [ ! -d "$_GTR_TRUST_DIR" ]
 }
 
+# Verify a generated shell helper preserves only trusted hooks and exports.
+# Usage: check_generated_policy_hooks <bash|zsh|fish>
+# Skips unavailable shells; assertion failures propagate to the BATS test.
 check_generated_policy_hooks() {
   local shell_name="$1"
   command -v "$shell_name" >/dev/null 2>&1 || skip "$shell_name is not installed"
   configure_policy_hooks postCd
+  local trusted_export_hook untrusted_export_hook
+  case "$shell_name" in
+    bash|zsh)
+      trusted_export_hook='export POLICY_TRUSTED_EXPORT=trusted'
+      untrusted_export_hook='export POLICY_UNTRUSTED_EXPORT=untrusted'
+      ;;
+    fish)
+      trusted_export_hook='set -gx POLICY_TRUSTED_EXPORT trusted'
+      untrusted_export_hook='set -gx POLICY_UNTRUSTED_EXPORT untrusted'
+      ;;
+  esac
+  git config --local --add gtr.hook.postCd "$trusted_export_hook"
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd "$untrusted_export_hook"
   export POLICY_INIT="$POLICY_FIXTURE/init.$shell_name"
   export POLICY_WORKTREE="$POLICY_FIXTURE/linked worktree"
   git worktree add --quiet "$POLICY_WORKTREE" -b policy-cd HEAD
   "$PROJECT_ROOT/bin/gtr" init "$shell_name" > "$POLICY_INIT"
 
-  run "$shell_name" -c 'source "$POLICY_INIT"; gtr_run_post_cd_hooks "$POLICY_WORKTREE"'
+  unset POLICY_TRUSTED_EXPORT POLICY_UNTRUSTED_EXPORT
+  case "$shell_name" in
+    bash|zsh)
+      run "$shell_name" -c '
+        set -e
+        # Completion registration is outside this non-interactive hook fixture.
+        compdef() { :; }
+        source "$POLICY_INIT"
+        gtr_run_post_cd_hooks "$POLICY_WORKTREE"
+        [ "$POLICY_TRUSTED_EXPORT" = trusted ]
+        [ -z "${POLICY_UNTRUSTED_EXPORT+x}" ]
+      '
+      ;;
+    fish)
+      run fish -c '
+        source "$POLICY_INIT"; or exit 1
+        gtr_run_post_cd_hooks "$POLICY_WORKTREE"; or exit 1
+        test "$POLICY_TRUSTED_EXPORT" = trusted; or exit 1
+        not set -q POLICY_UNTRUSTED_EXPORT
+      '
+      ;;
+  esac
   [ "$status" -eq 0 ]
   [[ "$output" == *"Untrusted .gtrconfig hooks skipped"* ]]
   [ "$(cat "$POLICY_EVENTS")" = $'global.postCd\nlocal.postCd' ]

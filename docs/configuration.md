@@ -28,7 +28,7 @@
 
 All configuration is stored via `git config`, making it easy to manage per-repository or globally. You can also use a `.gtrconfig` file for team-shared settings.
 
-**Configuration precedence** (highest to lowest):
+**Configuration precedence for single-value settings** (highest to lowest):
 
 1. `git config --local` (`.git/config`) - personal overrides
 2. `.gtrconfig` (repo root) - team defaults
@@ -36,6 +36,12 @@ All configuration is stored via `git config`, making it easy to manage per-repos
 4. `git config --system` (`/etc/gitconfig`) - system defaults
 5. Environment variables
 6. Default values
+
+Multi-valued copy settings merge values from local, `.gtrconfig`, global, and
+system configuration, removing duplicates. For example, a local
+`gtr.copy.includeDirs=vendor` and `.gtrconfig` `copy.includeDirs=node_modules`
+can cause both directories to be copied; the local value does not replace the
+team value.
 
 Git configuration is a trusted input: GTR runs hooks from local, global, and
 system Git configuration without a separate `git gtr trust` approval. Anyone
@@ -45,7 +51,8 @@ trust to run commands as your user. The `.gtrconfig` approval gate does not
 isolate users sharing writable Git configuration.
 
 `git gtr trust` approves executable `.gtrconfig` entries (hooks and editor/AI
-defaults). Other settings follow the precedence above without that approval.
+defaults). Other settings use the single-value precedence or multi-value merging
+described above without that approval.
 For example, `worktrees.dir` selects the worktree destination; honoring this
 path does not approve `.gtrconfig` hooks.
 
