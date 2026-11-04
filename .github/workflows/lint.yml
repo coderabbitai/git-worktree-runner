@@ -49,6 +49,11 @@ jobs:
         run: |
           export PATH="$PWD/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
           export XDG_CACHE_HOME="$RUNNER_TEMP/gtr-cache"
+          # Exercise the CLI with private config, not the runner image's
+          # system config under its shared writable application directories.
+          export GIT_CONFIG_NOSYSTEM=1
+          export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/gtr-global.gitconfig"
+          : > "$GIT_CONFIG_GLOBAL"
           /bin/bash --version
           git gtr --version
           ./bin/gtr --version
@@ -68,4 +73,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y bats fish zsh
 
       - name: Run tests
-        run: bats tests/
+        run: |
+          # Tests write global settings and XDG state; isolate them from the
+          # runner image. Permission regressions supply their own unsafe files.
+          export GIT_CONFIG_NOSYSTEM=1
+          export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/gtr-global.gitconfig"
+          export XDG_CONFIG_HOME="$RUNNER_TEMP/gtr-config"
+          export XDG_CACHE_HOME="$RUNNER_TEMP/gtr-cache"
+          export XDG_DATA_HOME="$RUNNER_TEMP/gtr-data"
+          : > "$GIT_CONFIG_GLOBAL"
+          bats tests/
