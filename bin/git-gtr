@@ -34,6 +34,8 @@ resolve_script_dir() {
 . "$GTR_DIR/lib/ui.sh"
 . "$GTR_DIR/lib/args.sh"
 . "$GTR_DIR/lib/config.sh"
+. "$GTR_DIR/lib/config_safety.sh"
+_gtr_config_check || exit 1
 _ui_apply_color_config
 . "$GTR_DIR/lib/platform.sh"
 . "$GTR_DIR/lib/core.sh"

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Hook execution system
 
+# Hook dispatch can enter a different linked worktree after CLI startup.
+# shellcheck source=lib/config_safety.sh
+. "${BASH_SOURCE[0]%/*}/config_safety.sh"
+
 # ── Hook trust model ────────────────────────────────────────────────────
 # Hooks and executable defaults from .gtrconfig files (committed to
 # repositories) require explicit user approval before use. This prevents
@@ -240,6 +244,7 @@ _hooks_mark_trusted() {
 # Usage: _hooks_get_trusted <phase>
 _hooks_get_trusted() {
   local phase="$1"
+  _gtr_config_check || return 1
 
   # Always include hooks from git config (user controls their own .git/config)
   local git_hooks
@@ -313,7 +318,7 @@ run_hooks() {
 
   # Get hooks, filtering untrusted .gtrconfig hooks
   local hooks
-  hooks=$(_hooks_get_trusted "$phase")
+  hooks=$(_hooks_get_trusted "$phase") || return 1
 
   if [ -z "$hooks" ]; then
     # No hooks configured for this phase
@@ -398,7 +403,7 @@ run_hooks_export() {
   shift
 
   local hooks
-  hooks=$(_hooks_get_trusted "$phase")
+  hooks=$(_hooks_get_trusted "$phase") || return 1
 
   if [ -z "$hooks" ]; then
     return 0

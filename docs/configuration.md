@@ -44,6 +44,36 @@ that root, never its parent directory. The default worktree location is a siblin
 named `<bare-directory-name>-worktrees`. Files stored only in Git history are not
 copy sources; use `git gtr copy --from <worktree>` to copy from a checkout.
 
+### Configuration safety
+
+Before using native Git configuration, GTR checks that configuration files and
+their paths are owned by the current user or root and cannot be written or
+replaced by other users. The check includes local, global, system, and linked
+worktree configuration, included files, symlinks, and parent directories. It
+rejects group/other write permissions and, on macOS, write-capable ACL grants.
+Trusted-owner sticky directories such as `/tmp` are allowed when they protect
+an existing entry owned by the current user or root. Unreadable permissions or
+configuration fail closed.
+
+An unsafe source stops the command before GTR creates a worktree, honors a
+configured destination, or launches configured commands. Hook dispatch and
+generated Bash/Zsh/Fish `postCd` helpers also check the destination worktree's
+configuration. A `.gtrconfig` approval never overrides unsafe Git permissions.
+
+The error names the path that needs attention. For example, if your own
+`.git/config` is group-writable, remove group/other write access:
+
+```bash
+chmod go-w .git/config
+```
+
+Secure any reported parent directories, included files, or ACLs as well; do not
+change ownership or permissions on files you do not manage. Shared repositories
+that deliberately grant other users write access need separate private clones
+for GTR use. After upgrading, reload the documented shell setup or restart your
+shell so cached integration is regenerated; already-loaded functions retain
+their old behavior until reloaded.
+
 ---
 
 ## Team Configuration (.gtrconfig)
