@@ -265,6 +265,12 @@ git gtr config add gtr.copy.exclude "**/.env"
 git gtr config add gtr.copy.exclude "**/secrets.*"
 ```
 
+File exclusions match source paths relative to the repository root. A leading
+`**/` matches zero or more directory levels: `**/note.txt` excludes `note.txt`,
+`data/note.txt`, and deeper matches. A literal `note.txt` excludes only the root
+path. Other shell wildcard behavior is preserved, including `*` matching `/`
+in exclusions, so `*.txt` excludes matching files at any depth.
+
 ### Using .worktreeinclude file
 
 Alternatively, create a `.worktreeinclude` file in your repository root:

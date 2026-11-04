@@ -92,17 +92,26 @@ _copy_tree_entry() {
 # Returns: 0 if excluded, 1 if not
 is_excluded() {
   local path="$1"
-  local excludes="$2"
+  local excludes="$2" exclude_pattern
 
   [ -z "$excludes" ] && return 1
 
   while IFS= read -r exclude_pattern; do
     [ -z "$exclude_pattern" ] && continue
-    # Intentional glob pattern matching for exclusion
-    # shellcheck disable=SC2254
-    case "$path" in
-      $exclude_pattern) return 0 ;;
-    esac
+    while :; do
+      # Intentional glob pattern matching for exclusion
+      # shellcheck disable=SC2254
+      case "$path" in
+        $exclude_pattern) return 0 ;;
+      esac
+      # case treats ** like *, so its following slash normally requires a
+      # directory. Also try each leading **/ with zero directories, matching
+      # the root-level behavior of recursive file includes on Bash 3.2+.
+      case "$exclude_pattern" in
+        \*\*/*) exclude_pattern="${exclude_pattern#\*\*/}" ;;
+        *) break ;;
+      esac
+    done
   done <<EOF
 $excludes
 EOF

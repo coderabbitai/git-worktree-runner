@@ -176,6 +176,21 @@ _cmd_create_capture_stdout() {
   [ ! -f "$TEST_WORKTREES_DIR/no-copy-test/.env" ]
 }
 
+@test "new CLI applies shared globstar exclusions to root and nested files" {
+  mkdir -p "$TEST_REPO/data"
+  echo "excluded root fixture" > "$TEST_REPO/.env.production"
+  echo "excluded nested fixture" > "$TEST_REPO/data/.env.production"
+  echo "included fixture" > "$TEST_REPO/.env.example"
+  git config -f "$TEST_REPO/.gtrconfig" --add copy.include "**/.env.*"
+  git config -f "$TEST_REPO/.gtrconfig" --add copy.exclude "**/.env.production"
+
+  run "$PROJECT_ROOT/bin/gtr" new excluded-copy --from HEAD --no-fetch --no-hooks --yes
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_WORKTREES_DIR/excluded-copy/.env.production" ]
+  [ ! -e "$TEST_WORKTREES_DIR/excluded-copy/data/.env.production" ]
+  [ "$(cat "$TEST_WORKTREES_DIR/excluded-copy/.env.example")" = "included fixture" ]
+}
+
 @test "cmd_create --no-hooks skips post-create hooks" {
   git config --add gtr.hook.postCreate "touch hook-ran"
   cmd_create no-hook-test --from HEAD --no-hooks --no-fetch --yes

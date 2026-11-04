@@ -37,6 +37,43 @@ teardown() {
   [ -f "$TEST_WORKTREES_DIR/copy-target/config.json" ]
 }
 
+@test "copy CLI excludes globstar matches in an existing worktree" {
+  local dir
+  # Untracked files are created after the target to isolate the copy operation.
+  mkdir -p "$TEST_REPO/data/deep"
+  for dir in "$TEST_REPO" "$TEST_REPO/data" "$TEST_REPO/data/deep"; do
+    echo "excluded fixture" > "$dir/note.txt"
+    echo "included fixture" > "$dir/keep.txt"
+  done
+  git config --add gtr.copy.exclude "**/note.txt"
+
+  run "$PROJECT_ROOT/bin/gtr" copy copy-target -- "**/*.txt"
+  [ "$status" -eq 0 ]
+  for dir in "$TEST_WT_PATH" "$TEST_WT_PATH/data" "$TEST_WT_PATH/data/deep"; do
+    [ ! -e "$dir/note.txt" ]
+    [ "$(cat "$dir/keep.txt")" = "included fixture" ]
+  done
+}
+
+@test "copy CLI dry-run honors configured globstar exclusions" {
+  mkdir -p "$TEST_REPO/data"
+  echo "excluded root fixture" > "$TEST_REPO/note.txt"
+  echo "excluded nested fixture" > "$TEST_REPO/data/note.txt"
+  echo "included fixture" > "$TEST_REPO/keep.txt"
+  git config --add gtr.copy.include "**/*.txt"
+  git config --add gtr.copy.exclude "**/note.txt"
+
+  run "$PROJECT_ROOT/bin/gtr" copy copy-target --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Would copy 1 file(s)"* ]] || return 1
+  [[ "$output" == *"Would copy: keep.txt"* ]] || return 1
+  [[ "$output" != *"Would copy: note.txt"* ]] || return 1
+  [[ "$output" != *"Would copy: data/note.txt"* ]] || return 1
+  [ ! -e "$TEST_WT_PATH/note.txt" ]
+  [ ! -e "$TEST_WT_PATH/keep.txt" ]
+  [ ! -e "$TEST_WT_PATH/data" ]
+}
+
 @test "cmd_copy copies configured includeDirs" {
   mkdir -p "$TEST_REPO/.zed"
   echo "settings" > "$TEST_REPO/.zed/settings.json"
