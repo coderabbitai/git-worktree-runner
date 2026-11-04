@@ -74,6 +74,43 @@ teardown() {
   [ "$(cat "$worktrees/env-isolated/own.txt")" = "bare fixture" ]
 }
 
+@test "bare root probe ignores GIT_COMMON_DIR without changing the caller environment" {
+  export GIT_DIR=. GIT_COMMON_DIR=. GIT_WORK_TREE=.
+  [ "$(git --git-dir=. rev-parse --is-bare-repository)" = false ]
+
+  # The initial discovery must honor GIT_COMMON_DIR; only the probe ignores it.
+  _resolve_main_repo_root > "$TEST_FIXTURE/resolved-root"
+
+  [ "$(cat "$TEST_FIXTURE/resolved-root")" = "$TEST_BARE" ]
+  [ "$(_gtrconfig_path)" = "$TEST_BARE/.gtrconfig" ]
+  [ "$GIT_DIR" = . ]
+  [ "$GIT_COMMON_DIR" = . ]
+  [ "$GIT_WORK_TREE" = . ]
+  [ "$(git rev-parse --git-common-dir)" = . ]
+}
+
+@test "new with GIT_DIR and GIT_COMMON_DIR uses bare config and copy source" {
+  local worktrees="$TEST_FIXTURE/worktrees"
+  # A relative GIT_COMMON_DIR breaks Git's own checkout in the new worktree.
+  # Use an absolute override and a .git name to expose the parent-root fallback.
+  TEST_BARE="$TEST_PARENT/.git"
+  git clone --bare --quiet "$TEST_FIXTURE/seed" "$TEST_BARE"
+  cd "$TEST_BARE"
+  git config gtr.worktrees.dir "$worktrees"
+  git config -f "$TEST_PARENT/.gtrconfig" copy.include secret.txt
+  git config -f "$TEST_BARE/.gtrconfig" copy.include own.txt
+  printf 'benign parent fixture\n' > "$TEST_PARENT/secret.txt"
+  printf 'bare fixture\n' > "$TEST_BARE/own.txt"
+
+  run env GIT_DIR=. GIT_COMMON_DIR="$TEST_BARE" \
+    "$PROJECT_ROOT/bin/gtr" new common-isolated --from HEAD --no-fetch --porcelain
+
+  [ "$status" -eq 0 ]
+  [ -f "$worktrees/common-isolated/.git" ]
+  [ ! -e "$worktrees/common-isolated/secret.txt" ]
+  [ "$(cat "$worktrees/common-isolated/own.txt")" = "bare fixture" ]
+}
+
 @test "bare repositories named .git keep their own root from linked worktrees" {
   local bare="$TEST_PARENT/.git" linked="$TEST_FIXTURE/linked"
   git clone --bare --quiet "$TEST_FIXTURE/seed" "$bare"

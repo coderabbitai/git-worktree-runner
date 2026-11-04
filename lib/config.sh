@@ -23,9 +23,10 @@ _resolve_main_repo_root() {
   # Query the common directory, not the current worktree: a linked worktree
   # reports false even when its main repository is bare. Do not infer this
   # from the directory name (a bare repository can itself be named .git).
-  # GIT_WORK_TREE also forces a false result; ignore it only for this probe.
+  # GIT_WORK_TREE and GIT_COMMON_DIR can force a false result. Discovery above
+  # already resolved the common directory; ignore these only for this probe.
   is_bare=$(
-    unset GIT_WORK_TREE
+    unset GIT_WORK_TREE GIT_COMMON_DIR
     git --git-dir="$git_common_dir" rev-parse --is-bare-repository 2>/dev/null
   ) || return 1
   if [ "$is_bare" = "true" ]; then
