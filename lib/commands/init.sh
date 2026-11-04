@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+# The generators are also sourced directly, independently of the CLI loader.
+if ! command -v _gtr_config_check >/dev/null 2>&1; then
+  if [ -n "${ZSH_VERSION:-}" ]; then
+    # shellcheck disable=SC2296,SC2298,SC1091
+    . "${${(%):-%x}:h}/../config_safety.sh"
+  else
+    # shellcheck source=lib/config_safety.sh
+    . "${BASH_SOURCE[0]%/*}/../config_safety.sh"
+  fi
+fi
+
 # Init command (generate shell integration for cd support)
 cmd_init() {
   local shell="" func_name="gtr"
@@ -69,8 +80,8 @@ cmd_init() {
   local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gtr"
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 7 can contain PR207's v2 trust helpers; schema 8 requires v3 snapshots.
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-8}"
+  # Schema 9 adds filesystem checks before using native Git configuration.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-9}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # Return cached output if version matches
@@ -89,6 +100,20 @@ cmd_init() {
   printf '%s\n' "$output"
   if mkdir -p "$cache_dir" 2>/dev/null; then
     printf '%s\n%s\n' "$cache_stamp" "$output" > "$cache_file" 2>/dev/null || true
+  fi
+}
+
+# Run the exact CLI validator in Bash for every generated shell. Embedding the
+# functions keeps cached integration independent of the installation pathname.
+_init_emit_config_safety_helper() {
+  local shell_name="$1" validator
+  validator=$(typeset -f _config_safety_error _config_safety_node _config_safety_path _gtr_config_check)
+  validator="$validator"$'\n_gtr_config_check'
+  if [ "$shell_name" = fish ]; then
+    validator=$(printf '%s' "$validator" | sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g")
+    printf "function __FUNC___check_git_config\n  command bash -c '%s'\nend\n" "$validator"
+  else
+    printf '__FUNC___check_git_config() {\n  command bash -c %q\n}\n' "$validator"
   fi
 }
 
@@ -334,12 +359,14 @@ _init_bash() {
 # Setup: see git gtr help init
 BASH
   _init_emit_posix_trust_helpers ""
+  _init_emit_config_safety_helper bash
   cat <<'BASH'
 __FUNC___run_post_cd_hooks() {
   local dir="$1"
   local _gtr_trust_dir="${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"
 
   cd "$dir" && {
+    __FUNC___check_git_config || return 1
     local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
     _gtr_hooks=""
     _gtr_seen=""
@@ -520,6 +547,7 @@ _init_zsh() {
 # Setup: see git gtr help init
 ZSH
   _init_emit_posix_trust_helpers "  emulate -L zsh"
+  _init_emit_config_safety_helper zsh
   cat <<'ZSH'
 __FUNC___run_post_cd_hooks() {
   emulate -L zsh
@@ -527,6 +555,7 @@ __FUNC___run_post_cd_hooks() {
   local _gtr_trust_dir="${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"
 
   cd "$dir" && {
+    __FUNC___check_git_config || return 1
     local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
     _gtr_hooks=""
     _gtr_seen=""
@@ -709,6 +738,7 @@ _init_fish() {
 #   git gtr init fish | source
 FISH
   _init_emit_fish_trust_helpers
+  _init_emit_config_safety_helper fish
   cat <<'FISH'
 function __FUNC___run_post_cd_hooks
   set -l dir "$argv[1]"
@@ -718,6 +748,7 @@ function __FUNC___run_post_cd_hooks
   end
   cd $dir
   and begin
+    __FUNC___check_git_config; or return 1
     set -l _gtr_hooks
     set -l _gtr_seen
     # Read from git config (local > global > system)
