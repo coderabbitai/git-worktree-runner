@@ -37,6 +37,43 @@ teardown() {
   [ -f "$TEST_WORKTREES_DIR/copy-target/config.json" ]
 }
 
+@test "copy CLI excludes globstar matches in an existing worktree" {
+  local dir
+  # Untracked files are created after the target to isolate the copy operation.
+  mkdir -p "$TEST_REPO/data/deep"
+  for dir in "$TEST_REPO" "$TEST_REPO/data" "$TEST_REPO/data/deep"; do
+    echo "excluded fixture" > "$dir/note.txt"
+    echo "included fixture" > "$dir/keep.txt"
+  done
+  git config --add gtr.copy.exclude "**/note.txt"
+
+  run "$PROJECT_ROOT/bin/gtr" copy copy-target -- "**/*.txt"
+  [ "$status" -eq 0 ]
+  for dir in "$TEST_WT_PATH" "$TEST_WT_PATH/data" "$TEST_WT_PATH/data/deep"; do
+    [ ! -e "$dir/note.txt" ]
+    [ "$(cat "$dir/keep.txt")" = "included fixture" ]
+  done
+}
+
+@test "copy CLI dry-run honors configured globstar exclusions" {
+  mkdir -p "$TEST_REPO/data"
+  echo "excluded root fixture" > "$TEST_REPO/note.txt"
+  echo "excluded nested fixture" > "$TEST_REPO/data/note.txt"
+  echo "included fixture" > "$TEST_REPO/keep.txt"
+  git config --add gtr.copy.include "**/*.txt"
+  git config --add gtr.copy.exclude "**/note.txt"
+
+  run "$PROJECT_ROOT/bin/gtr" copy copy-target --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Would copy 1 file(s)"* ]] || return 1
+  [[ "$output" == *"Would copy: keep.txt"* ]] || return 1
+  [[ "$output" != *"Would copy: note.txt"* ]] || return 1
+  [[ "$output" != *"Would copy: data/note.txt"* ]] || return 1
+  [ ! -e "$TEST_WT_PATH/note.txt" ]
+  [ ! -e "$TEST_WT_PATH/keep.txt" ]
+  [ ! -e "$TEST_WT_PATH/data" ]
+}
+
 @test "cmd_copy copies configured includeDirs" {
   mkdir -p "$TEST_REPO/.zed"
   echo "settings" > "$TEST_REPO/.zed/settings.json"
@@ -47,14 +84,45 @@ teardown() {
   [ -f "$TEST_WORKTREES_DIR/copy-target/.zed/settings.json" ]
 }
 
+@test "cmd_copy keeps trailing-slash includeDirs and their exclusions under the directory" {
+  mkdir -p "$TEST_REPO/vendor/cache"
+  echo replacement > "$TEST_REPO/vendor/marker"
+  echo excluded > "$TEST_REPO/vendor/cache/marker"
+  echo sentinel > "$TEST_WORKTREES_DIR/copy-target/marker"
+  git config -f "$TEST_REPO/.gtrconfig" copy.includeDirs vendor/
+  git config -f "$TEST_REPO/.gtrconfig" copy.excludeDirs vendor/cache
+
+  # Run the CLI so the regression is also exercised with set -e enabled.
+  run "$PROJECT_ROOT/bin/gtr" copy copy-target
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_WORKTREES_DIR/copy-target/marker")" = sentinel ]
+  [ "$(cat "$TEST_WORKTREES_DIR/copy-target/vendor/marker")" = replacement ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target/vendor/cache" ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target/cache" ]
+}
+
+@test "cmd_copy propagates a directory publication failure" {
+  mkdir -p "$TEST_REPO/deps"
+  echo value > "$TEST_REPO/deps/file"
+  git config --add gtr.copy.includeDirs deps
+  mv() { return 1; }
+
+  run cmd_copy copy-target
+
+  [ "$status" -ne 0 ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target/deps" ]
+}
+
 @test "cmd_copy dry-run does not copy configured includeDirs" {
   mkdir -p "$TEST_REPO/.zed"
   echo "settings" > "$TEST_REPO/.zed/settings.json"
-  git config --add gtr.copy.includeDirs ".zed"
+  git config --add gtr.copy.includeDirs ".zed/"
 
   run cmd_copy copy-target --dry-run
   [ "$status" -eq 0 ]
   [ ! -d "$TEST_WORKTREES_DIR/copy-target/.zed" ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target/settings.json" ]
 }
 
 @test "cmd_copy applies configured excludeDirs" {
@@ -145,4 +213,37 @@ teardown() {
   run cmd_copy nonexistent -- ".env"
   [ "$status" -eq 0 ]
   [[ "$output" == *"No files copied"* ]]
+}
+
+@test "git gtr copy skips colliding and stray targets without writing files" {
+  create_test_worktree "feat-login"
+  mkdir -p "$TEST_WORKTREES_DIR/stray"
+
+  run "$PROJECT_ROOT/bin/gtr" copy feat/login stray -- .env
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No files copied"* ]]
+  [ ! -e "$TEST_WORKTREES_DIR/feat-login/.env" ]
+  [ ! -e "$TEST_WORKTREES_DIR/stray/.env" ]
+}
+
+@test "git gtr copy cannot overwrite a parent through dot targets" {
+  local base="$BATS_TEST_TMPDIR/targets"
+  mkdir -p "$base"
+  git config gtr.worktrees.dir "$base"
+  echo keep > "$BATS_TEST_TMPDIR/.env"
+
+  run "$PROJECT_ROOT/bin/gtr" copy .. . -- .env
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No files copied"* ]]
+  [ "$(cat "$BATS_TEST_TMPDIR/.env")" = keep ]
+  [ ! -e "$base/.env" ]
+}
+
+@test "git gtr copy rejects an unregistered source" {
+  mkdir -p "$TEST_WORKTREES_DIR/stray"
+  echo fixture > "$TEST_WORKTREES_DIR/stray/source.txt"
+
+  run "$PROJECT_ROOT/bin/gtr" copy copy-target --from stray -- source.txt
+  [ "$status" -eq 1 ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-target/source.txt" ]
 }

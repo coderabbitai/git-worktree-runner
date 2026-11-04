@@ -201,10 +201,24 @@ gtr.editor.workspace = project.code-workspace
 
 VS Code, Cursor, and Antigravity support `.code-workspace` files for multi-root workspaces, custom settings, and recommended extensions. When opening a worktree:
 
-1. If `gtr.editor.workspace` is set to a path, opens that file (relative to worktree root)
+1. If `gtr.editor.workspace` is set to a path, opens that file (relative to and contained within the worktree root)
 2. If set to `none`, disables workspace lookup (always opens folder)
 3. Otherwise, auto-detects any `*.code-workspace` file in the worktree root
-4. Falls back to opening the folder if no workspace file is found
+4. Falls back to opening the folder if no valid workspace file is found
+
+Workspace paths from every config source must resolve to a file inside the selected
+worktree. Nested paths, spaces, and symlinks that resolve inside the worktree are
+supported. Absolute configured paths and paths or symlinks that resolve outside
+the worktree are ignored. An invalid or missing explicit path opens the folder;
+it does not trigger auto-detection. Previously accepted outside-worktree paths
+now open the folder instead.
+
+The shared `.gtrconfig` `editor.workspace` setting is workspace data and does not
+require command approval. Selecting an editor through `.gtrconfig`
+`defaults.editor` still requires `git gtr trust`; a local/global editor default
+or an explicit `--editor` can also select the editor. Containment applies to the
+workspace file itself, not the folders or settings described inside it. The
+editor remains responsible for its own workspace trust checks.
 
 ---
 
@@ -272,6 +286,12 @@ git gtr config add gtr.copy.exclude "**/.env"
 git gtr config add gtr.copy.exclude "**/secrets.*"
 ```
 
+File exclusions match source paths relative to the repository root. A leading
+`**/` matches zero or more directory levels: `**/note.txt` excludes `note.txt`,
+`data/note.txt`, and deeper matches. A literal `note.txt` excludes only the root
+path. Other shell wildcard behavior is preserved, including `*` matching `/`
+in exclusions, so `*.txt` excludes matching files at any depth.
+
 ### Using .worktreeinclude file
 
 Alternatively, create a `.worktreeinclude` file in your repository root:
@@ -320,6 +340,8 @@ are checked directly, `*` and `?` match within the pattern's explicit depth,
 and `**` enables recursive matching when a full-tree search is intentional. For
 backward compatibility, a bare basename that has no root-level match falls back
 to a recursive search. Prefer an explicit nested path to avoid that scan.
+Trailing slashes on directory include and exclude patterns are ignored:
+`vendor/` and `vendor` both copy to `<worktree>/vendor` and use the same exclusions.
 
 ```bash
 # Exclude specific nested directories (supports glob patterns)
@@ -335,6 +357,16 @@ Directory exclusions never descend through symlinks. An exclusion matching a
 symlink itself removes only the link, including when the pattern ends in `/`;
 the link target is preserved. Exclusions are skipped when the copied directory
 or one of its path components is a symlink.
+
+If directory copying fails, `git gtr new` and `git gtr pr` stop before running
+post-create hooks or automatically launching tools. The created worktree is
+left in place for inspection and cleanup.
+
+Keep copy sources, destination worktrees, and their parent directories writable
+only by trusted users. A user who can replace a worktree path or modify a copied
+tool can change what a hook executes. Hook approval covers command definitions;
+it does not pin the contents of delegated scripts or dependencies. Copy path
+checks cannot isolate execution from other users who can mutate those paths.
 
 > [!WARNING]
 > Dependency directories may contain sensitive files (credentials, tokens, cached secrets). Always use `gtr.copy.excludeDirs` to exclude sensitive subdirectories if needed.

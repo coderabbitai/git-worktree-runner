@@ -49,6 +49,20 @@ _copy_discovery_records() {
   done
 }
 
+_copy_move_os=""
+
+# Plain mv treats a destination symlink to a directory as a container. The
+# destination can change while copying to staging, so checking -L beforehand
+# is insufficient. Use the platform's no-follow form when publishing entries.
+# This protects the final component, not ancestors writable by other users.
+_copy_move_entry() {
+  [ -n "$_copy_move_os" ] || _copy_move_os=$(detect_os)
+  case "$_copy_move_os" in
+    darwin) mv -fh -- "$1" "$2" ;;
+    *) mv -fT -- "$1" "$2" ;;
+  esac
+}
+
 # Merge without following existing destination links. Stage each leaf in its
 # destination directory, then rename it so existing hard links are not written.
 _copy_tree_entry() {
@@ -77,7 +91,7 @@ _copy_tree_entry() {
           return 1
         fi
       fi
-      if mv -f -- "$staged/leaf" "$dest"; then
+      if _copy_move_entry "$staged/leaf" "$dest"; then
         rmdir "$staged"
         return 0
       fi
@@ -92,17 +106,26 @@ _copy_tree_entry() {
 # Returns: 0 if excluded, 1 if not
 is_excluded() {
   local path="$1"
-  local excludes="$2"
+  local excludes="$2" exclude_pattern
 
   [ -z "$excludes" ] && return 1
 
   while IFS= read -r exclude_pattern; do
     [ -z "$exclude_pattern" ] && continue
-    # Intentional glob pattern matching for exclusion
-    # shellcheck disable=SC2254
-    case "$path" in
-      $exclude_pattern) return 0 ;;
-    esac
+    while :; do
+      # Intentional glob pattern matching for exclusion
+      # shellcheck disable=SC2254
+      case "$path" in
+        $exclude_pattern) return 0 ;;
+      esac
+      # case treats ** like *, so its following slash normally requires a
+      # directory. Also try each leading **/ with zero directories, matching
+      # the root-level behavior of recursive file includes on Bash 3.2+.
+      case "$exclude_pattern" in
+        \*\*/*) exclude_pattern="${exclude_pattern#\*\*/}" ;;
+        *) break ;;
+      esac
+    done
   done <<EOF
 $excludes
 EOF
@@ -157,6 +180,9 @@ _fast_copy_os=""
 
 _fast_copy_dir() {
   local src="$1" dest="$2" target staging os
+  # A trailing slash must not turn the basename into an empty merge target.
+  while [ "${src%/}" != "$src" ]; do src="${src%/}"; done
+  [ -n "$src" ] || return 1
   target="${dest%/}/${src##*/}"
   if [ -e "$target" ] || [ -L "$target" ] || [ ! -d "$src" ] || [ -L "$src" ]; then
     _copy_tree_entry "$src" "$target"
@@ -189,7 +215,7 @@ _fast_copy_dir() {
     rm -rf -- "$staging"
     return 1
   fi
-  if mv -- "${staging:?}/${src##*/}" "$target"; then
+  if _copy_move_entry "${staging:?}/${src##*/}" "$target"; then
     rmdir "$staging"
   else
     rm -rf -- "$staging"
@@ -635,6 +661,10 @@ _resolve_directory_patterns() {
       continue
     fi
 
+    # Includes always name directories, not their contents. Normalize before
+    # discovery so both literal/glob matches and later exclusions use that name.
+    while [ "${pattern%/}" != "$pattern" ]; do pattern="${pattern%/}"; done
+
     local find_results=""
     case "$pattern" in
       *[\*\?\[]*)
@@ -692,6 +722,7 @@ EOF
 
 # Copy already-resolved directories from a source root.
 # Usage: _copy_resolved_directories src_root dst_root resolved_dirs excludes [dry_run]
+# Returns nonzero if any directory copy fails; callers must guard the status.
 _copy_resolved_directories() {
   local src_root="$1"
   local dst_root="$2"
@@ -703,11 +734,15 @@ _copy_resolved_directories() {
     return 0
   fi
 
+  # Match directory excludes using the same spelling as normalized includes.
+  # Strip only trailing separators: vendor/* must still exclude contents only.
+  excludes=$(printf '%s\n' "$excludes" | sed 's:/*$::')
+
   local old_pwd
   old_pwd=$(pwd)
   cd "$src_root" || return 1
 
-  local copied_count=0
+  local copied_count=0 failed=0
   local dir_path
   while IFS= read -r dir_path; do
     [ -z "$dir_path" ] && continue
@@ -730,7 +765,10 @@ _copy_resolved_directories() {
       continue
     fi
 
-    mkdir -p "$dest_parent"
+    if ! mkdir -p "$dest_parent"; then
+      failed=1
+      continue
+    fi
 
     if { if _has_subdir_excludes "$dir_path" "$excludes"; then
            _selective_copy_dir "$dir_path" "$dst_root" "$excludes"
@@ -741,6 +779,7 @@ _copy_resolved_directories() {
       copied_count=$((copied_count + 1))
     else
       log_warn "Failed to copy directory $dir_path"
+      failed=1
     fi
   done <<EOF
 $resolved_dirs
@@ -756,7 +795,7 @@ EOF
     fi
   fi
 
-  return 0
+  return "$failed"
 }
 
 # Copy directories matching patterns (typically git-ignored directories like node_modules)

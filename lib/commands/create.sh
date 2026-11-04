@@ -14,7 +14,7 @@ _post_create_copy() {
 
   if [ -n "$includes" ]; then
     log_step "Copying files..."
-    copy_patterns "$repo_root" "$worktree_path" "$includes" "$excludes"
+    copy_patterns "$repo_root" "$worktree_path" "$includes" "$excludes" || return 1
   fi
 
   # Copy directories (typically git-ignored dirs like node_modules, .venv)
@@ -24,7 +24,7 @@ _post_create_copy() {
 
   if [ -n "$dir_includes" ]; then
     log_step "Copying directories..."
-    copy_directories "$repo_root" "$worktree_path" "$dir_includes" "$dir_excludes"
+    copy_directories "$repo_root" "$worktree_path" "$dir_includes" "$dir_excludes" || return 1
   fi
 }
 
@@ -261,7 +261,10 @@ _cmd_create_impl() {
 
   # Copy files based on patterns
   if [ "$skip_copy" -eq 0 ]; then
-    _post_create_copy "$repo_root" "$worktree_path"
+    if ! _post_create_copy "$repo_root" "$worktree_path"; then
+      log_error "Worktree created at $worktree_path, but copying failed; hooks and tools were not started"
+      exit 1
+    fi
   fi
 
   # Run post-create hooks (unless --no-hooks)

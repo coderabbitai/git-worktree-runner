@@ -95,11 +95,15 @@ cmd_copy() {
     if [ "$dry_run" -eq 1 ]; then
       log_step "[dry-run] Would copy to: $dst_branch"
       [ -n "$patterns" ] && copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true" "true"
-      [ -n "$resolved_dirs" ] && _copy_resolved_directories "$src_path" "$dst_path" "$resolved_dirs" "$dir_excludes" "true"
+      if [ -n "$resolved_dirs" ]; then
+        _copy_resolved_directories "$src_path" "$dst_path" "$resolved_dirs" "$dir_excludes" "true" || return 1
+      fi
     else
       log_step "Copying to: $dst_branch"
       [ -n "$patterns" ] && copy_patterns "$src_path" "$dst_path" "$patterns" "$excludes" "true"
-      [ -n "$resolved_dirs" ] && _copy_resolved_directories "$src_path" "$dst_path" "$resolved_dirs" "$dir_excludes"
+      if [ -n "$resolved_dirs" ]; then
+        _copy_resolved_directories "$src_path" "$dst_path" "$resolved_dirs" "$dir_excludes" || return 1
+      fi
     fi
     copied_any=1
   done

@@ -201,6 +201,47 @@ _cmd_create_capture_stdout() {
   [ ! -s "$stdout_file" ]
 }
 
+@test "cmd_create stops before hooks when a directory publication races with a symlink" {
+  mkdir -p "$TEST_REPO/deps" "$TEST_REPO/outside"
+  printf 'echo expected > hook-marker\n' > "$TEST_REPO/deps/tool"
+  printf 'echo redirected > hook-marker\n' > "$TEST_REPO/outside/tool"
+  git config --add gtr.copy.includeDirs deps
+  git config --add gtr.hook.postCreate 'sh deps/tool'
+  local race_worktree="$TEST_WORKTREES_DIR/copy-race"
+  local stdout_file="$TEST_REPO/create-stdout"
+  mv() {
+    local last
+    for last in "$@"; do :; done
+    if [ "$last" = "$race_worktree/deps" ]; then
+      ln -s "$TEST_REPO/outside" "$race_worktree/deps"
+    fi
+    command mv "$@"
+  }
+
+  run _cmd_create_capture_stdout "$stdout_file" copy-race --from HEAD --no-fetch --porcelain
+
+  [ "$status" -ne 0 ]
+  [ -L "$race_worktree/deps" ]
+  [ ! -e "$race_worktree/hook-marker" ]
+  [ ! -e "$TEST_REPO/outside/deps" ]
+  [ ! -s "$stdout_file" ]
+  [[ "$output" == *"copying failed"* ]]
+}
+
+@test "cmd_create runs a copied tool once after successful directory publication" {
+  mkdir -p "$TEST_REPO/deps"
+  printf 'echo expected >> hook-marker\n' > "$TEST_REPO/deps/tool"
+  git config --add gtr.copy.includeDirs deps
+  git config --add gtr.hook.postCreate 'sh deps/tool'
+
+  run cmd_create copy-success --from HEAD --no-fetch --porcelain
+
+  [ "$status" -eq 0 ]
+  [ ! -L "$TEST_WORKTREES_DIR/copy-success/deps" ]
+  [ "$(cat "$TEST_WORKTREES_DIR/copy-success/hook-marker")" = expected ]
+  [[ "$output" == *$'hook_status\tran'* ]]
+}
+
 @test "cmd_create creates worktree with --track none" {
   cmd_create track-none --from HEAD --track none --no-fetch --yes
   [ -d "$TEST_WORKTREES_DIR/track-none" ]
@@ -248,6 +289,21 @@ _cmd_create_capture_stdout() {
   [ ! -f "$TEST_WORKTREES_DIR/no-copy-test/.env" ]
 }
 
+@test "new CLI applies shared globstar exclusions to root and nested files" {
+  mkdir -p "$TEST_REPO/data"
+  echo "excluded root fixture" > "$TEST_REPO/.env.production"
+  echo "excluded nested fixture" > "$TEST_REPO/data/.env.production"
+  echo "included fixture" > "$TEST_REPO/.env.example"
+  git config -f "$TEST_REPO/.gtrconfig" --add copy.include "**/.env.*"
+  git config -f "$TEST_REPO/.gtrconfig" --add copy.exclude "**/.env.production"
+
+  run "$PROJECT_ROOT/bin/gtr" new excluded-copy --from HEAD --no-fetch --no-hooks --yes
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_WORKTREES_DIR/excluded-copy/.env.production" ]
+  [ ! -e "$TEST_WORKTREES_DIR/excluded-copy/data/.env.production" ]
+  [ "$(cat "$TEST_WORKTREES_DIR/excluded-copy/.env.example")" = "included fixture" ]
+}
+
 @test "cmd_create --no-hooks skips post-create hooks" {
   git config --add gtr.hook.postCreate "touch hook-ran"
   cmd_create no-hook-test --from HEAD --no-hooks --no-fetch --yes
@@ -283,4 +339,24 @@ _cmd_create_capture_stdout() {
   [ "$(cat "$outside/cache/keep")" = sentinel ]
   [ -L "$TEST_WORKTREES_DIR/confined-copy/deps/nested/link" ]
   [ ! -e "$TEST_WORKTREES_DIR/confined-copy/deps/nested/remove" ]
+}
+
+@test "cmd_create normalizes trailing-slash directory includes from shared config" {
+  mkdir -p "$TEST_REPO/vendor/cache"
+  echo replacement > "$TEST_REPO/vendor/marker"
+  echo excluded > "$TEST_REPO/vendor/cache/marker"
+  echo sentinel > "$TEST_REPO/marker"
+  echo vendor/ > "$TEST_REPO/.gitignore"
+  git config -f "$TEST_REPO/.gtrconfig" copy.includeDirs vendor///
+  git config -f "$TEST_REPO/.gtrconfig" copy.excludeDirs vendor/cache/
+  git add .gtrconfig .gitignore marker
+  git commit -m "fixture directory copy configuration" --quiet
+
+  run "$PROJECT_ROOT/bin/gtr" new normalized-copy --from HEAD --no-fetch --yes --no-hooks
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_WORKTREES_DIR/normalized-copy/marker")" = sentinel ]
+  [ "$(cat "$TEST_WORKTREES_DIR/normalized-copy/vendor/marker")" = replacement ]
+  [ ! -e "$TEST_WORKTREES_DIR/normalized-copy/vendor/cache" ]
+  [ ! -e "$TEST_WORKTREES_DIR/normalized-copy/cache" ]
 }

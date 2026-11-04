@@ -91,6 +91,65 @@ teardown() {
   ! is_excluded "src/app.js" "$excludes"
 }
 
+@test "leading globstar exclusions match zero or more directory levels" {
+  is_excluded "note.txt" "**/note.txt"
+  is_excluded "data/note.txt" "**/note.txt"
+  is_excluded "data/deep/note.txt" "**/note.txt"
+  run is_excluded "other.txt" "**/note.txt"
+  [ "$status" -eq 1 ]
+  run is_excluded "data/note.txt.bak" "**/note.txt"
+  [ "$status" -eq 1 ]
+}
+
+@test "leading globstar exclusions preserve suffix globs and spaces" {
+  local excludes=$'\n**/.env\n**/secrets.[ab]?\n**/private note.txt\n'
+  is_excluded ".env" "$excludes"
+  is_excluded "data/.env" "$excludes"
+  is_excluded "secrets.a1" "$excludes"
+  is_excluded "data/secrets.b2" "$excludes"
+  is_excluded "private note.txt" "$excludes"
+  is_excluded "data/private note.txt" "$excludes"
+  run is_excluded ".env.example" "$excludes"
+  [ "$status" -eq 1 ]
+  run is_excluded "secrets.c1" "$excludes"
+  [ "$status" -eq 1 ]
+}
+
+@test "leading globstar exclusions retain explicit suffix directories" {
+  is_excluded "data/note.txt" "**/data/note.txt"
+  is_excluded "src/data/note.txt" "**/data/note.txt"
+  run is_excluded "note.txt" "**/data/note.txt"
+  [ "$status" -eq 1 ]
+  run is_excluded "other/note.txt" "**/data/note.txt"
+  [ "$status" -eq 1 ]
+}
+
+@test "repeated leading globstar exclusions can each match zero directories" {
+  is_excluded "note.txt" "**/**/note.txt"
+  is_excluded "data/note.txt" "**/**/note.txt"
+  is_excluded "data/deep/note.txt" "**/**/note.txt"
+}
+
+@test "literal exclusions remain relative paths rather than basename matches" {
+  is_excluded "note.txt" "note.txt"
+  run is_excluded "data/note.txt" "note.txt"
+  [ "$status" -eq 1 ]
+  is_excluded "data/note.txt" "data/note.txt"
+  run is_excluded "src/data/note.txt" "data/note.txt"
+  [ "$status" -eq 1 ]
+}
+
+@test "ordinary exclusion wildcards retain slash matching behavior" {
+  is_excluded "data/deep/note.txt" "*.txt"
+  is_excluded "data/deep/note.txt" "data/*"
+  is_excluded "data/note.txt" "*/note.txt"
+  run is_excluded "note.txt" "*/note.txt"
+  [ "$status" -eq 1 ]
+  is_excluded "file[1].txt" 'file\[1\].txt'
+  run is_excluded "file1.txt" 'file\[1\].txt'
+  [ "$status" -eq 1 ]
+}
+
 # --- _fast_copy_dir tests ---
 
 @test "_fast_copy_dir copies directory contents" {
@@ -104,6 +163,28 @@ teardown() {
 
   [ -f "$dst/mydir/sub/file.txt" ]
   [ "$(cat "$dst/mydir/sub/file.txt")" = "hello" ]
+}
+
+@test "_fast_copy_dir keeps trailing-slash sources under their basename" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" suffix
+  mkdir -p "$src/my dir"
+  echo replacement > "$src/my dir/marker"
+
+  for suffix in '' / ///; do
+    rm -rf "$dst"
+    mkdir -p "$dst"
+    echo sentinel > "$dst/marker"
+    _fast_copy_dir "$src/my dir$suffix" "$dst/"
+    [ "$(cat "$dst/marker")" = sentinel ]
+    [ "$(cat "$dst/my dir/marker")" = replacement ]
+
+    # Exercise merging as well as the staging path for a new directory.
+    echo keep > "$dst/my dir/destination-only"
+    _fast_copy_dir "$src/my dir$suffix" "$dst/"
+    [ "$(cat "$dst/marker")" = sentinel ]
+    [ "$(cat "$dst/my dir/destination-only")" = keep ]
+  done
 }
 
 @test "_fast_copy_dir preserves symlinks" {
@@ -180,6 +261,25 @@ teardown() {
   [ "$count" -eq 2 ]
   [ -f "$dst/CLAUDE.md" ]
   [ -f "$dst/config/CLAUDE.md" ]
+}
+
+@test "find fallback: globstar exclusions skip root and nested files" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" dir
+  mkdir -p "$src/data/deep" "$dst"
+  for dir in "$src" "$src/data" "$src/data/deep"; do
+    echo "excluded fixture" > "$dir/note.txt"
+    echo "included fixture" > "$dir/keep.txt"
+  done
+
+  cd "$src"
+  local count
+  count=$(_expand_and_copy_pattern "**/*.txt" "$dst" "**/note.txt" "true" "false" "0")
+  [ "$count" -eq 3 ]
+  for dir in "$dst" "$dst/data" "$dst/data/deep"; do
+    [ ! -e "$dir/note.txt" ]
+    [ "$(cat "$dir/keep.txt")" = "included fixture" ]
+  done
 }
 
 @test "_apply_directory_excludes supports node_modules/* patterns" {
@@ -341,6 +441,103 @@ teardown() {
   [ -f "$dst/vendor/bundle/gems/spec" ]
   [ ! -e "$dst/vendor/bundle/cache" ]
   ! grep -qx "vendor/bundle/cache" "$copy_log"
+}
+
+@test "directory includes preserve their destination with or without trailing slashes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" dir suffix
+  for dir in vendor 'packages/vendor space'; do
+    mkdir -p "$src/$dir"
+    echo replacement > "$src/$dir/marker"
+    for suffix in '' / ///; do
+      rm -rf "$dst"
+      mkdir -p "$dst/packages"
+      echo sentinel > "$dst/marker"
+      echo parent-sentinel > "$dst/packages/marker"
+
+      copy_directories "$src" "$dst" "$dir$suffix" ''
+
+      [ "$(cat "$dst/$dir/marker")" = replacement ]
+      [ "$(cat "$dst/marker")" = sentinel ]
+      [ "$(cat "$dst/packages/marker")" = parent-sentinel ]
+    done
+  done
+}
+
+@test "directory self exclusions match trailing-slash includes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" suffix exclude
+  mkdir -p "$src/vendor" "$dst"
+  echo excluded > "$src/vendor/marker"
+  echo sentinel > "$dst/marker"
+
+  for suffix in '' / ///; do
+    for exclude in vendor vendor/ vendor/// 'ven*/'; do
+      copy_directories "$src" "$dst" "vendor$suffix" "$exclude"
+      [ ! -e "$dst/vendor" ]
+      [ "$(cat "$dst/marker")" = sentinel ]
+    done
+  done
+}
+
+@test "directory content exclusions keep the included directory itself" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/vendor/cache" "$dst"
+  echo excluded > "$src/vendor/cache/marker"
+
+  copy_directories "$src" "$dst" vendor/ 'vendor/*'
+
+  [ -d "$dst/vendor" ]
+  [ ! -e "$dst/vendor/cache" ]
+  [ ! -e "$dst/cache" ]
+}
+
+@test "directory child exclusions match trailing-slash includes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" suffix exclude
+  mkdir -p "$src/vendor/cache" "$src/vendor/keep"
+  echo excluded > "$src/vendor/cache/marker"
+  echo keep > "$src/vendor/keep/marker"
+
+  for suffix in '' / ///; do
+    for exclude in vendor/cache vendor/cache/ '*/cache' '*/cache/'; do
+      rm -rf "$dst"
+      mkdir -p "$dst"
+      copy_directories "$src" "$dst" "vendor$suffix" "$exclude"
+      [ "$(cat "$dst/vendor/keep/marker")" = keep ]
+      [ ! -e "$dst/vendor/cache" ]
+      [ ! -e "$dst/cache" ]
+      [ ! -e "$dst/keep" ]
+    done
+  done
+}
+
+@test "directory discovery treats trailing slashes consistently for literals and globs" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" pattern expected suffix
+  mkdir -p "$src/vendor" "$src/packages/a/generated" "$src/packages/a/cache"
+  for pattern in vendor 'vendor*' 'packages/*/generated' '**/cache' cache; do
+    expected=$(_resolve_directory_patterns "$src" "$pattern")
+    [ -n "$expected" ]
+    for suffix in / ///; do
+      [ "$(_resolve_directory_patterns "$src" "$pattern$suffix")" = "$expected" ]
+    done
+  done
+}
+
+@test "trailing-slash includes still reject unsafe paths and source links" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" outside="$_test_tmpdir/outside"
+  mkdir -p "$src/.git" "$dst" "$outside"
+  echo sentinel > "$outside/marker"
+  echo metadata > "$src/.git/config"
+  ln -s "$outside" "$src/link"
+
+  copy_directories "$src" "$dst" $'/\n///\n../outside/\n[.][.]/outside/\nlink/\n.git/' ''
+
+  [ -z "$(find "$dst" -mindepth 1 -print)" ]
+  [ "$(cat "$outside/marker")" = sentinel ]
 }
 
 @test "literal directory patterns do not invoke find" {
@@ -551,7 +748,8 @@ teardown() {
   echo private > "$outside/secret"
   echo replacement > "$src/vendor/cache/secret"
   ln -s "$outside" "$dst/vendor/cache"
-  copy_directories "$src" "$dst" vendor ''
+  run copy_directories "$src" "$dst" vendor ''
+  [ "$status" -ne 0 ]
   [ "$(cat "$outside/secret")" = private ]
 }
 
@@ -708,4 +906,64 @@ SH
   run _fast_copy_dir "$src/cache" "$dst/"
   [ "$status" -ne 0 ]
   [ ! -e "$dst/cache" ]
+}
+
+@test "directory publication does not follow a symlink inserted at the move boundary" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/source space" dst="$_test_tmpdir/destination space"
+  local outside="$_test_tmpdir/outside"
+  mkdir -p "$src/cache" "$dst" "$outside"
+  echo value > "$src/cache/file"
+  echo sentinel > "$outside/keep"
+  # Deterministically schedule the other writer after all pre-copy checks.
+  # The actual system mv still performs the move with the production options.
+  mv() {
+    ln -s "$outside" "$dst/cache"
+    command mv "$@"
+  }
+
+  run _fast_copy_dir "$src/cache" "$dst/"
+
+  [ "$status" -ne 0 ]
+  [ -L "$dst/cache" ]
+  [ ! -e "$outside/cache" ]
+  [ "$(cat "$outside/keep")" = sentinel ]
+  [ "$(find "$dst" -name '.gtr-copy.*' | wc -l | tr -d ' ')" -eq 0 ]
+}
+
+@test "directory copy failures reach the caller and restore its working directory" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/cache" "$dst"
+  echo value > "$src/cache/file"
+  mv() { return 1; }
+  local before result=0
+  before=$(pwd)
+
+  copy_directories "$src" "$dst" cache '' || result=$?
+
+  [ "$result" -ne 0 ]
+  [ "$(pwd)" = "$before" ]
+  [ ! -e "$dst/cache" ]
+  [ "$(find "$dst" -name '.gtr-copy.*' | wc -l | tr -d ' ')" -eq 0 ]
+}
+
+@test "staged leaf publication replaces a raced symlink without writing its referent" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  local outside="$_test_tmpdir/outside"
+  mkdir -p "$src" "$dst" "$outside"
+  echo value > "$src/file"
+  echo sentinel > "$outside/leaf"
+  mv() {
+    ln -s "$outside" "$dst/file"
+    command mv "$@"
+  }
+
+  _copy_tree_entry "$src/file" "$dst/file"
+
+  [ ! -L "$dst/file" ]
+  [ "$(cat "$dst/file")" = value ]
+  [ "$(cat "$outside/leaf")" = sentinel ]
+  [ "$(find "$dst" -name '.gtr-copy.*' | wc -l | tr -d ' ')" -eq 0 ]
 }

@@ -62,6 +62,134 @@ teardown() {
   [[ "$output" == *"Invalid gtr.worktrees.prefix"* ]]
 }
 
+@test "resolve_target rejects a sanitized collision with a different branch" {
+  create_test_worktree "feat-login"
+
+  run resolve_target "feat/login" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$status" -eq 1 ]
+}
+
+@test "resolve_target prefers the exact registered branch over a colliding folder" {
+  create_test_worktree "feat-login"
+  git worktree add "$TEST_WORKTREES_DIR/login-custom" -b feat/login --quiet
+
+  resolve_worktree "feat/login" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/login-custom" ]
+  [ "$_ctx_branch" = "feat/login" ]
+}
+
+@test "resolve_target prefers an external exact branch over a literal folder alias" {
+  git worktree add "$TEST_WORKTREES_DIR/alias" -b other-branch --quiet
+  git worktree add "${TEST_REPO}-external" -b alias --quiet
+
+  resolve_worktree "alias" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "${TEST_REPO}-external" ]
+  [ "$_ctx_branch" = "alias" ]
+}
+
+@test "resolve_target keeps registered sanitized folder aliases" {
+  create_test_worktree "feature/login"
+
+  resolve_worktree "feature-login" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/feature-login" ]
+  [ "$_ctx_branch" = "feature/login" ]
+}
+
+@test "resolve_target keeps prefixed custom folders and named duplicate worktrees" {
+  create_worktree "$TEST_WORKTREES_DIR" "wt-" "feature/login" "HEAD" "none" "1" "0" >/dev/null
+  git worktree add --force "$TEST_WORKTREES_DIR/wt-feature-login-backend" feature/login --quiet
+  git worktree add "$TEST_WORKTREES_DIR/wt-custom folder" -b another-branch --quiet
+
+  resolve_worktree "feature/login" "$TEST_REPO" "$TEST_WORKTREES_DIR" "wt-"
+  [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/wt-feature-login" ]
+  resolve_worktree "feature-login-backend" "$TEST_REPO" "$TEST_WORKTREES_DIR" "wt-"
+  [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/wt-feature-login-backend" ]
+  [ "$_ctx_branch" = "feature/login" ]
+  resolve_worktree "another-branch" "$TEST_REPO" "$TEST_WORKTREES_DIR" "wt-"
+  [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/wt-custom folder" ]
+}
+
+@test "resolve_target keeps detached registered folder aliases" {
+  git worktree add --detach "$TEST_WORKTREES_DIR/review" HEAD --quiet
+
+  resolve_worktree "review" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/review" ]
+  [ "$_ctx_branch" = "(detached)" ]
+}
+
+@test "resolve_target rejects stray directories and dot targets" {
+  local base="$TEST_REPO/worktrees"
+  mkdir -p "$base/stray"
+  local identifier
+  for identifier in stray . .. ""; do
+    run resolve_target "$identifier" "$TEST_REPO" "$base" ""
+    [ "$status" -eq 1 ]
+  done
+}
+
+@test "resolve_target ignores unrelated repositories in its base directory" {
+  local foreign="$TEST_WORKTREES_DIR/impostor"
+  mkdir -p "$foreign"
+  git -C "$foreign" init --quiet
+  git -C "$foreign" -c user.name=Test -c user.email=test@example.com commit --allow-empty -m init --quiet
+  git -C "$foreign" branch -m foreign-branch
+
+  run resolve_target "impostor" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$status" -eq 1 ]
+  run resolve_target "foreign-branch" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$status" -eq 1 ]
+}
+
+@test "resolve_target does not accept symlink aliases to unregistered directories" {
+  mkdir -p "$TEST_WORKTREES_DIR" "$TEST_REPO/stray"
+  ln -s "$TEST_REPO/stray" "$TEST_WORKTREES_DIR/link"
+
+  run resolve_target "link" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$status" -eq 1 ]
+}
+
+@test "resolve_target handles a symlinked base directory" {
+  create_test_worktree "feature/login"
+  ln -s "$TEST_WORKTREES_DIR" "$TEST_REPO/base-link"
+
+  resolve_worktree "feature-login" "$TEST_REPO" "$TEST_REPO/base-link" ""
+  [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/feature-login" ]
+}
+
+@test "resolve_target ID 1 takes precedence over a registered branch named 1" {
+  git worktree add "$TEST_WORKTREES_DIR/numeric" -b 1 --quiet
+
+  resolve_worktree "1" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_is_main" = "1" ]
+  [ "$_ctx_worktree_path" = "$TEST_REPO" ]
+}
+
+@test "resolve_target main branch takes precedence over a duplicate worktree" {
+  local main_branch
+  main_branch=$(git rev-parse --abbrev-ref HEAD)
+  git worktree add --force "$TEST_WORKTREES_DIR/$main_branch" "$main_branch" --quiet
+
+  resolve_worktree "$main_branch" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_is_main" = "1" ]
+  [ "$_ctx_worktree_path" = "$TEST_REPO" ]
+}
+
+@test "resolve_target uses the porcelain fallback when Git lacks NUL records" {
+  create_test_worktree "feature/login"
+  git() {
+    case "$*" in
+      *"worktree list --porcelain -z") return 1 ;;
+    esac
+    command git "$@"
+  }
+
+  resolve_worktree "feature/login" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/feature-login" ]
+  [ "$_ctx_branch" = "feature/login" ]
+  resolve_worktree "feature-login" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_branch" = "feature/login" ]
+}
+
 @test "unpack_target parses TSV into context globals" {
   local tsv="0"$'\t'"/some/path"$'\t'"my-branch"
   unpack_target "$tsv"
