@@ -145,8 +145,8 @@ cmd_init() {
   case "$cache_dir" in /*) ;; *) cache_dir="$(pwd -P)/$cache_dir" ;; esac
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 12 carries registered path identities through picker actions.
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-12}"
+  # Schema 13 preserves whole postCd records alongside picker path identities.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-13}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # A matching public stamp alone does not make executable cache data trusted.
@@ -196,6 +196,7 @@ __FUNC___hooks_read_definitions() {
 
 # Select values only from the captured definitions, never from the pathname.
 # An empty key displays every record for the trust confirmation.
+# The nul mode streams complete hook values without storing NULs in variables.
 __FUNC___hooks_definitions_get() {
   local definitions="$1" key="${2:-}" mode="${3:-all}" record record_key value last_value=""
   key=$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]')
@@ -208,6 +209,8 @@ __FUNC___hooks_definitions_get() {
     elif [ "$record_key" = "$key" ]; then
       if [ "$mode" = last ]; then
         last_value="$value"
+      elif [ "$mode" = nul ]; then
+        printf '%s\0' "$value"
       else
         printf '%s\n' "$value"
       fi
@@ -434,7 +437,7 @@ _init_emit_fish_trust_helpers() {
   snapshot_helpers=$(_init_emit_snapshot_helpers |
     sed -e 's/__FUNC___hooks_/_hooks_/g; s/\\/\\\\/g' -e "s/'/\\\\'/g")
   printf "function __FUNC___hooks_read_definitions\n  command bash -c '%s\n_hooks_read_definitions \"\$1\"' bash \"\$argv[1]\"\nend\n" "$snapshot_helpers"
-  printf "function __FUNC___hooks_definitions_get\n  command bash -c '%s\n_hooks_definitions_get \"\$1\" \"\$2\"' bash \"\$argv[1]\" \"\$argv[2]\"\nend\n" "$snapshot_helpers"
+  printf "function __FUNC___hooks_definitions_get\n  command bash -c '%s\n_hooks_definitions_get \"\$1\" \"\$2\" \"\$3\"' bash \"\$argv[1]\" \"\$argv[2]\" \"\$argv[3]\"\nend\n" "$snapshot_helpers"
   storage_helpers=$(_init_emit_trust_storage_helpers |
     sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g")
   printf "function __FUNC___hooks_safe_trust_path\n  command bash -c '%s\n_hooks_safe_trust_path \"\$1\"' bash \"\$argv[1]\"\nend\n" "$storage_helpers"
@@ -540,43 +543,49 @@ __FUNC___run_post_cd_hooks() {
 
   cd "$dir" && {
     __FUNC___check_git_config || return 1
-    local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
-    _gtr_hooks=""
-    _gtr_seen=""
+    local _gtr_hook _gtr_previous _gtr_duplicate _gtr_config_file
+    local -a _gtr_hooks=() _gtr_seen=()
     # Read from git config (local > global > system)
-    _gtr_hooks="$(git config --get-all gtr.hook.postCd 2>/dev/null)" || true
+    # NULs stay in the stream; each array element holds one complete value.
+    while IFS= read -r -d '' _gtr_hook; do
+      [ -z "$_gtr_hook" ] || _gtr_hooks+=("$_gtr_hook")
+    done < <(git config -z --get-all gtr.hook.postCd 2>/dev/null || true)
     # Read from .gtrconfig if it exists — only if trusted
     _gtr_config_file="$(__FUNC___gtrconfig_path 2>/dev/null)" || true
     if [ -f "$_gtr_config_file" ]; then
-      local _gtr_file_hooks
+      local -a _gtr_file_hooks=()
       local _gtr_definitions
       _gtr_definitions="$(__FUNC___hooks_read_definitions "$_gtr_config_file")" || true
-      _gtr_file_hooks="$(__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd)"
-      if [ -n "$_gtr_file_hooks" ]; then
+      while IFS= read -r -d '' _gtr_hook; do
+        [ -z "$_gtr_hook" ] || _gtr_file_hooks+=("$_gtr_hook")
+      done < <(__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd nul)
+      if [ "${#_gtr_file_hooks[@]}" -gt 0 ]; then
         # Verify trust before including .gtrconfig hooks
         if __FUNC___hooks_are_trusted "$_gtr_config_file" "$_gtr_trust_dir" "$_gtr_definitions"; then
-          if [ -n "$_gtr_hooks" ]; then
-            _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
-          else
-            _gtr_hooks="$_gtr_file_hooks"
-          fi
+          _gtr_hooks+=("${_gtr_file_hooks[@]}")
         else
           echo "__FUNC__: Untrusted .gtrconfig hooks skipped — run 'git gtr trust' to approve" >&2
         fi
       fi
     fi
-    if [ -n "$_gtr_hooks" ]; then
-      # Deduplicate while preserving order
-      _gtr_seen=""
+    if [ "${#_gtr_hooks[@]}" -gt 0 ]; then
+      # Deduplicate whole values while preserving their original order.
       export WORKTREE_PATH="$dir"
       export REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
       export BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
-      while IFS= read -r _gtr_hook; do
-        [ -z "$_gtr_hook" ] && continue
-        case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
-        _gtr_seen="$_gtr_seen|$_gtr_hook|"
+      for _gtr_hook in "${_gtr_hooks[@]}"; do
+        _gtr_duplicate=0
+        # Bash 3.2 treats an empty array as unset under nounset.
+        for _gtr_previous in ${_gtr_seen[@]+"${_gtr_seen[@]}"}; do
+          if [ "$_gtr_hook" = "$_gtr_previous" ]; then
+            _gtr_duplicate=1
+            break
+          fi
+        done
+        [ "$_gtr_duplicate" -eq 0 ] || continue
+        _gtr_seen+=("$_gtr_hook")
         eval "$_gtr_hook" </dev/null || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
-      done <<< "$_gtr_hooks"
+      done
       unset WORKTREE_PATH REPO_ROOT BRANCH
     fi
   }
@@ -738,43 +747,48 @@ __FUNC___run_post_cd_hooks() {
 
   cd "$dir" && {
     __FUNC___check_git_config || return 1
-    local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
-    _gtr_hooks=""
-    _gtr_seen=""
+    local _gtr_hook _gtr_previous _gtr_duplicate _gtr_config_file
+    local -a _gtr_hooks=() _gtr_seen=()
     # Read from git config (local > global > system)
-    _gtr_hooks="$(git config --get-all gtr.hook.postCd 2>/dev/null)" || true
+    # NULs stay in the stream; each array element holds one complete value.
+    while IFS= read -r -d '' _gtr_hook; do
+      [ -z "$_gtr_hook" ] || _gtr_hooks+=("$_gtr_hook")
+    done < <(git config -z --get-all gtr.hook.postCd 2>/dev/null || true)
     # Read from .gtrconfig if it exists — only if trusted
     _gtr_config_file="$(__FUNC___gtrconfig_path 2>/dev/null)" || true
     if [ -f "$_gtr_config_file" ]; then
-      local _gtr_file_hooks
+      local -a _gtr_file_hooks=()
       local _gtr_definitions
       _gtr_definitions="$(__FUNC___hooks_read_definitions "$_gtr_config_file")" || true
-      _gtr_file_hooks="$(__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd)"
-      if [ -n "$_gtr_file_hooks" ]; then
+      while IFS= read -r -d '' _gtr_hook; do
+        [ -z "$_gtr_hook" ] || _gtr_file_hooks+=("$_gtr_hook")
+      done < <(__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd nul)
+      if [ "${#_gtr_file_hooks[@]}" -gt 0 ]; then
         # Verify trust before including .gtrconfig hooks
         if __FUNC___hooks_are_trusted "$_gtr_config_file" "$_gtr_trust_dir" "$_gtr_definitions"; then
-          if [ -n "$_gtr_hooks" ]; then
-            _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
-          else
-            _gtr_hooks="$_gtr_file_hooks"
-          fi
+          _gtr_hooks+=("${_gtr_file_hooks[@]}")
         else
           echo "__FUNC__: Untrusted .gtrconfig hooks skipped — run 'git gtr trust' to approve" >&2
         fi
       fi
     fi
-    if [ -n "$_gtr_hooks" ]; then
-      # Deduplicate while preserving order
-      _gtr_seen=""
+    if [ "${#_gtr_hooks[@]}" -gt 0 ]; then
+      # Deduplicate whole values while preserving their original order.
       export WORKTREE_PATH="$dir"
       export REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
       export BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
-      while IFS= read -r _gtr_hook; do
-        [ -z "$_gtr_hook" ] && continue
-        case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
-        _gtr_seen="$_gtr_seen|$_gtr_hook|"
+      for _gtr_hook in "${_gtr_hooks[@]}"; do
+        _gtr_duplicate=0
+        for _gtr_previous in "${_gtr_seen[@]}"; do
+          if [ "$_gtr_hook" = "$_gtr_previous" ]; then
+            _gtr_duplicate=1
+            break
+          fi
+        done
+        [ "$_gtr_duplicate" -eq 0 ] || continue
+        _gtr_seen+=("$_gtr_hook")
         eval "$_gtr_hook" </dev/null || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
-      done <<< "$_gtr_hooks"
+      done
       unset WORKTREE_PATH REPO_ROOT BRANCH
     fi
   }
@@ -937,13 +951,14 @@ function __FUNC___run_post_cd_hooks
     set -l _gtr_hooks
     set -l _gtr_seen
     # Read from git config (local > global > system)
-    set -l _gtr_git_hooks (git config --get-all gtr.hook.postCd 2>/dev/null)
+    # split0 preserves embedded and trailing newlines in each list element.
+    set -l _gtr_git_hooks (git config -z --get-all gtr.hook.postCd 2>/dev/null | string split0)
     # Read from .gtrconfig if it exists — only if trusted
     set -l _gtr_config_file (__FUNC___gtrconfig_path 2>/dev/null)
     set -l _gtr_file_hooks
     if test -f "$_gtr_config_file"
       set -l _gtr_definitions (__FUNC___hooks_read_definitions "$_gtr_config_file")
-      set -l _gtr_candidate_hooks (__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd)
+      set -l _gtr_candidate_hooks (__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd nul | string split0)
       if test (count $_gtr_candidate_hooks) -gt 0
         # Verify trust before including .gtrconfig hooks
         if __FUNC___hooks_are_trusted "$_gtr_config_file" "$_gtr_trust_dir" "$_gtr_definitions"
