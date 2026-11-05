@@ -11,6 +11,70 @@ if ! command -v _gtr_config_check >/dev/null 2>&1; then
   fi
 fi
 
+# Cache contents are executable code. Reuse the config validator's component
+# walk so safe XDG symlinks work without hiding writable link parents/targets.
+_init_cache_path_is_safe() {
+  local _config_safety_uid _config_safety_os _config_safety_sticky=0
+  local _config_safety_checked=()
+  _config_safety_uid=$(id -u) || return 1
+  _config_safety_os=$(uname -s) || return 1
+  _config_safety_path "$1" || return 1
+  # Sticky ancestors can protect existing owned entries (e.g. under /tmp),
+  # but the cache directory itself must not be writable by other users.
+  [ "$_config_safety_sticky" -eq 0 ] || return 1
+  if [ "$#" -gt 1 ]; then
+    # Retain checked components only within this validation, not across I/O.
+    _config_safety_path "$2" || return 1
+  fi
+  return 0
+}
+
+_init_cache_is_safe() {
+  local cache_dir="$1" cache_file="$2"
+  [ ! -L "$cache_dir" ] && [ -d "$cache_dir" ] && [ -O "$cache_dir" ] || return 1
+  [ ! -L "$cache_file" ] || return 1
+  if [ -e "$cache_file" ]; then
+    [ -f "$cache_file" ] && [ -O "$cache_file" ] || return 1
+  fi
+  _init_cache_path_is_safe "$cache_dir" "$cache_file"
+}
+
+# Create one missing component at a time after checking its parent. In
+# particular, mkdir -p could traverse unchecked paths after a missing/.. pair.
+_init_cache_mkdir() {
+  local dir="$1" parent
+  if [ -d "$dir" ]; then
+    _init_cache_path_is_safe "$dir"
+    return $?
+  fi
+  [ ! -e "$dir" ] && [ ! -L "$dir" ] || return 1
+  parent="${dir%/*}"
+  _init_cache_mkdir "${parent:-/}" || return 1
+  _init_cache_path_is_safe "$dir" || return 1
+  mkdir -m 700 -- "$dir" || return 1
+  _init_cache_path_is_safe "$dir"
+}
+
+_init_cache_write() {
+  local cache_dir="$1" cache_file="$2" stamp="$3" output="$4" temp_file
+  [ ! -L "$cache_dir" ] || return 1
+  if [ ! -d "$cache_dir" ]; then
+    _init_cache_mkdir "$cache_dir" || return 1
+  fi
+  _init_cache_is_safe "$cache_dir" "$cache_file" || return 1
+  # mktemp creates a new 0600 file even under umask 000. Atomic replacement
+  # avoids following a cache-file link or exposing a partially written cache.
+  temp_file=$(mktemp "$cache_dir/.init.XXXXXX") || return 1
+  if _init_cache_is_safe "$cache_dir" "$temp_file" &&
+    printf '%s\n%s\n' "$stamp" "$output" > "$temp_file" &&
+    _init_cache_is_safe "$cache_dir" "$cache_file" &&
+    mv -f -- "$temp_file" "$cache_file"; then
+    return 0
+  fi
+  rm -f -- "$temp_file" || true
+  return 1
+}
+
 # Init command (generate shell integration for cd support)
 cmd_init() {
   local shell="" func_name="gtr"
@@ -78,29 +142,29 @@ cmd_init() {
 
   # Generate output (cached to ~/.cache/gtr/, auto-invalidates on shell integration changes)
   local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gtr"
+  case "$cache_dir" in /*) ;; *) cache_dir="$(pwd -P)/$cache_dir" ;; esac
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 10 replaces shell-expanded Bash cd candidates with literal filtering.
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-10}"
+  # Schema 13 preserves whole postCd records alongside picker path identities.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-13}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
-  # Return cached output if version matches
-  if [ -f "$cache_file" ]; then
-    local first_line
-    first_line="$(head -1 "$cache_file")"
-    if [ "$first_line" = "$cache_stamp" ]; then
-      tail -n +2 "$cache_file"
-      return 0
-    fi
+  # A matching public stamp alone does not make executable cache data trusted.
+  local first_line cached_output
+  if _init_cache_is_safe "$cache_dir" "$cache_file" 2>/dev/null &&
+    [ -f "$cache_file" ] &&
+    first_line="$(head -1 "$cache_file" 2>/dev/null)" &&
+    [ "$first_line" = "$cache_stamp" ] &&
+    cached_output="$(tail -n +2 "$cache_file" 2>/dev/null)"; then
+    printf '%s\n' "$cached_output"
+    return 0
   fi
 
   # Generate, output, and cache (output first so set -e cache failures don't swallow it)
   local output
   output="$("$generator" | sed "s/__FUNC__/$func_name/g")"
   printf '%s\n' "$output"
-  if mkdir -p "$cache_dir" 2>/dev/null; then
-    printf '%s\n%s\n' "$cache_stamp" "$output" > "$cache_file" 2>/dev/null || true
-  fi
+  _init_cache_write "$cache_dir" "$cache_file" "$cache_stamp" "$output" 2>/dev/null || true
 }
 
 # Run the exact CLI validator in Bash for every generated shell. Embedding the
@@ -132,6 +196,7 @@ __FUNC___hooks_read_definitions() {
 
 # Select values only from the captured definitions, never from the pathname.
 # An empty key displays every record for the trust confirmation.
+# The nul mode streams complete hook values without storing NULs in variables.
 __FUNC___hooks_definitions_get() {
   local definitions="$1" key="${2:-}" mode="${3:-all}" record record_key value last_value=""
   key=$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]')
@@ -144,6 +209,8 @@ __FUNC___hooks_definitions_get() {
     elif [ "$record_key" = "$key" ]; then
       if [ "$mode" = last ]; then
         last_value="$value"
+      elif [ "$mode" = nul ]; then
+        printf '%s\0' "$value"
       else
         printf '%s\n' "$value"
       fi
@@ -155,12 +222,114 @@ __FUNC___hooks_definitions_get() {
 SNAPSHOT
 }
 
+# Keep this template identical to the storage helpers in lib/hooks.sh; tests
+# compare them so the CLI and generated shells enforce the same trust boundary.
+_init_emit_trust_storage_helpers() {
+  cat <<'STORAGE'
+# Read ownership and permission bits on both GNU and BSD systems.
+_hooks_storage_stat() {
+  local metadata
+  metadata=$(stat -c '%u:%a' "$1" 2>/dev/null) ||
+    metadata=$(stat -f '%u:%Lp' "$1" 2>/dev/null) || return 1
+  case "$metadata" in
+    *[!0-9:]*|:*|*:) return 1 ;;
+  esac
+  case "${metadata#*:}" in *[!0-7]*) return 1 ;; esac
+  printf '%s\n' "$metadata"
+}
+
+# Validate every ancestor before traversing or creating it. Safe config-home
+# symlinks and system aliases (/tmp and /var on macOS) remain supported: check
+# the link's owner and its target's full path, with a bounded symlink walk.
+# Sticky system temp directories are safe ancestors, but never trust stores.
+# Usage: _hooks_trust_directory <directory> [create]
+# Prints the physical directory; new components are private even with umask 000.
+_hooks_trust_directory() {
+  local remaining="$1" action="${2:-}" current="/" component candidate metadata owner mode
+  local link_target links=0 current_uid
+  current_uid=$(id -u) || return 1
+  case "$remaining" in
+    /*) ;;
+    *) remaining="$(pwd -P)/$remaining" ;;
+  esac
+  while [ -n "$remaining" ]; do
+    component="${remaining%%/*}"
+    if [ "$component" = "$remaining" ]; then remaining=""; else remaining="${remaining#*/}"; fi
+    case "$component" in
+      ''|.) continue ;;
+      ..) current="${current%/*}"; [ -n "$current" ] || current="/"; continue ;;
+    esac
+    candidate="${current%/}/$component"
+    if [ -L "$candidate" ]; then
+      # The trust directory itself must be a real directory.
+      [ -n "$remaining" ] || return 1
+      links=$((links + 1))
+      [ "$links" -le 40 ] || return 1
+      metadata=$(_hooks_storage_stat "$candidate") || return 1
+      owner="${metadata%%:*}"
+      [ "$owner" = "$current_uid" ] || [ "$owner" = 0 ] || return 1
+      link_target=$(readlink "$candidate") || return 1
+      case "$link_target" in /*) current="/" ;; esac
+      remaining="$link_target/$remaining"
+      continue
+    fi
+    if [ ! -e "$candidate" ] && [ "$action" = create ]; then
+      (umask 077; mkdir -- "$candidate") || return 1
+    fi
+    [ -d "$candidate" ] && [ ! -L "$candidate" ] || return 1
+    metadata=$(_hooks_storage_stat "$candidate") || return 1
+    owner="${metadata%%:*}"
+    mode="${metadata#*:}"
+    [ "$owner" = "$current_uid" ] || [ "$owner" = 0 ] || return 1
+    if [ "$((8#$mode & 8#22))" -ne 0 ]; then
+      [ "$((8#$mode & 8#1000))" -ne 0 ] || return 1
+    fi
+    current="$candidate"
+  done
+  # Even a sticky or root-owned trust store cannot hold this user's approvals.
+  metadata=$(_hooks_storage_stat "$current") || return 1
+  [ "${metadata%%:*}" = "$current_uid" ] || return 1
+  mode="${metadata#*:}"
+  [ "$((8#$mode & 8#22))" -eq 0 ] || return 1
+  printf '%s\n' "$current"
+}
+
+# Only accept regular, user-owned, non-writable-by-others marker files. Resolve
+# the validated directory once so subsequent operations use its physical path.
+# In create mode a missing marker is allowed, but an unsafe existing one is not.
+_hooks_safe_trust_path() {
+  local trust_path="$1" action="${2:-}" directory name metadata mode current_uid
+  name="${trust_path##*/}"
+  case "$name" in ''|*[!0-9a-f]*) return 1 ;; esac
+  [ "${#name}" -eq 64 ] || return 1
+  directory=$(_hooks_trust_directory "${trust_path%/*}" "$action") || return 1
+  trust_path="$directory/$name"
+  [ ! -L "$trust_path" ] || return 1
+  if [ -e "$trust_path" ]; then
+    [ -f "$trust_path" ] || return 1
+    metadata=$(_hooks_storage_stat "$trust_path") || return 1
+    current_uid=$(id -u) || return 1
+    [ "${metadata%%:*}" = "$current_uid" ] || return 1
+    mode="${metadata#*:}"
+    [ "$((8#$mode & 8#22))" -eq 0 ] || return 1
+  else
+    [ "$action" = create ] || return 1
+  fi
+  printf '%s\n' "$trust_path"
+}
+STORAGE
+}
+
+# Emit Bash/Zsh trust helpers with the requested per-function shell setup.
+# Usage: _init_emit_posix_trust_helpers <shell_prelude>
+# Prints definitions with __FUNC__ placeholders for cmd_init to substitute.
 _init_emit_posix_trust_helpers() {
   local shell_prelude="$1"
   local template
 
   # Keep the snapshot encoding and extraction identical to the CLI.
   _init_emit_snapshot_helpers
+  _init_emit_trust_storage_helpers | sed 's/_hooks_/__FUNC___hooks_/g'
 
   # Keep case patterns balanced inside this substitution for Bash 3.2's parser.
   template=$(cat <<'EOF'
@@ -238,7 +407,7 @@ __SHELL_PRELUDE__
   local _gtr_trust_path="$1"
   local _gtr_config_file="$2"
   local _gtr_marker _gtr_canonical_config
-  [ -f "$_gtr_trust_path" ] || return 1
+  _gtr_trust_path="$(__FUNC___hooks_safe_trust_path "$_gtr_trust_path")" || return 1
   _gtr_marker="$(cat "$_gtr_trust_path" 2>/dev/null)" || return 1
   _gtr_canonical_config="$(__FUNC___hooks_canonical_config_path "$_gtr_config_file" 2>/dev/null)" || return 1
   [ "$_gtr_marker" = "$_gtr_canonical_config" ]
@@ -258,14 +427,20 @@ EOF
   printf '%s\n' "${template//__SHELL_PRELUDE__/$shell_prelude}"
 }
 
+# Emit Fish trust helpers, embedding the shared Bash snapshot/storage logic.
+# Usage: _init_emit_fish_trust_helpers
+# Prints self-contained definitions with __FUNC__ placeholders; runs no hooks.
 _init_emit_fish_trust_helpers() {
-  local snapshot_helpers
+  local snapshot_helpers storage_helpers
   # Quote for a Fish single-quoted string. Bash 3.2's parameter substitution
   # over-escapes single quotes here, so use sed for consistent generated code.
   snapshot_helpers=$(_init_emit_snapshot_helpers |
     sed -e 's/__FUNC___hooks_/_hooks_/g; s/\\/\\\\/g' -e "s/'/\\\\'/g")
   printf "function __FUNC___hooks_read_definitions\n  command bash -c '%s\n_hooks_read_definitions \"\$1\"' bash \"\$argv[1]\"\nend\n" "$snapshot_helpers"
-  printf "function __FUNC___hooks_definitions_get\n  command bash -c '%s\n_hooks_definitions_get \"\$1\" \"\$2\"' bash \"\$argv[1]\" \"\$argv[2]\"\nend\n" "$snapshot_helpers"
+  printf "function __FUNC___hooks_definitions_get\n  command bash -c '%s\n_hooks_definitions_get \"\$1\" \"\$2\" \"\$3\"' bash \"\$argv[1]\" \"\$argv[2]\" \"\$argv[3]\"\nend\n" "$snapshot_helpers"
+  storage_helpers=$(_init_emit_trust_storage_helpers |
+    sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g")
+  printf "function __FUNC___hooks_safe_trust_path\n  command bash -c '%s\n_hooks_safe_trust_path \"\$1\"' bash \"\$argv[1]\"\nend\n" "$storage_helpers"
   cat <<'FISH'
 function __FUNC___gtrconfig_path
   set -l _gtr_git_common_dir (git rev-parse --git-common-dir 2>/dev/null)
@@ -337,7 +512,8 @@ end
 function __FUNC___hooks_marker_matches_config
   set -l _gtr_trust_path "$argv[1]"
   set -l _gtr_config_file "$argv[2]"
-  test -f "$_gtr_trust_path"; or return 1
+  set _gtr_trust_path (__FUNC___hooks_safe_trust_path "$_gtr_trust_path")
+  or return 1
   set -l _gtr_marker (cat "$_gtr_trust_path" 2>/dev/null)
   set -l _gtr_canonical_config (__FUNC___hooks_canonical_config_path "$_gtr_config_file" 2>/dev/null)
   test "$_gtr_marker" = "$_gtr_canonical_config"
@@ -367,43 +543,49 @@ __FUNC___run_post_cd_hooks() {
 
   cd "$dir" && {
     __FUNC___check_git_config || return 1
-    local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
-    _gtr_hooks=""
-    _gtr_seen=""
+    local _gtr_hook _gtr_previous _gtr_duplicate _gtr_config_file
+    local -a _gtr_hooks=() _gtr_seen=()
     # Read from git config (local > global > system)
-    _gtr_hooks="$(git config --get-all gtr.hook.postCd 2>/dev/null)" || true
+    # NULs stay in the stream; each array element holds one complete value.
+    while IFS= read -r -d '' _gtr_hook; do
+      [ -z "$_gtr_hook" ] || _gtr_hooks+=("$_gtr_hook")
+    done < <(git config -z --get-all gtr.hook.postCd 2>/dev/null || true)
     # Read from .gtrconfig if it exists — only if trusted
     _gtr_config_file="$(__FUNC___gtrconfig_path 2>/dev/null)" || true
     if [ -f "$_gtr_config_file" ]; then
-      local _gtr_file_hooks
+      local -a _gtr_file_hooks=()
       local _gtr_definitions
       _gtr_definitions="$(__FUNC___hooks_read_definitions "$_gtr_config_file")" || true
-      _gtr_file_hooks="$(__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd)"
-      if [ -n "$_gtr_file_hooks" ]; then
+      while IFS= read -r -d '' _gtr_hook; do
+        [ -z "$_gtr_hook" ] || _gtr_file_hooks+=("$_gtr_hook")
+      done < <(__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd nul)
+      if [ "${#_gtr_file_hooks[@]}" -gt 0 ]; then
         # Verify trust before including .gtrconfig hooks
         if __FUNC___hooks_are_trusted "$_gtr_config_file" "$_gtr_trust_dir" "$_gtr_definitions"; then
-          if [ -n "$_gtr_hooks" ]; then
-            _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
-          else
-            _gtr_hooks="$_gtr_file_hooks"
-          fi
+          _gtr_hooks+=("${_gtr_file_hooks[@]}")
         else
           echo "__FUNC__: Untrusted .gtrconfig hooks skipped — run 'git gtr trust' to approve" >&2
         fi
       fi
     fi
-    if [ -n "$_gtr_hooks" ]; then
-      # Deduplicate while preserving order
-      _gtr_seen=""
+    if [ "${#_gtr_hooks[@]}" -gt 0 ]; then
+      # Deduplicate whole values while preserving their original order.
       export WORKTREE_PATH="$dir"
       export REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
       export BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
-      while IFS= read -r _gtr_hook; do
-        [ -z "$_gtr_hook" ] && continue
-        case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
-        _gtr_seen="$_gtr_seen|$_gtr_hook|"
+      for _gtr_hook in "${_gtr_hooks[@]}"; do
+        _gtr_duplicate=0
+        # Bash 3.2 treats an empty array as unset under nounset.
+        for _gtr_previous in ${_gtr_seen[@]+"${_gtr_seen[@]}"}; do
+          if [ "$_gtr_hook" = "$_gtr_previous" ]; then
+            _gtr_duplicate=1
+            break
+          fi
+        done
+        [ "$_gtr_duplicate" -eq 0 ] || continue
+        _gtr_seen+=("$_gtr_hook")
         eval "$_gtr_hook" </dev/null || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
-      done <<< "$_gtr_hooks"
+      done
       unset WORKTREE_PATH REPO_ROOT BRANCH
     fi
   }
@@ -415,7 +597,7 @@ __FUNC__() {
     local dir
     if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
       local _gtr_porcelain
-      _gtr_porcelain="$(command git gtr list --porcelain)"
+      _gtr_porcelain="$(command git gtr list --ids)"
       if [ "$(printf '%s\n' "$_gtr_porcelain" | wc -l)" -le 1 ]; then
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
@@ -423,18 +605,18 @@ __FUNC__() {
       local _gtr_selection _gtr_key _gtr_line _gtr_branch
       _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
-        --with-nth=2 \
-        --ansi \
+        --with-nth=2,1 \
+        --no-ansi \
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
         --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
         --expect=ctrl-n,ctrl-a,ctrl-e \
-        --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+        --preview='git gtr run {s1} git log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git gtr run {s1} git status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
-        --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
+        --bind='ctrl-d:execute(git gtr rm {s1} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --ids)' \
+        --bind='ctrl-y:execute(git gtr copy {s1} > /dev/tty 2>&1 < /dev/tty)' \
+        --bind='ctrl-r:reload(git gtr list --ids)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
       _gtr_key="$(head -1 <<< "$_gtr_selection")"
       _gtr_line="$(sed -n '2p' <<< "$_gtr_selection")"
@@ -448,13 +630,16 @@ __FUNC__() {
       [ -z "$_gtr_line" ] && return 0
       # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
       if [ "$_gtr_key" = "ctrl-a" ]; then
-        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f2)"
+        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f1)"
         return $?
       elif [ "$_gtr_key" = "ctrl-e" ]; then
-        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f2)"
+        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f1)"
         return $?
       fi
-      dir="$(printf '%s' "$_gtr_line" | cut -f1)"
+      # Resolve the identity again; preserve path newlines with a sentinel.
+      dir="$(command git gtr go "$(printf '%s' "$_gtr_line" | cut -f1)" && printf '.')" || return $?
+      dir="${dir%.}"
+      dir="${dir%$'\n'}"
     elif [ "$#" -eq 0 ]; then
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
@@ -562,43 +747,48 @@ __FUNC___run_post_cd_hooks() {
 
   cd "$dir" && {
     __FUNC___check_git_config || return 1
-    local _gtr_hooks _gtr_hook _gtr_seen _gtr_config_file
-    _gtr_hooks=""
-    _gtr_seen=""
+    local _gtr_hook _gtr_previous _gtr_duplicate _gtr_config_file
+    local -a _gtr_hooks=() _gtr_seen=()
     # Read from git config (local > global > system)
-    _gtr_hooks="$(git config --get-all gtr.hook.postCd 2>/dev/null)" || true
+    # NULs stay in the stream; each array element holds one complete value.
+    while IFS= read -r -d '' _gtr_hook; do
+      [ -z "$_gtr_hook" ] || _gtr_hooks+=("$_gtr_hook")
+    done < <(git config -z --get-all gtr.hook.postCd 2>/dev/null || true)
     # Read from .gtrconfig if it exists — only if trusted
     _gtr_config_file="$(__FUNC___gtrconfig_path 2>/dev/null)" || true
     if [ -f "$_gtr_config_file" ]; then
-      local _gtr_file_hooks
+      local -a _gtr_file_hooks=()
       local _gtr_definitions
       _gtr_definitions="$(__FUNC___hooks_read_definitions "$_gtr_config_file")" || true
-      _gtr_file_hooks="$(__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd)"
-      if [ -n "$_gtr_file_hooks" ]; then
+      while IFS= read -r -d '' _gtr_hook; do
+        [ -z "$_gtr_hook" ] || _gtr_file_hooks+=("$_gtr_hook")
+      done < <(__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd nul)
+      if [ "${#_gtr_file_hooks[@]}" -gt 0 ]; then
         # Verify trust before including .gtrconfig hooks
         if __FUNC___hooks_are_trusted "$_gtr_config_file" "$_gtr_trust_dir" "$_gtr_definitions"; then
-          if [ -n "$_gtr_hooks" ]; then
-            _gtr_hooks="$_gtr_hooks"$'\n'"$_gtr_file_hooks"
-          else
-            _gtr_hooks="$_gtr_file_hooks"
-          fi
+          _gtr_hooks+=("${_gtr_file_hooks[@]}")
         else
           echo "__FUNC__: Untrusted .gtrconfig hooks skipped — run 'git gtr trust' to approve" >&2
         fi
       fi
     fi
-    if [ -n "$_gtr_hooks" ]; then
-      # Deduplicate while preserving order
-      _gtr_seen=""
+    if [ "${#_gtr_hooks[@]}" -gt 0 ]; then
+      # Deduplicate whole values while preserving their original order.
       export WORKTREE_PATH="$dir"
       export REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
       export BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
-      while IFS= read -r _gtr_hook; do
-        [ -z "$_gtr_hook" ] && continue
-        case "$_gtr_seen" in *"|$_gtr_hook|"*) continue ;; esac
-        _gtr_seen="$_gtr_seen|$_gtr_hook|"
+      for _gtr_hook in "${_gtr_hooks[@]}"; do
+        _gtr_duplicate=0
+        for _gtr_previous in "${_gtr_seen[@]}"; do
+          if [ "$_gtr_hook" = "$_gtr_previous" ]; then
+            _gtr_duplicate=1
+            break
+          fi
+        done
+        [ "$_gtr_duplicate" -eq 0 ] || continue
+        _gtr_seen+=("$_gtr_hook")
         eval "$_gtr_hook" </dev/null || echo "__FUNC__: postCd hook failed: $_gtr_hook" >&2
-      done <<< "$_gtr_hooks"
+      done
       unset WORKTREE_PATH REPO_ROOT BRANCH
     fi
   }
@@ -611,7 +801,7 @@ __FUNC__() {
     local dir
     if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
       local _gtr_porcelain
-      _gtr_porcelain="$(command git gtr list --porcelain)"
+      _gtr_porcelain="$(command git gtr list --ids)"
       if [ "$(printf '%s\n' "$_gtr_porcelain" | wc -l)" -le 1 ]; then
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
@@ -619,18 +809,18 @@ __FUNC__() {
       local _gtr_selection _gtr_key _gtr_line _gtr_branch
       _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
-        --with-nth=2 \
-        --ansi \
+        --with-nth=2,1 \
+        --no-ansi \
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
         --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
         --expect=ctrl-n,ctrl-a,ctrl-e \
-        --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+        --preview='git gtr run {s1} git log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git gtr run {s1} git status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
-        --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
+        --bind='ctrl-d:execute(git gtr rm {s1} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --ids)' \
+        --bind='ctrl-y:execute(git gtr copy {s1} > /dev/tty 2>&1 < /dev/tty)' \
+        --bind='ctrl-r:reload(git gtr list --ids)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
       _gtr_key="$(head -1 <<< "$_gtr_selection")"
       _gtr_line="$(sed -n '2p' <<< "$_gtr_selection")"
@@ -644,13 +834,16 @@ __FUNC__() {
       [ -z "$_gtr_line" ] && return 0
       # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
       if [ "$_gtr_key" = "ctrl-a" ]; then
-        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f2)"
+        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f1)"
         return $?
       elif [ "$_gtr_key" = "ctrl-e" ]; then
-        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f2)"
+        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f1)"
         return $?
       fi
-      dir="$(printf '%s' "$_gtr_line" | cut -f1)"
+      # Resolve the identity again; preserve path newlines with a sentinel.
+      dir="$(command git gtr go "$(printf '%s' "$_gtr_line" | cut -f1)" && printf '.')" || return $?
+      dir="${dir%.}"
+      dir="${dir%$'\n'}"
     elif [ "$#" -eq 0 ]; then
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
@@ -758,13 +951,14 @@ function __FUNC___run_post_cd_hooks
     set -l _gtr_hooks
     set -l _gtr_seen
     # Read from git config (local > global > system)
-    set -l _gtr_git_hooks (git config --get-all gtr.hook.postCd 2>/dev/null)
+    # split0 preserves embedded and trailing newlines in each list element.
+    set -l _gtr_git_hooks (git config -z --get-all gtr.hook.postCd 2>/dev/null | string split0)
     # Read from .gtrconfig if it exists — only if trusted
     set -l _gtr_config_file (__FUNC___gtrconfig_path 2>/dev/null)
     set -l _gtr_file_hooks
     if test -f "$_gtr_config_file"
       set -l _gtr_definitions (__FUNC___hooks_read_definitions "$_gtr_config_file")
-      set -l _gtr_candidate_hooks (__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd)
+      set -l _gtr_candidate_hooks (__FUNC___hooks_definitions_get "$_gtr_definitions" hooks.postCd nul | string split0)
       if test (count $_gtr_candidate_hooks) -gt 0
         # Verify trust before including .gtrconfig hooks
         if __FUNC___hooks_are_trusted "$_gtr_config_file" "$_gtr_trust_dir" "$_gtr_definitions"
@@ -796,25 +990,25 @@ function __FUNC__
   if test (count $argv) -gt 0; and test "$argv[1]" = "cd"
     set -l dir
     if test (count $argv) -eq 1; and type -q fzf
-      set -l _gtr_porcelain (command git gtr list --porcelain)
+      set -l _gtr_porcelain (command git gtr list --ids)
       if test (count $_gtr_porcelain) -le 1
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
       end
       set -l _gtr_selection (printf '%s\n' $_gtr_porcelain | fzf \
         --delimiter=\t \
-        --with-nth=2 \
-        --ansi \
+        --with-nth=2,1 \
+        --no-ansi \
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
         --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
         --expect=ctrl-n,ctrl-a,ctrl-e \
-        --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+        --preview='git gtr run {s1} git log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git gtr run {s1} git status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
-        --bind='ctrl-r:reload(git gtr list --porcelain)')
+        --bind='ctrl-d:execute(git gtr rm {s1} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --ids)' \
+        --bind='ctrl-y:execute(git gtr copy {s1} > /dev/tty 2>&1 < /dev/tty)' \
+        --bind='ctrl-r:reload(git gtr list --ids)')
       or return 0
       test -z "$_gtr_selection"; and return 0
       # --expect gives two lines: key (index 1) and selection (index 2)
@@ -838,13 +1032,15 @@ function __FUNC__
       test -z "$_gtr_line"; and return 0
       # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
       if test "$_gtr_key" = "ctrl-a"
-        command git gtr ai (string split \t -- "$_gtr_line")[2]
+        command git gtr ai (string split \t -- "$_gtr_line")[1]
         return $status
       else if test "$_gtr_key" = "ctrl-e"
-        command git gtr editor (string split \t -- "$_gtr_line")[2]
+        command git gtr editor (string split \t -- "$_gtr_line")[1]
         return $status
       end
-      set dir (string split \t -- "$_gtr_line")[1]
+      # NUL output preserves embedded/trailing newlines as one Fish argument.
+      set dir (command git gtr run (string split \t -- "$_gtr_line")[1] sh -c 'printf "%s\0" "$PWD"' | string split0)
+      test "$pipestatus[1]" -eq 0; or return 1
     else if test (count $argv) -eq 1
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2

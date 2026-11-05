@@ -139,6 +139,61 @@ _clean_branch_matches_pr_state() {
   return 1
 }
 
+# Delete only the exact tip authorized by the provider. A separate tip read
+# followed by `git branch -D` would still race a concurrent branch update.
+# Usage: _clean_delete_validated_branch repo_root branch branch_tip
+_clean_delete_validated_branch() {
+  local repo_root="$1" branch="$2" branch_tip="$3"
+  local branch_ref="refs/heads/$branch" worktrees delete_output
+
+  # update-ref does not provide git branch's checked-out branch protection.
+  if ! worktrees=$(git -C "$repo_root" worktree list --porcelain 2>/dev/null); then
+    log_warn "Kept branch $branch (could not verify remaining worktrees)"
+    return 1
+  fi
+  if printf '%s\n' "$worktrees" | grep -Fxq "branch $branch_ref"; then
+    log_warn "Kept branch $branch (still checked out in another worktree)"
+    return 1
+  fi
+
+  # Rebase/bisect can detach HEAD while still reserving the original branch.
+  # Preserve git branch's protection for those operations as well.
+  local common_dir state_file state_branch
+  if ! common_dir=$(git -C "$repo_root" rev-parse --git-common-dir 2>/dev/null) || \
+     [ -z "$common_dir" ]; then
+    log_warn "Kept branch $branch (could not verify rebase/bisect state)"
+    return 1
+  fi
+  case "$common_dir" in /*) ;; *) common_dir="$repo_root/$common_dir" ;; esac
+  for state_file in "$common_dir"/rebase-merge/head-name \
+    "$common_dir"/rebase-apply/head-name "$common_dir"/BISECT_START \
+    "$common_dir"/worktrees/*/rebase-merge/head-name \
+    "$common_dir"/worktrees/*/rebase-apply/head-name "$common_dir"/worktrees/*/BISECT_START; do
+    [ -e "$state_file" ] || continue
+    if ! state_branch=$(cat "$state_file" 2>/dev/null) || [ -z "$state_branch" ]; then
+      log_warn "Kept branch $branch (could not verify rebase/bisect state)"
+      return 1
+    fi
+    if [ "$state_branch" = "$branch_ref" ] || [ "$state_branch" = "$branch" ]; then
+      log_warn "Kept branch $branch (rebase or bisect in progress)"
+      return 1
+    fi
+  done
+
+  # --no-deref also prevents deleting a different branch if this ref becomes
+  # symbolic between validation and deletion. Never retry without the old tip.
+  if ! delete_output=$(git -C "$repo_root" update-ref --no-deref -d \
+    "$branch_ref" "$branch_tip" 2>&1); then
+    log_warn "Kept branch $branch (tip changed or deletion failed): $delete_output"
+    return 1
+  fi
+
+  # Match git branch's metadata cleanup only after successful ref deletion.
+  # A missing section is normal; metadata cleanup must not abort postRemove.
+  git -C "$repo_root" config --local --remove-section "branch.$branch" 2>/dev/null || true
+  log_info "Branch deleted: $branch"
+}
+
 # Remove worktrees whose PRs/MRs match requested cleanup states (handles squash merges)
 # Usage: _clean_prs repo_root base_dir prefix yes_mode dry_run [force] [active_worktree_path] [target_ref] [merged_mode] [closed_mode]
 _clean_prs() {
@@ -177,13 +232,19 @@ _clean_prs() {
     case "$line" in
       "")
         if [ -n "$dir" ] && [ "$is_main" != "1" ]; then
-          local branch_tip
-          branch_tip=$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)
-
           # Skip main repo branch silently (not counted)
           [ "$branch" = "$main_branch" ] && continue
 
           if _clean_should_skip "$dir" "$branch" "$force" "$active_worktree_path"; then
+            skipped=$((skipped + 1))
+            continue
+          fi
+
+          # Never fall back to branch-name-only matching, even with --force.
+          local branch_tip
+          if ! branch_tip=$(git -C "$dir" rev-parse --verify 'HEAD^{commit}' 2>/dev/null) || \
+             [ -z "$branch_tip" ]; then
+            log_warn "Skipping $branch (could not resolve HEAD to a commit in $dir)"
             skipped=$((skipped + 1))
             continue
           fi
@@ -205,8 +266,20 @@ _clean_prs() {
                 continue
               fi
 
+              # Hooks (or concurrent Git commands) may change the checked-out
+              # branch or its tip. --force must not override provider validation.
+              local current_ref current_tip
+              if ! current_ref=$(git -C "$dir" symbolic-ref --quiet HEAD 2>/dev/null) || \
+                 [ "$current_ref" != "refs/heads/$branch" ] || \
+                 ! current_tip=$(git -C "$dir" rev-parse --verify "refs/heads/$branch^{commit}" 2>/dev/null) || \
+                 [ "$current_tip" != "$branch_tip" ]; then
+                log_warn "Skipping $branch (branch identity or tip changed, or could not be verified after preRemove)"
+                skipped=$((skipped + 1))
+                continue
+              fi
+
               if remove_worktree "$dir" "$force"; then
-                git branch -d "$branch" 2>/dev/null || git branch -D "$branch" 2>/dev/null || true
+                _clean_delete_validated_branch "$repo_root" "$branch" "$branch_tip" || true
                 removed=$((removed + 1))
 
                 if ! run_hooks postRemove \

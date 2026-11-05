@@ -298,6 +298,30 @@ list_worktree_records() {
   if git -C "$repo_root" worktree list --porcelain -z >/dev/null 2>&1; then
     _parse_worktree_records "$repo_root_canonical" "" < <(git -C "$repo_root" worktree list --porcelain -z 2>/dev/null)
   else
+    # Old porcelain writes raw newlines in paths, which can impersonate another
+    # row. Reject that ambiguous format before emitting any selectable records.
+    local common_dir gitdir_file registered_gitdir
+    case "$repo_root" in
+      *$'\n'*)
+        log_error "Newline-containing worktree paths require Git with NUL worktree listing support"
+        return 1
+        ;;
+    esac
+    common_dir=$(git -C "$repo_root" rev-parse --git-common-dir) || return 1
+    case "$common_dir" in
+      /* | [a-zA-Z]:/*) ;;
+      *) common_dir="$repo_root/$common_dir" ;;
+    esac
+    for gitdir_file in "$common_dir"/worktrees/*/gitdir; do
+      [ -f "$gitdir_file" ] || continue
+      registered_gitdir=$(cat "$gitdir_file") || return 1
+      case "$registered_gitdir" in
+        *$'\n'*)
+          log_error "Newline-containing worktree paths require Git with NUL worktree listing support"
+          return 1
+          ;;
+      esac
+    done
     _parse_worktree_records "$repo_root_canonical" $'\n' < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
   fi
 }
@@ -414,7 +438,36 @@ _print_resolved_target() {
   printf "%s\t%s\t%s\n" "$is_main" "$(_tsv_escape_field "$path")" "$(_tsv_escape_field "$branch")"
 }
 
-# Resolve a registered worktree by branch, literal folder alias, or main repo ID '1'.
+# Resolve an escaped absolute path identity against this repository's registry.
+# Compare encoded fields before decoding so tabs/newlines cannot split records.
+_resolve_path_target() {
+  local identifier="$1" repo_root="$2"
+  local is_main="" path="" branch="" line decoded_path
+  while IFS= read -r line; do
+    case "$line" in
+      "")
+        if [ -n "$path" ] && [ "path:$path" = "$identifier" ]; then
+          decoded_path=$(_tsv_unescape_field "$path"; printf '.')
+          decoded_path="${decoded_path%.}"
+          [ -d "$decoded_path" ] || break
+          printf '%s\t%s\t%s\n' "$is_main" "$path" "$branch"
+          return 0
+        fi
+        is_main="" path="" branch=""
+        ;;
+      "is_main "*) is_main="${line#is_main }" ;;
+      "path "*) path="${line#path }" ;;
+      "branch "*) branch="${line#branch }" ;;
+    esac
+  done <<EOF
+$(list_worktree_records "$repo_root")
+
+EOF
+  log_error "Registered worktree not found for identity: $identifier"
+  return 1
+}
+
+# Resolve a registered path identity, branch, literal folder alias, or main ID '1'.
 # Usage: resolve_target identifier repo_root base_dir prefix
 # Returns: tab-separated "is_main\tpath\tbranch" with escaped fields on success (is_main: 1 for main repo, 0 for worktrees)
 # Exit code: 0 on success, 1 if not found
@@ -433,6 +486,15 @@ resolve_target() {
   esac
 
   _validate_worktree_prefix "$prefix" || return 1
+
+  # ':' cannot occur in a branch; the absolute path also avoids folder aliases.
+  # Never fall back to branch resolution for a stale or invalid path identity.
+  case "$identifier" in
+    path:/* | path:[a-zA-Z]:/*)
+      _resolve_path_target "$identifier" "$repo_root"
+      return $?
+      ;;
+  esac
 
   # Special case: ID 1 is always the repo root
   if [ "$identifier" = "1" ]; then
@@ -515,7 +577,9 @@ unpack_target() {
   local escaped_path escaped_branch
   local IFS=$'\t'
   read -r _ctx_is_main escaped_path escaped_branch <<< "$1"
-  _ctx_worktree_path=$(_tsv_unescape_field "$escaped_path")
+  # Preserve trailing newlines in a registered path through command substitution.
+  _ctx_worktree_path=$(_tsv_unescape_field "$escaped_path"; printf '.')
+  _ctx_worktree_path="${_ctx_worktree_path%.}"
   _ctx_branch=$(_tsv_unescape_field "$escaped_branch")
 }
 
@@ -524,7 +588,8 @@ unpack_target() {
 # Sets: _ctx_is_main, _ctx_worktree_path, _ctx_branch
 resolve_worktree() {
   local target
-  target=$(resolve_target "$1" "$2" "$3" "$4") || return 1
+  # Guard the subshell too: a handled miss must not fire Bash 3.2's ERR trap.
+  target=$(resolve_target "$1" "$2" "$3" "$4" || exit 1) || return 1
   unpack_target "$target"
 }
 

@@ -61,6 +61,22 @@ jobs:
           /bin/bash -n "$RUNNER_TEMP/gtr-init.bash"
           source "$RUNNER_TEMP/gtr-init.bash"
 
+      - name: Install BATS and Fish for integration tests
+        run: brew install bats-core fish
+
+      - name: Run full test suite with system Bash
+        shell: /bin/bash --noprofile --norc -eo pipefail {0}
+        run: |
+          # Keep BATS and CLI shebangs on Bash 3.2, even when Homebrew has Bash.
+          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+          export GIT_CONFIG_NOSYSTEM=1
+          export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/gtr-global.gitconfig"
+          export XDG_CONFIG_HOME="$RUNNER_TEMP/gtr-config"
+          export XDG_CACHE_HOME="$RUNNER_TEMP/gtr-cache"
+          export XDG_DATA_HOME="$RUNNER_TEMP/gtr-data"
+          : > "$GIT_CONFIG_GLOBAL"
+          bats tests/
+
   test:
     name: Tests
     runs-on: ubuntu-latest

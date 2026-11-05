@@ -17,8 +17,9 @@ _config_safety_node() {
   for cached in "${_config_safety_checked[@]}"; do
     [ "$cached" != "$path" ] || return 0
   done
-  metadata=$(LC_ALL=C stat -c '%u %a' -- "$path" 2>/dev/null) ||
-    metadata=$(LC_ALL=C stat -f '%u %p' -- "$path" 2>/dev/null) ||
+  # Bash 3.2 needs the guards inside $(...) to suppress inherited ERR traps.
+  metadata=$(LC_ALL=C stat -c '%u %a' -- "$path" 2>/dev/null ||
+    LC_ALL=C stat -f '%u %p' -- "$path" 2>/dev/null || exit 1) ||
     { _config_safety_error "$path" 'cannot inspect permissions'; return 1; }
   owner="${metadata%% *}"
   mode="${metadata#* }"

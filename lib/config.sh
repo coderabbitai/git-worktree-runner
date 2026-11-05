@@ -13,12 +13,20 @@
 # Resolve the main repo root from the current git context.
 # Works from the main repo root, a subdirectory, or a linked worktree.
 # A bare repository is its own root; its parent is not a checkout.
+# Linked separate-directory layouts require core.worktree. Without it, a .git
+# basename is ambiguous and retains Git's conventional parent-directory fallback.
+# Usage: _resolve_main_repo_root (uses the caller's Git context; no arguments)
 # Returns: absolute path to main repo root or empty on failure
+# Exit code: 0 on success, 1 when Git context or a main root cannot be resolved
 _resolve_main_repo_root() {
-  local git_common_dir repo_root is_bare
+  local git_common_dir git_dir repo_root is_bare
   git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || return 1
 
   [ -n "$git_common_dir" ] || return 1
+  git_common_dir=$(
+    unset CDPATH
+    cd -P -- "$git_common_dir" 2>/dev/null && pwd -P
+  ) || return 1
 
   # Query the common directory, not the current worktree: a linked worktree
   # reports false even when its main repository is bare. Do not infer this
@@ -30,25 +38,38 @@ _resolve_main_repo_root() {
     git --git-dir="$git_common_dir" rev-parse --is-bare-repository 2>/dev/null
   ) || return 1
   if [ "$is_bare" = "true" ]; then
-    repo_root=$(
-      unset CDPATH
-      cd -P -- "$git_common_dir" 2>/dev/null && pwd -P
-    ) || return 1
-    printf "%s" "$repo_root"
+    printf "%s" "$git_common_dir"
     return
   fi
 
-  case "$git_common_dir" in
-    /*)
-      repo_root="${git_common_dir%/.git}"
-      ;;
-    *)
-      repo_root=$(
-        unset CDPATH
-        cd -P -- "$git_common_dir/.." 2>/dev/null && pwd -P
-      ) || return 1
-      ;;
-  esac
+  git_dir=$(git rev-parse --git-dir 2>/dev/null) || return 1
+  git_dir=$(
+    unset CDPATH
+    cd -P -- "$git_dir" 2>/dev/null && pwd -P
+  ) || return 1
+
+  if [ "$git_dir" = "$git_common_dir" ]; then
+    # This is the main worktree, including a .git file created by
+    # --separate-git-dir. rev-parse returns the path without porcelain quoting.
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || return 1
+  else
+    repo_root=$(
+      unset GIT_WORK_TREE GIT_COMMON_DIR
+      if git --git-dir="$git_common_dir" config --get core.worktree >/dev/null 2>&1; then
+        # Query the main repository's config, not config.worktree of the linked
+        # worktree. Let Git resolve relative core.worktree values itself.
+        git --git-dir="$git_common_dir" rev-parse --show-toplevel 2>/dev/null
+      else
+        # Preserve conventional linked worktrees. Git cannot distinguish their
+        # .git directory from external metadata also named .git: even probing
+        # the parent with --show-toplevel returns that parent in both layouts.
+        # Separate-directory users must set core.worktree to disambiguate;
+        # rejecting this fallback would also reject ordinary linked worktrees.
+        [ "${git_common_dir##*/}" = .git ] || return 1
+        printf "%s" "${git_common_dir%/.git}"
+      fi
+    ) || return 1
+  fi
 
   [ -n "$repo_root" ] || return 1
   printf "%s" "$repo_root"
@@ -219,7 +240,7 @@ cfg_get_all() {
 _cfg_read_bool() {
   local key="$1" value status
   shift
-  if value=$(git config "$@" --bool --get "$key" 2>/dev/null); then
+  if value=$(git config "$@" --bool --get "$key" 2>/dev/null || exit $?); then
     printf "%s" "$value"
     return 0
   else
@@ -255,7 +276,7 @@ cfg_bool() {
       global) args=(--global) ;;
       system) args=(--system) ;;
     esac
-    if value=$(_cfg_read_bool "$candidate" "${args[@]}"); then
+    if value=$(_cfg_read_bool "$candidate" "${args[@]}" || exit $?); then
       [ "$value" = "true" ]
       return
     else
@@ -479,7 +500,7 @@ cfg_default() {
 
   # 4. Fall back to environment variable
   if [ -z "$value" ] && [ -n "$env_name" ]; then
-    value=$(printenv "$env_name" 2>/dev/null) || true
+    value=$(printenv "$env_name" 2>/dev/null || true)
   fi
 
   # 5. Use fallback if still empty
@@ -532,7 +553,7 @@ cfg_default_trusted_file() {
 
   # 4. Fall back to environment variable
   if [ -z "$value" ] && [ -n "$env_name" ]; then
-    value=$(printenv "$env_name" 2>/dev/null) || true
+    value=$(printenv "$env_name" 2>/dev/null || true)
   fi
 
   # 5. Use fallback if still empty

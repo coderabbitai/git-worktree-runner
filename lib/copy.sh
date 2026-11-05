@@ -67,14 +67,25 @@ _copy_move_entry() {
 # destination directory, then rename it so existing hard links are not written.
 _copy_tree_entry() {
   local src="$1" dest="$2" child name staged dest_mode=""
+  local final_mode=""
   [ -L "$dest" ] && return 1
   if [ -d "$src" ] && [ ! -L "$src" ]; then
-    mkdir -p "$dest" || return 1
+    if [ ! -d "$dest" ]; then
+      final_mode=$(_copy_directory_mode "$src") || return 1
+      # Keep partial trees private and writable until all children are copied.
+      # Without -p, a raced existing directory cannot be treated as ours to chmod.
+      mkdir -m 700 "$dest" || return 1
+    fi
     while IFS= read -r -d '' child; do
       name="${child##*/}"
       case "$name" in .[gG][iI][tT]) continue ;; esac
       _copy_tree_entry "$child" "$dest/$name" || return 1
     done < <(find "$src" -mindepth 1 -maxdepth 1 -print0)
+    if [ -n "$final_mode" ]; then
+      # Recheck before chmod so a replacement symlink is not followed.
+      [ -L "$dest" ] && return 1
+      chmod "$final_mode" "$dest" || return 1
+    fi
   else
     [ -d "$dest" ] && return 1
     if [ -f "$dest" ]; then

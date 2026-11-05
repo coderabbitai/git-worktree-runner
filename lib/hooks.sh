@@ -19,6 +19,98 @@
 
 _GTR_TRUST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"
 
+# Read ownership and permission bits on both GNU and BSD systems.
+_hooks_storage_stat() {
+  local metadata
+  metadata=$(stat -c '%u:%a' "$1" 2>/dev/null) ||
+    metadata=$(stat -f '%u:%Lp' "$1" 2>/dev/null) || return 1
+  case "$metadata" in
+    *[!0-9:]*|:*|*:) return 1 ;;
+  esac
+  case "${metadata#*:}" in *[!0-7]*) return 1 ;; esac
+  printf '%s\n' "$metadata"
+}
+
+# Validate every ancestor before traversing or creating it. Safe config-home
+# symlinks and system aliases (/tmp and /var on macOS) remain supported: check
+# the link's owner and its target's full path, with a bounded symlink walk.
+# Sticky system temp directories are safe ancestors, but never trust stores.
+# Usage: _hooks_trust_directory <directory> [create]
+# Prints the physical directory; new components are private even with umask 000.
+_hooks_trust_directory() {
+  local remaining="$1" action="${2:-}" current="/" component candidate metadata owner mode
+  local link_target links=0 current_uid
+  current_uid=$(id -u) || return 1
+  case "$remaining" in
+    /*) ;;
+    *) remaining="$(pwd -P)/$remaining" ;;
+  esac
+  while [ -n "$remaining" ]; do
+    component="${remaining%%/*}"
+    if [ "$component" = "$remaining" ]; then remaining=""; else remaining="${remaining#*/}"; fi
+    case "$component" in
+      ''|.) continue ;;
+      ..) current="${current%/*}"; [ -n "$current" ] || current="/"; continue ;;
+    esac
+    candidate="${current%/}/$component"
+    if [ -L "$candidate" ]; then
+      # The trust directory itself must be a real directory.
+      [ -n "$remaining" ] || return 1
+      links=$((links + 1))
+      [ "$links" -le 40 ] || return 1
+      metadata=$(_hooks_storage_stat "$candidate") || return 1
+      owner="${metadata%%:*}"
+      [ "$owner" = "$current_uid" ] || [ "$owner" = 0 ] || return 1
+      link_target=$(readlink "$candidate") || return 1
+      case "$link_target" in /*) current="/" ;; esac
+      remaining="$link_target/$remaining"
+      continue
+    fi
+    if [ ! -e "$candidate" ] && [ "$action" = create ]; then
+      (umask 077; mkdir -- "$candidate") || return 1
+    fi
+    [ -d "$candidate" ] && [ ! -L "$candidate" ] || return 1
+    metadata=$(_hooks_storage_stat "$candidate") || return 1
+    owner="${metadata%%:*}"
+    mode="${metadata#*:}"
+    [ "$owner" = "$current_uid" ] || [ "$owner" = 0 ] || return 1
+    if [ "$((8#$mode & 8#22))" -ne 0 ]; then
+      [ "$((8#$mode & 8#1000))" -ne 0 ] || return 1
+    fi
+    current="$candidate"
+  done
+  # Even a sticky or root-owned trust store cannot hold this user's approvals.
+  metadata=$(_hooks_storage_stat "$current") || return 1
+  [ "${metadata%%:*}" = "$current_uid" ] || return 1
+  mode="${metadata#*:}"
+  [ "$((8#$mode & 8#22))" -eq 0 ] || return 1
+  printf '%s\n' "$current"
+}
+
+# Only accept regular, user-owned, non-writable-by-others marker files. Resolve
+# the validated directory once so subsequent operations use its physical path.
+# In create mode a missing marker is allowed, but an unsafe existing one is not.
+_hooks_safe_trust_path() {
+  local trust_path="$1" action="${2:-}" directory name metadata mode current_uid
+  name="${trust_path##*/}"
+  case "$name" in ''|*[!0-9a-f]*) return 1 ;; esac
+  [ "${#name}" -eq 64 ] || return 1
+  directory=$(_hooks_trust_directory "${trust_path%/*}" "$action") || return 1
+  trust_path="$directory/$name"
+  [ ! -L "$trust_path" ] || return 1
+  if [ -e "$trust_path" ]; then
+    [ -f "$trust_path" ] || return 1
+    metadata=$(_hooks_storage_stat "$trust_path") || return 1
+    current_uid=$(id -u) || return 1
+    [ "${metadata%%:*}" = "$current_uid" ] || return 1
+    mode="${metadata#*:}"
+    [ "$((8#$mode & 8#22))" -eq 0 ] || return 1
+  else
+    [ "$action" = create ] || return 1
+  fi
+  printf '%s\n' "$trust_path"
+}
+
 # Read all trusted command definitions from a .gtrconfig file.
 # Usage: _hooks_read_definitions <config_file>
 _hooks_read_definitions() {
@@ -33,6 +125,8 @@ _hooks_read_definitions() {
 
 # Select values only from the captured definitions, never from the pathname.
 # An empty key displays every record for the trust confirmation.
+# Mode null emits NUL-terminated values for execution; all/last retain their
+# text output for existing display/default callers and generated shell helpers.
 _hooks_definitions_get() {
   local definitions="$1" key="${2:-}" mode="${3:-all}" record record_key value last_value=""
   key=$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]')
@@ -45,12 +139,20 @@ _hooks_definitions_get() {
     elif [ "$record_key" = "$key" ]; then
       if [ "$mode" = last ]; then
         last_value="$value"
+      elif [ "$mode" = null ]; then
+        printf '%s\0' "$value"
       else
         printf '%s\n' "$value"
       fi
     fi
   done < <(printf '%b' "$(printf '%s' "$definitions" | sed 's/../\\x&/g')")
   if [ "$mode" = last ]; then printf '%s\n' "$last_value"; fi
+}
+
+# Decode hex records to a stream, never to a shell variable (which cannot hold
+# NUL bytes). Consumers use read -d '' so trailing value newlines also survive.
+_hooks_decode_records() {
+  printf '%b' "$(printf '%s' "$1" | sed 's/../\\x&/g')"
 }
 
 # Validate a captured snapshot against its repository-scoped marker.
@@ -188,7 +290,7 @@ _hooks_marker_matches_config() {
   local config_file="$2"
   local marker_content canonical_config_file
 
-  [ -f "$trust_path" ] || return 1
+  trust_path=$(_hooks_safe_trust_path "$trust_path") || return 1
   marker_content="$(cat "$trust_path" 2>/dev/null)" || return 1
   canonical_config_file=$(_hooks_canonical_config_path "$config_file") || return 1
   [ "$marker_content" = "$canonical_config_file" ]
@@ -214,9 +316,14 @@ _hooks_write_trust_marker() {
   local temp_path=""
   local canonical_config_file=""
 
-  mkdir -p "$_GTR_TRUST_DIR" || return 1
+  # The caller may only publish a marker directly in the configured trust store.
+  [ "${trust_path%/*}" = "$_GTR_TRUST_DIR" ] || return 1
+  trust_path=$(_hooks_safe_trust_path "$trust_path" create) || {
+    log_error "Unsafe or inaccessible trust storage: $_GTR_TRUST_DIR"
+    return 1
+  }
   canonical_config_file=$(_hooks_canonical_config_path "$config_file") || return 1
-  temp_path="$(mktemp "$_GTR_TRUST_DIR/.trust.XXXXXX")" || return 1
+  temp_path="$(umask 077; mktemp "${trust_path%/*}/.trust.XXXXXX")" || return 1
 
   if ! printf '%s\n' "$canonical_config_file" > "$temp_path"; then
     rm -f "$temp_path"
@@ -242,13 +349,16 @@ _hooks_mark_trusted() {
 
 # Get hooks, filtering out untrusted .gtrconfig hooks with a warning
 # Usage: _hooks_get_trusted <phase>
+# Returns hex-encoded, NUL-terminated complete values, in first-seen order.
+# This internal execution interface must not be consumed as lines of shell code.
 _hooks_get_trusted() {
   local phase="$1"
   _gtr_config_check || return 1
 
   # Always include hooks from git config (user controls their own .git/config)
   local git_hooks
-  git_hooks=$(git config --get-all "gtr.hook.$phase" 2>/dev/null) || true
+  git_hooks=$(git config -z --get-all "gtr.hook.$phase" 2>/dev/null |
+    od -An -v -tx1 | tr -d ' \n' || true)
 
   # Check .gtrconfig trust before including its hooks
   local config_file
@@ -258,7 +368,8 @@ _hooks_get_trusted() {
   if [ -n "$config_file" ] && [ -f "$config_file" ]; then
     local definitions
     definitions=$(_hooks_read_definitions "$config_file") || true
-    file_hooks=$(_hooks_definitions_get "$definitions" "hooks.$phase")
+    file_hooks=$(_hooks_definitions_get "$definitions" "hooks.$phase" null |
+      od -An -v -tx1 | tr -d ' \n')
     if ! _hooks_snapshot_is_trusted "$config_file" "$definitions"; then
       if [ -n "$file_hooks" ]; then
         log_warn "Untrusted .gtrconfig hooks for '$phase' phase — skipping"
@@ -268,11 +379,24 @@ _hooks_get_trusted() {
     fi
   fi
 
-  # Merge and deduplicate
-  {
-    [ -n "$git_hooks" ] && printf '%s\n' "$git_hooks"
-    [ -n "$file_hooks" ] && printf '%s\n' "$file_hooks"
-  } | awk '!seen[$0]++'
+  # Deduplicate complete values, not their physical lines. Indexed arrays work
+  # in Bash 3.2; no delimiter can collide with text inside a hook value.
+  local seen=()
+  local hook previous duplicate
+  while IFS= read -r -d '' hook; do
+    [ -n "$hook" ] || continue
+    duplicate=0
+    for previous in "${seen[@]}"; do
+      if [ "$hook" = "$previous" ]; then
+        duplicate=1
+        break
+      fi
+    done
+    [ "$duplicate" -eq 0 ] || continue
+    seen+=("$hook")
+    printf '%s\0' "$hook"
+  done < <(_hooks_decode_records "$git_hooks$file_hooks") |
+    od -An -v -tx1 | tr -d ' \n'
 }
 
 # Report the outcome a successful hook phase will have without executing it.
@@ -283,12 +407,12 @@ _hooks_phase_status() {
   local git_hooks="" config_file="" file_hooks=""
   local has_runnable=0 has_untrusted=0
 
-  git_hooks=$(git config --get-all "gtr.hook.$phase" 2>/dev/null) || true
+  git_hooks=$(git config --get-all "gtr.hook.$phase" 2>/dev/null || true)
   [ -n "$git_hooks" ] && has_runnable=1
 
   config_file=$(_gtrconfig_path) || true
   if [ -n "$config_file" ] && [ -f "$config_file" ]; then
-    file_hooks=$(git config -f "$config_file" --get-all "hooks.$phase" 2>/dev/null) || true
+    file_hooks=$(git config -f "$config_file" --get-all "hooks.$phase" 2>/dev/null || true)
     if [ -n "$file_hooks" ]; then
       if _hooks_are_trusted "$config_file"; then
         has_runnable=1
@@ -327,14 +451,14 @@ run_hooks() {
 
   log_step "Running $phase hooks..."
 
-  local hook_count=0
+  local hook hook_count=0
   local failed=0
 
   # Capture environment variable assignments in array to preserve quoting
   local envs=("$@")
 
   # Execute each hook in a subshell to isolate side effects
-  while IFS= read -r hook; do
+  while IFS= read -r -d '' hook; do
     [ -z "$hook" ] && continue
 
     hook_count=$((hook_count + 1))
@@ -356,9 +480,7 @@ run_hooks() {
       log_error "Hook $hook_count failed with exit code $rc"
       failed=$((failed + 1))
     fi
-  done <<EOF
-$hooks
-EOF
+  done < <(_hooks_decode_records "$hooks")
 
   if [ "$failed" -gt 0 ]; then
     log_warn "$failed hook(s) failed"
@@ -418,8 +540,8 @@ run_hooks_export() {
     export "$kv"
   done
 
-  local hook_count=0
-  while IFS= read -r hook; do
+  local hook hook_count=0
+  while IFS= read -r -d '' hook; do
     [ -z "$hook" ] && continue
 
     hook_count=$((hook_count + 1))
@@ -427,7 +549,5 @@ run_hooks_export() {
 
     # eval directly (no subshell) so exports persist
     eval "$hook" </dev/null || log_warn "Hook $hook_count failed (continuing)"
-  done <<EOF
-$hooks
-EOF
+  done < <(_hooks_decode_records "$hooks")
 }

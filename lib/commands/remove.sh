@@ -126,14 +126,11 @@ EOF
   printf '  Dirty (tracked): %s; untracked: %s; locked: %s\n' "$dirty" "$untracked" "$locked"
   if [ "$locked" = yes ]; then
     printf '  Blocked: locked worktree; the existing single --force cannot remove it.\n'
-  elif [ "$dirty" = yes ] || [ "$untracked" = yes ]; then
-    if [ "$force" -eq 0 ]; then
-      if [ "$dirty" = yes ]; then
-        printf '  Blocked without --force: modified tracked files.\n'
-      else
-        printf '  Untracked files may block removal without --force, depending on Git status settings.\n'
-      fi
-    fi
+  elif [ "$dirty" = yes ] && [ "$force" -eq 0 ]; then
+    printf '  Blocked without --force: modified tracked files.\n'
+  fi
+  if [ "$untracked" = yes ] && [ "$force" -eq 0 ]; then
+    printf '  Warning: status.showUntrackedFiles=no can allow removal to delete untracked files even without --force.\n'
   fi
   printf '  Warning: --force can discard uncommitted changes and untracked files.\n'
   printf '  Hooks: preRemove/postRemove not executed; trust state unchanged.\n'

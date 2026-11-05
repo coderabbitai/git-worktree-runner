@@ -189,13 +189,20 @@ _help_list() {
   cat <<'EOF'
 git gtr list - List all worktrees
 
-Usage: git gtr list [--porcelain]
-       git gtr ls [--porcelain]
+Usage: git gtr list [--porcelain | --ids]
+       git gtr ls [--porcelain | --ids]
 
 Shows all git worktrees for the current repository in a formatted table.
 
 Options:
   --porcelain         Machine-readable output (one worktree per line)
+  --ids               TSV: registered identity, branch, status (escaped fields)
+
+Pass the first field from --ids as a quoted target to go, rm, copy, editor,
+ai, or run. It selects that exact registered worktree, including duplicates
+and detached worktrees. Identity format: path:<absolute path>, with backslash,
+tab and newline escaped as \\, \t and \n.
+Main-repository removal is still prohibited; unregistered paths are rejected.
 
 Examples:
   git gtr list                                  # Human-readable table
@@ -430,6 +437,8 @@ Add to your shell configuration.
 Output is cached under ${XDG_CACHE_HOME:-$HOME/.cache}/gtr/.
 Each invocation checks the installed version and shell integration schema,
 regenerating outdated helpers before returning them.
+New cache directories and files are private. Ownership and write permissions
+are checked through the parent path; unsafe or unavailable caches are bypassed.
 Replace older setup snippets that source a cache directly or check a hard-coded
 'init=' value, then restart your shell or run the matching setup command below.
 Upgrades to the v3 trust format require reviewing commands with 'git gtr trust'.
@@ -624,7 +633,7 @@ CORE COMMANDS (daily workflow):
            git gtr run feature-auth git status
            git gtr run 1 npm run build
 
-  list [--porcelain]
+  list [--porcelain | --ids]
          List all worktrees
          Aliases: ls
 

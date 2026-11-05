@@ -289,7 +289,11 @@ gtr cd 1
 
 `git gtr init <shell>` reuses cached output only when both the installed version and shell integration schema match. Keep the invocation in your shell configuration so upgrades refresh the helpers automatically. If your existing setup sources a cache file directly or checks a hard-coded `init=` value, replace it with the setup above, then restart your shell or run the matching setup command in the current shell. Upgrades to the v3 trust format require reviewing commands again with `git gtr trust`.
 
+The cache lives under `${XDG_CACHE_HOME:-$HOME/.cache}/gtr/`. New cache directories and files are private to your user. Each invocation checks ownership and write permissions, including parent directories and any XDG symlink targets. If the location is unsafe or unavailable, `git gtr init` returns fresh shell integration without reading or updating that cache.
+
 With [fzf](https://github.com/junegunn/fzf) installed, `gtr cd` (no arguments) opens a command palette with git log preview and keybindings: `ctrl-e` editor, `ctrl-a` AI, `ctrl-d` delete, `ctrl-y` copy, `ctrl-r` refresh.
+The picker shows each worktree's branch and path, and actions apply to the selected
+registered path even when branches or detached labels repeat.
 
 > **Note:** If `gtr` conflicts with another command (e.g., GNU `tr` from coreutils), use `--as` to pick a different name:
 >
@@ -382,9 +386,13 @@ git gtr copy my-feature -n -- "**/.env*"      # Dry-run preview
 - `-a, --all`: Copy to all worktrees
 - `--from <source>`: Copy from different worktree (default: main repo)
 
-### `git gtr list [--porcelain]`
+### `git gtr list [--porcelain | --ids]`
 
 List all worktrees. Use `--porcelain` for machine-readable output.
+Use `--ids` for tab-separated registered identity, branch, and status fields.
+Pass the first field as a quoted command target to select one exact worktree.
+See [registered identities](docs/advanced-usage.md#multiple-worktrees-same-branch)
+for the path escaping rules.
 
 ### `git gtr config {get|set|add|unset|list} <key> [value] [--global]`
 
@@ -443,6 +451,10 @@ must be secured before running GTR; `git gtr trust` does not bypass this check.
 See [configuration safety](docs/configuration.md#configuration-safety).
 
 Approval covers command definitions and the behavior they delegate to. It does not hash or pin scripts, dependencies, or tools: for example, approving `sh ./scripts/setup.sh` allows subsequent changes to that script within the same repository. Review delegated code and trust the repository's contributors before approving commands.
+
+Trust markers must be regular files. Both the markers and their directory must be owned by you, must not be symlinks, and must not be group-writable or world-writable. Modes such as `0775` for a directory or `0664` for a marker are rejected even if the group contains only you. Ancestor directories and config-home symlink targets must be owned by you or root and protected from replacement by other users. A group-writable or world-writable ancestor is accepted only when it has the sticky bit; the trust directory itself must still have both write bits disabled.
+
+New trust directories are created with mode `0700` and markers with mode `0600`, regardless of your umask. Unsafe existing storage is rejected without changing its permissions. For an existing trust directory you own and have verified is not a symlink, `chmod 700 "${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"` repairs only that directory's permissions, not its markers or parent directories. Secure writable parent directories as well. If the store contains non-regular markers (such as directories or FIFOs), or other users could have modified it, move it aside before reviewing commands again with `git gtr trust` to create fresh approvals; changing permissions alone does not validate the old markers.
 
 Trust requires a known filesystem birth time for the Git directory. If `stat` cannot provide it, `.gtrconfig` executable commands remain untrusted.
 

@@ -200,7 +200,7 @@ preview() {
   run preview topic -n
   [ "$status" -eq 0 ]
   [[ "$output" == *"untracked: yes"* ]]
-  [[ "$output" == *"depending on Git status settings"* ]]
+  [[ "$output" == *"status.showUntrackedFiles=no can allow removal to delete untracked files even without --force"* ]]
   [[ "$output" != *"Blocked without --force"* ]]
   [ "$(cat "$TEST_WT_PATH/untracked")" = keep ]
 }

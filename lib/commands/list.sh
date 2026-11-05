@@ -3,19 +3,21 @@
 # List command
 # shellcheck disable=SC2154  # _arg_* set by parse_args, _ctx_* set by resolve_*
 cmd_list() {
-  parse_args "--porcelain" "$@"
+  parse_args "--porcelain
+--ids" "$@"
 
   local porcelain="${_arg_porcelain:-0}"
+  local ids="${_arg_ids:-0}"
 
   resolve_repo_context || exit 1
 
   local repo_root="$_ctx_repo_root"
   local records
-  records=$(list_worktree_records "$repo_root")
+  records=$(list_worktree_records "$repo_root") || return 1
 
   # Machine-readable output (porcelain)
-  if [ "$porcelain" -eq 1 ]; then
-    # Output: path<tab>branch<tab>status
+  if [ "$porcelain" -eq 1 ] || [ "$ids" -eq 1 ]; then
+    # Output: path (or escaped path: identity)<tab>branch<tab>status
     local is_main="" path="" branch="" status="" linked_rows="" line
     while IFS= read -r line; do
       case "$line" in
@@ -35,7 +37,11 @@ cmd_list() {
           is_main="${line#is_main }"
           ;;
         "path "*)
-          path=$(_tsv_unescape_field "${line#path }")
+          if [ "$ids" -eq 1 ]; then
+            path="path:${line#path }"
+          else
+            path=$(_tsv_unescape_field "${line#path }")
+          fi
           ;;
         "branch "*)
           branch=$(_tsv_unescape_field "${line#branch }")

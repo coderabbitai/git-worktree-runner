@@ -95,6 +95,20 @@ create_test_worktree() {
   TEST_WT_PATH=$(create_worktree "$TEST_WORKTREES_DIR" "" "$branch" "HEAD" "none" "1" "0")
 }
 
+# Run a function with jq discovery disabled, without hiding other dependencies.
+# Usage: without_jq <function> [args...]
+# Returns the function status; the subshell keeps discovery unchanged for callers.
+without_jq() (
+  # Hide only command -v jq; delegate every other invocation to the Bash builtin.
+  command() {
+    if [ "$1" = "-v" ] && [ "${2:-}" = "jq" ]; then
+      return 1
+    fi
+    builtin command "$@"
+  }
+  "$@"
+)
+
 # Create a stub CLI in PATH for provider testing
 # Usage: mock_provider_cli <name> <exit_code> [stdout]
 mock_provider_cli() {

@@ -121,7 +121,7 @@ _git-gtr() {
 
   # Early handler for `list/ls` command - add --porcelain
   if (( CURRENT >= 4 )) && [[ $words[3] == (list|ls) ]]; then
-    _arguments '--porcelain[Machine-readable output]'
+    _arguments '--porcelain[Machine-readable output]' '--ids[Machine-readable registered identities]'
     return
   fi
 
