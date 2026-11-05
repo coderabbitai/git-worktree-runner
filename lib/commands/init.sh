@@ -145,8 +145,8 @@ cmd_init() {
   case "$cache_dir" in /*) ;; *) cache_dir="$(pwd -P)/$cache_dir" ;; esac
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 11 also validates trust storage before accepting v3 approval markers.
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-11}"
+  # Schema 12 carries registered path identities through picker actions.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-12}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # A matching public stamp alone does not make executable cache data trusted.
@@ -588,7 +588,7 @@ __FUNC__() {
     local dir
     if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
       local _gtr_porcelain
-      _gtr_porcelain="$(command git gtr list --porcelain)"
+      _gtr_porcelain="$(command git gtr list --ids)"
       if [ "$(printf '%s\n' "$_gtr_porcelain" | wc -l)" -le 1 ]; then
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
@@ -596,18 +596,18 @@ __FUNC__() {
       local _gtr_selection _gtr_key _gtr_line _gtr_branch
       _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
-        --with-nth=2 \
-        --ansi \
+        --with-nth=2,1 \
+        --no-ansi \
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
         --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
         --expect=ctrl-n,ctrl-a,ctrl-e \
-        --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+        --preview='git gtr run {s1} git log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git gtr run {s1} git status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
-        --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
+        --bind='ctrl-d:execute(git gtr rm {s1} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --ids)' \
+        --bind='ctrl-y:execute(git gtr copy {s1} > /dev/tty 2>&1 < /dev/tty)' \
+        --bind='ctrl-r:reload(git gtr list --ids)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
       _gtr_key="$(head -1 <<< "$_gtr_selection")"
       _gtr_line="$(sed -n '2p' <<< "$_gtr_selection")"
@@ -621,13 +621,16 @@ __FUNC__() {
       [ -z "$_gtr_line" ] && return 0
       # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
       if [ "$_gtr_key" = "ctrl-a" ]; then
-        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f2)"
+        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f1)"
         return $?
       elif [ "$_gtr_key" = "ctrl-e" ]; then
-        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f2)"
+        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f1)"
         return $?
       fi
-      dir="$(printf '%s' "$_gtr_line" | cut -f1)"
+      # Resolve the identity again; preserve path newlines with a sentinel.
+      dir="$(command git gtr go "$(printf '%s' "$_gtr_line" | cut -f1)" && printf '.')" || return $?
+      dir="${dir%.}"
+      dir="${dir%$'\n'}"
     elif [ "$#" -eq 0 ]; then
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
@@ -784,7 +787,7 @@ __FUNC__() {
     local dir
     if [ "$#" -eq 0 ] && command -v fzf >/dev/null 2>&1; then
       local _gtr_porcelain
-      _gtr_porcelain="$(command git gtr list --porcelain)"
+      _gtr_porcelain="$(command git gtr list --ids)"
       if [ "$(printf '%s\n' "$_gtr_porcelain" | wc -l)" -le 1 ]; then
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
@@ -792,18 +795,18 @@ __FUNC__() {
       local _gtr_selection _gtr_key _gtr_line _gtr_branch
       _gtr_selection="$(printf '%s\n' "$_gtr_porcelain" | fzf \
         --delimiter=$'\t' \
-        --with-nth=2 \
-        --ansi \
+        --with-nth=2,1 \
+        --no-ansi \
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
         --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
         --expect=ctrl-n,ctrl-a,ctrl-e \
-        --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+        --preview='git gtr run {s1} git log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git gtr run {s1} git status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
-        --bind='ctrl-r:reload(git gtr list --porcelain)')" || return 0
+        --bind='ctrl-d:execute(git gtr rm {s1} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --ids)' \
+        --bind='ctrl-y:execute(git gtr copy {s1} > /dev/tty 2>&1 < /dev/tty)' \
+        --bind='ctrl-r:reload(git gtr list --ids)')" || return 0
       [ -z "$_gtr_selection" ] && return 0
       _gtr_key="$(head -1 <<< "$_gtr_selection")"
       _gtr_line="$(sed -n '2p' <<< "$_gtr_selection")"
@@ -817,13 +820,16 @@ __FUNC__() {
       [ -z "$_gtr_line" ] && return 0
       # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
       if [ "$_gtr_key" = "ctrl-a" ]; then
-        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f2)"
+        command git gtr ai "$(printf '%s' "$_gtr_line" | cut -f1)"
         return $?
       elif [ "$_gtr_key" = "ctrl-e" ]; then
-        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f2)"
+        command git gtr editor "$(printf '%s' "$_gtr_line" | cut -f1)"
         return $?
       fi
-      dir="$(printf '%s' "$_gtr_line" | cut -f1)"
+      # Resolve the identity again; preserve path newlines with a sentinel.
+      dir="$(command git gtr go "$(printf '%s' "$_gtr_line" | cut -f1)" && printf '.')" || return $?
+      dir="${dir%.}"
+      dir="${dir%$'\n'}"
     elif [ "$#" -eq 0 ]; then
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
@@ -969,25 +975,25 @@ function __FUNC__
   if test (count $argv) -gt 0; and test "$argv[1]" = "cd"
     set -l dir
     if test (count $argv) -eq 1; and type -q fzf
-      set -l _gtr_porcelain (command git gtr list --porcelain)
+      set -l _gtr_porcelain (command git gtr list --ids)
       if test (count $_gtr_porcelain) -le 1
         echo "No worktrees to pick from. Create one with: git gtr new <branch>" >&2
         return 0
       end
       set -l _gtr_selection (printf '%s\n' $_gtr_porcelain | fzf \
         --delimiter=\t \
-        --with-nth=2 \
-        --ansi \
+        --with-nth=2,1 \
+        --no-ansi \
         --layout=reverse \
         --border \
         --prompt='Worktree> ' \
         --header='enter:cd │ ctrl-n:new │ ctrl-e:editor │ ctrl-a:ai │ ctrl-d:delete │ ctrl-y:copy │ ctrl-r:refresh' \
         --expect=ctrl-n,ctrl-a,ctrl-e \
-        --preview='git -C {1} log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git -C {1} status --short 2>/dev/null' \
+        --preview='git gtr run {s1} git log --oneline --graph --color=always -15 2>/dev/null; echo "---"; git gtr run {s1} git status --short 2>/dev/null' \
         --preview-window=right:50% \
-        --bind='ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)' \
-        --bind='ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)' \
-        --bind='ctrl-r:reload(git gtr list --porcelain)')
+        --bind='ctrl-d:execute(git gtr rm {s1} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --ids)' \
+        --bind='ctrl-y:execute(git gtr copy {s1} > /dev/tty 2>&1 < /dev/tty)' \
+        --bind='ctrl-r:reload(git gtr list --ids)')
       or return 0
       test -z "$_gtr_selection"; and return 0
       # --expect gives two lines: key (index 1) and selection (index 2)
@@ -1011,13 +1017,15 @@ function __FUNC__
       test -z "$_gtr_line"; and return 0
       # ctrl-a/ctrl-e: run after fzf exits (needs full terminal for TUI apps)
       if test "$_gtr_key" = "ctrl-a"
-        command git gtr ai (string split \t -- "$_gtr_line")[2]
+        command git gtr ai (string split \t -- "$_gtr_line")[1]
         return $status
       else if test "$_gtr_key" = "ctrl-e"
-        command git gtr editor (string split \t -- "$_gtr_line")[2]
+        command git gtr editor (string split \t -- "$_gtr_line")[1]
         return $status
       end
-      set dir (string split \t -- "$_gtr_line")[1]
+      # NUL output preserves embedded/trailing newlines as one Fish argument.
+      set dir (command git gtr run (string split \t -- "$_gtr_line")[1] sh -c 'printf "%s\0" "$PWD"' | string split0)
+      test "$pipestatus[1]" -eq 0; or return 1
     else if test (count $argv) -eq 1
       echo "Usage: __FUNC__ cd <branch>" >&2
       echo "Tip: Install fzf for an interactive picker (https://github.com/junegunn/fzf)" >&2
