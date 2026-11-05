@@ -5,14 +5,14 @@ load test_helper
 
 setup() {
   setup_integration_repo
-  export XDG_CONFIG_HOME="$BATS_TMPDIR/gtr-launch-config-$$"
-  export GIT_CONFIG_GLOBAL="$BATS_TMPDIR/gtr-launch-global-$$"
+  # Keep config under a private fixture even when BATS_TMPDIR is shared /tmp.
+  export XDG_CONFIG_HOME="$TEST_REPO/test-config"
+  export GIT_CONFIG_GLOBAL="$TEST_REPO/test-global.gitconfig"
+  : > "$GIT_CONFIG_GLOBAL"
   source_gtr_commands
 }
 
 teardown() {
-  rm -rf "$XDG_CONFIG_HOME"
-  rm -f "$GIT_CONFIG_GLOBAL"
   teardown_integration_repo
 }
 
