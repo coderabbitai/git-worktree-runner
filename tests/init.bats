@@ -63,12 +63,38 @@ COMP_WORDS=("${words[@]}")
 COMP_CWORD="$comp_cword"
 COMP_LINE="$comp_line"
 COMP_POINT="$comp_point"
-COMPREPLY=()
+COMPREPLY=(stale-reply)
 "$completion_fn"
 
-printf 'REPLY=%s\n' "${COMPREPLY[*]}"
+printf 'REPLY=%s\n' "${COMPREPLY[*]-}"
 BASH
 }
+
+run_generated_bash_cd_completion() (
+  set -e
+  local wrapper_name="$1" prefix="$2" fixture branch index=0 comp_line
+  shift 2
+  fixture=$(mktemp -d)
+  trap 'rm -rf "$fixture"' EXIT
+  export PATH="$PROJECT_ROOT/bin:$PATH"
+  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
+  git init --quiet "$fixture/repo with spaces"
+  cd "$fixture/repo with spaces"
+  git symbolic-ref HEAD refs/heads/main
+  git -c user.name=Fixture -c user.email=fixture@example.test \
+    commit --allow-empty --quiet -m init
+  for branch in "$@"; do
+    git check-ref-format --branch "$branch" >/dev/null
+    index=$((index + 1))
+    git worktree add --quiet -b "$branch" "$fixture/wt-$index"
+  done
+  comp_line="$wrapper_name cd $prefix"
+  run_generated_bash_wrapper_completion "$wrapper_name" "$comp_line" 2 \
+    "${#comp_line}" "$wrapper_name" cd "$prefix"
+  # Both payloads only create a marker in this disposable repository if evaluated.
+  [ ! -e completion-dollar-marker ]
+  [ ! -e completion-backtick-marker ]
+)
 
 run_generated_post_cd_hooks() {
   local shell_name="$1"
@@ -424,6 +450,48 @@ run_generated_v2_trust_upgrade() (
   run cmd_init bash
   [ "$status" -eq 0 ]
   [[ "$output" == *"git gtr list --porcelain"* ]]
+}
+
+@test "bash cd completion filters ordinary branch prefixes" {
+  run run_generated_bash_cd_completion gtr feature/a feature/auth feature/api bugfix
+  [ "$status" -eq 0 ]
+  [ "$output" = "REPLY=feature/api feature/auth" ]
+}
+
+@test "bash cd completion includes the main worktree alias" {
+  run run_generated_bash_cd_completion gtr 1 feature/auth
+  [ "$status" -eq 0 ]
+  [ "$output" = "REPLY=1" ]
+}
+
+@test "bash cd completion keeps dollar command substitutions literal" {
+  run run_generated_bash_cd_completion gtr 'feature/$(' \
+    'feature/$(>completion-dollar-marker)' 'feature/`>completion-backtick-marker`'
+  [ "$status" -eq 0 ]
+  [ "$output" = 'REPLY=feature/$(>completion-dollar-marker)' ]
+}
+
+@test "bash cd completion keeps backtick substitutions literal with a custom wrapper" {
+  run run_generated_bash_cd_completion gwtr 'feature/`' \
+    'feature/$(>completion-dollar-marker)' 'feature/`>completion-backtick-marker`'
+  [ "$status" -eq 0 ]
+  [ "$output" = 'REPLY=feature/`>completion-backtick-marker`' ]
+}
+
+@test "bash cd completion with an empty prefix preserves every literal candidate" {
+  run run_generated_bash_cd_completion gtr '' \
+    'feature/$(>completion-dollar-marker)' 'feature/`>completion-backtick-marker`'
+  [ "$status" -eq 0 ]
+  [ "$output" = 'REPLY=1 main feature/$(>completion-dollar-marker) feature/`>completion-backtick-marker`' ]
+}
+
+@test "bash cd completion clears unmatched replies under set -e and treats prefixes literally" {
+  local prefix
+  for prefix in missing 'feature/*'; do
+    run run_generated_bash_cd_completion gtr "$prefix" feature/auth
+    [ "$status" -eq 0 ]
+    [ "$output" = "REPLY=" ]
+  done
 }
 
 @test "generated wrappers resolve .gtrconfig from the git common dir" {
@@ -1079,14 +1147,14 @@ run_generated_v2_trust_upgrade() (
   mkdir -p "$XDG_CACHE_HOME/gtr"
   for shell_name in bash zsh fish; do
     for func_name in gtr gwtr; do
-      for schema in 9 8 7 6; do
+      for schema in 10 9 8 7 6; do
         cache_file="$XDG_CACHE_HOME/gtr/init-$func_name.$shell_name"
         printf '# gtr-cache: version=test init=%s func=%s shell=%s\nold-cache\n' \
           "$schema" "$func_name" "$shell_name" > "$cache_file"
         run cmd_init "$shell_name" --as "$func_name"
         [ "$status" -eq 0 ]
         [[ "$output" != *old-cache* ]]
-        [[ "$(head -1 "$cache_file")" == *"init=10"* ]]
+        [[ "$(head -1 "$cache_file")" == *"init=11"* ]]
       done
     done
   done
@@ -1115,15 +1183,15 @@ run_documented_init_upgrade() (
     if [ "$shell_name" = zsh ]; then
       snippet='compdef() { :; }'$'\n'"$snippet"
     fi
-    for schema in 6 7 8 9 10; do
+    for schema in 6 7 8 9 10 11; do
       version="$cli_version"
-      [ "$schema" != 10 ] || version=old-version
+      [ "$schema" != 11 ] || version=old-version
       printf '# gtr-cache: version=%s init=%s func=gtr shell=%s\n' \
         "$version" "$schema" "$shell_name" > "$cache_file"
       printf '%s\n' 'echo stale > "$STALE_CACHE_MARKER"' >> "$cache_file"
       "$shell_name" -c "$snippet"
       [ ! -f "$STALE_CACHE_MARKER" ]
-      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=10 "* ]]
+      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=11 "* ]]
     done
   done
 )
