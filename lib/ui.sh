@@ -136,7 +136,7 @@ prompt_input() {
   local question="$1"
   local var_name="$2"
 
-  log_question "$question " >&2
+  printf "%s[?]%s %s " "$_UI_BOLD" "$_UI_RESET" "$question" >&2
   read -r input
 
   if [ -n "$var_name" ]; then

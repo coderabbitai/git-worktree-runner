@@ -35,3 +35,27 @@ setup() {
   [ ! -s "$BATS_TEST_TMPDIR/stdout" ]
   [ "$(cat "$BATS_TEST_TMPDIR/stderr")" = "[?] Enter branch name: " ]
 }
+
+@test "prompt_input omits color when only stdout has color enabled" {
+  _ui_enable_color
+  # Model stdout being a terminal while stderr is redirected.
+  _UI_BOLD="" _UI_RESET=""
+  local answer
+  answer=$(prompt_input "Enter branch name:" \
+    <<< 'feature/plain' 2>"$BATS_TEST_TMPDIR/stderr")
+
+  [ "$answer" = "feature/plain" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/stderr")" = "[?] Enter branch name: " ]
+}
+
+@test "prompt_input uses color when only stderr has color enabled" {
+  _ui_enable_color
+  # Model stdout being redirected while stderr is a terminal.
+  _UI_BOLD_STDOUT="" _UI_RESET_STDOUT=""
+  local answer
+  answer=$(prompt_input "Enter branch name:" \
+    <<< 'feature/color' 2>"$BATS_TEST_TMPDIR/stderr")
+
+  [ "$answer" = "feature/color" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/stderr")" = $'\033[1m[?]\033[0m Enter branch name: ' ]
+}
