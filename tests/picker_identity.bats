@@ -45,8 +45,10 @@ case "$PICKER_KEY" in
           # Mimic fzf's shell-quoted placeholders, running without a TTY.
           # Reject the old ambiguous branch placeholder explicitly.
           [[ "$action" != *'{2}'* ]]
+          [[ "$action" == *'{s1}'* ]]
           printf -v quoted '%q' "$PICKER_ID"
-          action="${action//\{s1\}/$quoted}"
+          # Concatenation preserves printf %q's backslashes across Bash versions.
+          action="${action%%\{s1\}*}${quoted}${action#*\{s1\}}"
           action="${action% > /dev/tty 2>&1 < /dev/tty}"
           bash -c "$action"
           exit 0
