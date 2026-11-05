@@ -251,6 +251,8 @@ setup_validated_tip_candidate() {
   check_branch_closed() { check_branch_merged "$@"; }
 }
 
+# Assert cleanup skipped a candidate after preRemove without removing its worktree
+# or invoking postRemove. Reads BATS status/output and the fixture's hook log.
 assert_changed_candidate_is_preserved() {
   [ "$status" -eq 0 ]
   [ -d "$TEST_WT_PATH" ]
@@ -260,6 +262,8 @@ assert_changed_candidate_is_preserved() {
   [[ "$output" == *"Removed: 0, Skipped: 1"* ]]
 }
 
+# Run cleanup with the supplied mode/flags and verify that a preRemove commit
+# preserves the worktree, updated branch, and branch metadata.
 assert_cleanup_preserves_hook_commit() {
   setup_validated_tip_candidate
   git config gtr.hook.preRemove \
@@ -298,7 +302,9 @@ assert_cleanup_preserves_hook_commit() {
 
   run run_clean_with_errexit --merged --force --yes
   assert_changed_candidate_is_preserved
-  ! git -C "$TEST_WT_PATH" symbolic-ref --quiet HEAD
+  if git -C "$TEST_WT_PATH" symbolic-ref --quiet HEAD >/dev/null; then
+    false
+  fi
   [ "$(git rev-parse refs/heads/validated-tip)" = "$CLEAN_VALIDATED_TIP" ]
 }
 
@@ -317,6 +323,7 @@ assert_cleanup_preserves_hook_commit() {
 @test "cmd_clean fails closed when post-hook branch state cannot be established" {
   setup_validated_tip_candidate
   git config gtr.hook.preRemove 'printf "pre\n" > "$REPO_ROOT/hook-order"'
+  # Fail only the selected post-hook lookup; preserve all other Git behavior.
   git() {
     if [ "$1" = -C ] && [ "$2" = "$TEST_WT_PATH" ] && \
        [ "$3" = "$CLEAN_FAIL_COMMAND" ] && [ -e "$TEST_REPO/hook-order" ]; then
@@ -362,14 +369,20 @@ assert_cleanup_preserves_hook_commit() {
     run run_clean_with_errexit "$mode" --yes
     [ "$status" -eq 0 ]
     [ ! -d "$TEST_WT_PATH" ]
-    ! git show-ref --verify --quiet refs/heads/validated-tip
-    ! git config --get-regexp '^branch\.validated-tip\.'
+    if git show-ref --verify --quiet refs/heads/validated-tip; then
+      false
+    fi
+    if git config --get-regexp '^branch\.validated-tip\.' >/dev/null; then
+      false
+    fi
     [ "$(cat "$TEST_REPO/hook-order")" = $'pre\npost' ]
     [[ "$output" == *"Removed: 1, Skipped: 0"* ]]
     [[ "$output" != *"Post-remove hook failed"* ]]
   done
 }
 
+# Inject an update immediately before branch deletion, then assert cleanup keeps
+# the new tip and metadata for the supplied cleanup mode/flags.
 assert_cleanup_preserves_racing_tip() {
   setup_validated_tip_candidate
   local new_tip
@@ -423,6 +436,7 @@ assert_cleanup_preserves_racing_tip() {
 
 @test "cmd_clean keeps branch metadata if remaining worktrees cannot be checked" {
   setup_validated_tip_candidate
+  # Fail worktree enumeration only after the candidate directory is removed.
   git() {
     if [ "$1" = -C ] && [ "$2" = "$TEST_REPO" ] && \
        [ "$3 $4" = "worktree list" ] && [ ! -d "$TEST_WT_PATH" ]; then
@@ -440,6 +454,8 @@ assert_cleanup_preserves_racing_tip() {
   [[ "$output" == *"Kept branch validated-tip (could not verify remaining worktrees)"* ]]
 }
 
+# Model the supplied rebase/bisect state file and branch value in another worktree,
+# then verify cleanup preserves the reserved branch and its metadata.
 assert_cleanup_preserves_in_progress_branch() {
   local state_file="$1" state_branch="$2" state_path
   setup_validated_tip_candidate
@@ -473,6 +489,7 @@ assert_cleanup_preserves_in_progress_branch() {
 @test "cmd_clean never follows a symbolic branch ref during final deletion" {
   setup_validated_tip_candidate
   git branch other-tip "$CLEAN_VALIDATED_TIP"
+  # Replace the branch with a symbolic ref at the final deletion command.
   git() {
     case " $* " in
       *" update-ref "*" -d refs/heads/validated-tip "*)
