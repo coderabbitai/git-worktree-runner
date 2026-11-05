@@ -171,7 +171,7 @@ MIDDLE1
       ;;
     ls|list)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--porcelain" -- "$cur"))
+        COMPREPLY=($(compgen -W "--porcelain --ids" -- "$cur"))
       fi
       ;;
     clean)
@@ -385,7 +385,7 @@ _git-gtr() {
 
   # Early handler for `list/ls` command - add --porcelain
   if (( CURRENT >= 4 )) && [[ $words[3] == (list|ls) ]]; then
-    _arguments '--porcelain[Machine-readable output]'
+    _arguments '--porcelain[Machine-readable output]' '--ids[Machine-readable registered identities]'
     return
   fi
 
@@ -618,7 +618,9 @@ complete -c git -n '__fish_git_gtr_using_command copy' -l from -d 'Source worktr
 
 # List command options
 complete -c git -n '__fish_git_gtr_using_command list' -l porcelain -d 'Machine-readable output'
+complete -c git -n '__fish_git_gtr_using_command list' -l ids -d 'Machine-readable registered identities'
 complete -c git -n '__fish_git_gtr_using_command ls' -l porcelain -d 'Machine-readable output'
+complete -c git -n '__fish_git_gtr_using_command ls' -l ids -d 'Machine-readable registered identities'
 
 # Editor command options
 HEADER

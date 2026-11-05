@@ -77,7 +77,7 @@ _git_gtr() {
       ;;
     ls|list)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--porcelain" -- "$cur"))
+        COMPREPLY=($(compgen -W "--porcelain --ids" -- "$cur"))
       fi
       ;;
     clean)

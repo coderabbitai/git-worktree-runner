@@ -361,3 +361,60 @@ teardown() {
 
   rm -rf "$outside_repo"
 }
+
+@test "registered path identities select duplicates without changing normal target precedence" {
+  create_test_worktree shared
+  local selected="$TEST_WORKTREES_DIR/second"
+  git worktree add --quiet --force "$selected" shared
+
+  resolve_worktree "path:$selected" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$selected" ]
+  [ "$_ctx_is_main" = 0 ]
+  resolve_worktree shared "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$TEST_WT_PATH" ]
+  resolve_worktree second "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$selected" ]
+  resolve_worktree 1 "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_is_main" = 1 ]
+  resolve_worktree "path:$TEST_REPO" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_is_main" = 1 ]
+}
+
+@test "path identities reject stale foreign unregistered and symlink paths" {
+  create_test_worktree target
+  mkdir "$TEST_REPO/stray" "$TEST_REPO/foreign"
+  git -C "$TEST_REPO/foreign" init --quiet
+  ln -s "$TEST_WT_PATH" "$TEST_REPO/link"
+  local path
+  for path in "$TEST_REPO/stray" "$TEST_REPO/foreign" "$TEST_REPO/link" "$TEST_WT_PATH/.."; do
+    run resolve_worktree "path:$path" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+    [ "$status" -eq 1 ]
+  done
+  git worktree remove "$TEST_WT_PATH"
+  mkdir "$TEST_WT_PATH"
+  run resolve_worktree "path:$TEST_WT_PATH" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$status" -eq 1 ]
+}
+
+@test "path identities use the old Git porcelain fallback for ordinary paths" {
+  create_test_worktree target
+  git() {
+    case "$*" in *"worktree list --porcelain -z") return 1 ;; esac
+    command git "$@"
+  }
+  resolve_worktree "path:$TEST_WT_PATH" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$TEST_WT_PATH" ]
+}
+
+@test "path identities preserve quotes tabs and shell syntax with old Git fallback" {
+  local path="$TEST_WORKTREES_DIR/\"quotes\" café \\ \$(touch should-not-exist)"$'\t'
+  git worktree add --quiet --detach "$path" HEAD
+  git() {
+    case "$*" in *"worktree list --porcelain -z") return 1 ;; esac
+    command git "$@"
+  }
+  resolve_worktree "path:$(_tsv_escape_field "$path")" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$path" ]
+  [ "$_ctx_branch" = '(detached)' ]
+  [ ! -e should-not-exist ]
+}

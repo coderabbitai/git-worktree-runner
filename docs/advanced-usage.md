@@ -173,6 +173,20 @@ such as `feature/auth` never selects a different branch just because its folder
 is named `feature-auth`. Unregistered directories and `.`/`..` targets are rejected;
 ID `1` always selects the main repository.
 
+For an unambiguous target, use the first field of `git gtr list --ids`.
+This format emits three tab-separated fields: registered identity, branch, status.
+An identity is `path:<absolute registered path>`, escaping backslash as `\\`,
+tab as `\t`, and newline as `\n`. For example,
+`git gtr editor 'path:/projects/repo-worktrees/feature-auth-backend'` opens that
+exact worktree. Pass the identity unchanged as one quoted argument to `go`, `rm`,
+`copy` (including `--from`), `editor`, `ai`, or `run`. The picker uses these
+identities for every action, so duplicate branches and detached worktrees remain
+distinct. Paths must match this repository's current registry; arbitrary
+directories, symlink aliases, and stale identities are rejected. Main-repository
+removal remains prohibited. The existing `list --porcelain` format is unchanged.
+Newline-containing worktree paths require Git with NUL-delimited worktree listings;
+older Git versions reject such listings to prevent selecting a truncated path.
+
 ### Best Practices
 
 - Always provide a descriptive `--name` (backend, frontend, tests, ci, etc.)

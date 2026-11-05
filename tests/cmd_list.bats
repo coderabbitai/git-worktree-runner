@@ -109,3 +109,44 @@ teardown() {
   [[ "$output" == *"$TEST_REPO"* ]]
   [[ "$output" != *"subdir/..-worktrees"* ]]
 }
+
+@test "cmd_list --ids emits one escaped registered identity per worktree" {
+  local path="$TEST_WORKTREES_DIR/back\\slash"$'\t'"tab"$'\n'"line"$'\n'
+  git worktree add --quiet --detach "$path" HEAD
+  run cmd_list --ids
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 2 ]
+  [ "${lines[1]}" = "path:$(_tsv_escape_field "$path")"$'\t(detached)\tdetached' ]
+  local identity="${lines[1]%%$'\t'*}"
+  resolve_worktree "$identity" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$_ctx_worktree_path" = "$path" ]
+}
+
+@test "old Git rejects newline paths before they can impersonate picker identities" {
+  git worktree add --quiet "$TEST_WORKTREES_DIR/other" -b other
+  git worktree add --quiet --detach "$TEST_WORKTREES_DIR/other"$'\n'"suffix" HEAD
+  git() {
+    case "$*" in *"worktree list --porcelain -z") return 1 ;; esac
+    command git "$@"
+  }
+  run cmd_list --ids
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'require Git with NUL'* ]]
+  [[ "$output" != *"path:$TEST_WORKTREES_DIR/other"* ]]
+  run resolve_worktree "path:$TEST_WORKTREES_DIR/other" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$status" -eq 1 ]
+}
+
+@test "old Git rejects a newline in the main worktree path too" {
+  local main="$TEST_REPO/main"$'\n'"root"
+  git init --quiet "$main"
+  cd "$main"
+  git() {
+    case "$*" in *"worktree list --porcelain -z") return 1 ;; esac
+    command git "$@"
+  }
+  run cmd_list --ids
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'require Git with NUL'* ]]
+  [[ "$output" != *"path:"* ]]
+}
