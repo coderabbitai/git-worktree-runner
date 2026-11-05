@@ -16,10 +16,13 @@ teardown() {
   teardown_integration_repo
 }
 
+# Print a fixture's octal permission bits using GNU or BSD stat.
+# Usage: file_mode <path>; returns nonzero when neither stat format succeeds.
 file_mode() {
   stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
 }
 
+# Assert that both approval reads and writes reject the current unsafe fixture.
 assert_storage_rejected() {
   run _hooks_marker_matches_config "$TRUST_MARKER" "$TEST_REPO/.gtrconfig"
   [ "$status" -eq 1 ]
@@ -207,6 +210,9 @@ SH
   [ "$expected" = "$actual" ]
 }
 
+# Exercise approval, unsafe-storage rejection and revocation in a real shell.
+# Usage: exercise_generated_storage <bash|zsh|fish>
+# Uses the disposable repository from setup; returns nonzero on any failed check.
 exercise_generated_storage() (
   set -e
   local shell_name="$1" directory

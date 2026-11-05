@@ -253,6 +253,9 @@ _hooks_safe_trust_path() {
 STORAGE
 }
 
+# Emit Bash/Zsh trust helpers with the requested per-function shell setup.
+# Usage: _init_emit_posix_trust_helpers <shell_prelude>
+# Prints definitions with __FUNC__ placeholders for cmd_init to substitute.
 _init_emit_posix_trust_helpers() {
   local shell_prelude="$1"
   local template
@@ -357,6 +360,9 @@ EOF
   printf '%s\n' "${template//__SHELL_PRELUDE__/$shell_prelude}"
 }
 
+# Emit Fish trust helpers, embedding the shared Bash snapshot/storage logic.
+# Usage: _init_emit_fish_trust_helpers
+# Prints self-contained definitions with __FUNC__ placeholders; runs no hooks.
 _init_emit_fish_trust_helpers() {
   local snapshot_helpers storage_helpers
   # Quote for a Fish single-quoted string. Bash 3.2's parameter substitution
