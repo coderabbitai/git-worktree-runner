@@ -210,6 +210,16 @@ JSON
   json="${json}}]"
   run without_jq _gitlab_mr_matches_tip "$json" abc123
   [ "$status" -eq 1 ]
+  [ "$output" = "" ]
+}
+
+@test "GitLab no-jq matching normalizes parser execution failures" {
+  awk() { printf 'parser resource limit\n' >&2; return 2; }
+
+  run without_jq _gitlab_mr_matches_tip '[{"sha":"abc123"}]' abc123
+
+  [ "$status" -eq 1 ]
+  [ "$output" = "" ]
 }
 
 @test "GitLab no-jq matching is safe in a Bash 3.2 errexit conditional" {

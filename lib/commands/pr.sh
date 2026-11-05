@@ -332,13 +332,21 @@ cmd_pr() {
     local gh_checkout_args=(pr checkout "$selector" --worktree "$expected_worktree_path" --branch "$branch_name")
     [ -n "$repo_arg" ] && gh_checkout_args+=(--repo "$repo_arg")
     mkdir -p "$base_dir"
-    if ! gh "${gh_checkout_args[@]}"; then
-      log_error "Could not create pull request worktree with gh"
+    if gh "${gh_checkout_args[@]}"; then
+      worktree_path="$expected_worktree_path"
+      native_checkout=1
+    elif [ -e "$expected_worktree_path" ] || [ -L "$expected_worktree_path" ]; then
+      # A failed native checkout may leave files behind; never replace them.
+      log_error "Could not create pull request worktree with gh; destination was left at $expected_worktree_path"
       exit 1
+    else
+      # gh may try to fetch a deleted head branch after a PR is merged. GitHub retains
+      # refs/pull/<number>/head, which the compatibility path below can fetch.
+      log_warn "Native gh checkout failed; retrying with the pull request ref"
     fi
-    worktree_path="$expected_worktree_path"
-    native_checkout=1
-  else
+  fi
+
+  if [ "$native_checkout" -eq 0 ]; then
     log_step "Fetching pull request #$pr_number..."
     if ! git fetch -- "$fetch_source" "refs/pull/$pr_number/head"; then
       log_error "Could not fetch pull request #$pr_number from $fetch_source"
