@@ -16,6 +16,21 @@
 #   Add to your ~/.bashrc:
 #     source /path/to/git-worktree-runner/completions/gtr.bash
 
+_git_gtr_complete_targets() {
+  local prefix="$1" branch branches
+  branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
+  COMPREPLY=()
+  # compgen -W evaluates its word list; treat branch names as literal data instead.
+  while IFS= read -r branch; do
+    if [[ -n "$branch" && "$branch" == "$prefix"* ]]; then
+      COMPREPLY+=("$branch")
+    fi
+  done <<EOF
+1
+$branches
+EOF
+}
+
 _git_gtr() {
   local cur prev words cword
   _init_completion || return
@@ -36,10 +51,7 @@ _git_gtr() {
     go|run|rm|mv|rename)
       if [ "$cword" -eq 3 ]; then
         # Complete with branch names and special ID '1' for main repo
-        local branches all_options
-        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
-        all_options="1 $branches"
-        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+        _git_gtr_complete_targets "$cur"
       elif [[ "$cur" == -* ]]; then
         case "$cmd" in
           rm)
@@ -57,10 +69,7 @@ _git_gtr() {
       elif [ "$prev" = "--editor" ]; then
         COMPREPLY=($(compgen -W "antigravity atom cursor emacs idea nano none nvim pycharm sublime vim vscode webstorm zed" -- "$cur"))
       else
-        local branches all_options
-        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
-        all_options="1 $branches"
-        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+        _git_gtr_complete_targets "$cur"
       fi
       ;;
     ai)
@@ -69,10 +78,7 @@ _git_gtr() {
       elif [ "$prev" = "--ai" ]; then
         COMPREPLY=($(compgen -W "aider antigravity auggie claude codex continue copilot cursor gemini none opencode" -- "$cur"))
       else
-        local branches all_options
-        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
-        all_options="1 $branches"
-        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+        _git_gtr_complete_targets "$cur"
       fi
       ;;
     ls|list)
@@ -90,10 +96,7 @@ _git_gtr() {
         COMPREPLY=($(compgen -W "-n --dry-run -a --all --from" -- "$cur"))
       else
         # Complete with branch names and special ID '1' for main repo
-        local branches all_options
-        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
-        all_options="1 $branches"
-        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+        _git_gtr_complete_targets "$cur"
       fi
       ;;
     new)

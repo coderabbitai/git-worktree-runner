@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Tests for completion path resolution in lib/commands/completion.sh
+# Tests for completion asset resolution and generated Bash completion behavior
 
 load test_helper
 
@@ -107,4 +107,93 @@ setup_homebrew_layout() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"Could not find bash completion asset under:"* ]]
   [[ "$output" == *"Expected either a source checkout (completions/) or a Homebrew install layout."* ]]
+}
+
+setup_bash_completion_repo() {
+  mkdir -p "$TEST_ROOT/repo"
+  cd "$TEST_ROOT/repo" || return 1
+  git init --quiet
+  git symbolic-ref HEAD refs/heads/main
+  git -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false \
+    commit --allow-empty --quiet -m init
+
+  # Both are valid refs. Evaluating either creates a harmless marker in this repo.
+  DOLLAR_BRANCH='literal$(>completion-dollar-marker)'
+  BACKTICK_BRANCH='literal`>completion-backtick-marker`'
+  local branch
+  for branch in feature/api feature/auth fix/bug "$DOLLAR_BRANCH" "$BACKTICK_BRANCH"; do
+    git branch "$branch"
+  done
+}
+
+run_bash_completion() {
+  # Supply bash-completion's context without requiring it to be installed.
+  # Use errexit to catch failures when a prefix has no matches.
+  run bash -e -c '
+    source "$1"
+    shift
+    _init_completion() {
+      words=("${COMP_WORDS[@]}")
+      cword=$COMP_CWORD
+      cur=${words[cword]}
+      prev=${words[cword-1]}
+      COMPREPLY=()
+    }
+    COMP_WORDS=(git gtr "$@")
+    COMP_CWORD=$((${#COMP_WORDS[@]} - 1))
+    _git_gtr
+    if [ "${#COMPREPLY[@]}" -gt 0 ]; then
+      printf "%s\n" "${COMPREPLY[@]}"
+    fi
+  ' bash "$PROJECT_ROOT/completions/gtr.bash" "$@"
+
+  [ ! -e completion-dollar-marker ]
+  [ ! -e completion-backtick-marker ]
+  [ "$status" -eq 0 ]
+}
+
+assert_literal_branch_completions() {
+  local expected
+  expected=$(printf '%s\n' 1 feature/api feature/auth fix/bug \
+    "$DOLLAR_BRANCH" "$BACKTICK_BRANCH" main)
+  run_bash_completion "$@" ""
+  [ "$output" = "$expected" ]
+
+  run_bash_completion "$@" 'literal$('
+  [ "$output" = "$DOLLAR_BRANCH" ]
+  run_bash_completion "$@" 'literal`'
+  [ "$output" = "$BACKTICK_BRANCH" ]
+
+  run_bash_completion "$@" feature/a
+  [ "$output" = $'feature/api\nfeature/auth' ]
+  run_bash_completion "$@" 1
+  [ "$output" = "1" ]
+  run_bash_completion "$@" missing
+  [ -z "$output" ]
+}
+
+@test "bash go/run/rm/mv/rename completion filters branch names literally" {
+  setup_bash_completion_repo
+  local cmd
+  for cmd in go run rm mv rename; do
+    assert_literal_branch_completions "$cmd"
+  done
+}
+
+@test "bash editor completion filters branch names literally" {
+  setup_bash_completion_repo
+  assert_literal_branch_completions editor
+  assert_literal_branch_completions editor --editor vim
+}
+
+@test "bash ai completion filters branch names literally" {
+  setup_bash_completion_repo
+  assert_literal_branch_completions ai
+  assert_literal_branch_completions ai --ai codex
+}
+
+@test "bash copy completion filters branch names literally" {
+  setup_bash_completion_repo
+  assert_literal_branch_completions copy
+  assert_literal_branch_completions copy --from
 }
