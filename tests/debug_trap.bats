@@ -65,6 +65,22 @@ teardown() {
   [[ "$output" != *"ERROR at "* ]]
 }
 
+@test "GTR_DEBUG keeps failed permission inspection fatal without a spurious error trap" {
+  cat > "$SHIM_DIR/stat" <<'SCRIPT'
+#!/usr/bin/env bash
+exit 1
+SCRIPT
+  chmod +x "$SHIM_DIR/stat"
+
+  run env PATH="$SHIM_DIR:$PATH" GTR_DEBUG=1 \
+    "$PROJECT_ROOT/bin/git-gtr" run 1 true
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unsafe Git configuration"* ]]
+  [[ "$output" == *"cannot inspect permissions"* ]]
+  [[ "$output" != *"ERROR at "* ]]
+}
+
 @test "GTR_DEBUG reports a failure raised inside a subshell" {
   # cmd_run executes the requested command in a subshell:
   #   (cd "$worktree_path" && "${run_args[@]}")
@@ -80,5 +96,36 @@ teardown() {
 @test "a successful command under gtr run reports nothing" {
   run env GTR_DEBUG=1 "$PROJECT_ROOT/bin/git-gtr" run 1 true
   [ "$status" -eq 0 ]
+  [[ "$output" != *"ERROR at "* ]]
+}
+
+@test "GTR_DEBUG handles absent optional settings and hooks during worktree creation and removal" {
+  run env GTR_DEBUG=1 "$PROJECT_ROOT/bin/git-gtr" new debug-create \
+    --from HEAD --no-fetch --no-copy --porcelain
+
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_WORKTREES_DIR/debug-create/.git" ]
+  [[ "$output" != *"ERROR at "* ]]
+
+  run env GTR_DEBUG=1 "$PROJECT_ROOT/bin/git-gtr" rm debug-create --yes
+
+  [ "$status" -eq 0 ]
+  [ ! -d "$TEST_WORKTREES_DIR/debug-create" ]
+  [[ "$output" != *"ERROR at "* ]]
+}
+
+@test "GTR_DEBUG allows an editor outside the adapter registry without an error trap" {
+  cat > "$SHIM_DIR/debug-editor" <<'SCRIPT'
+#!/usr/bin/env bash
+printf 'editor ran\n'
+SCRIPT
+  chmod +x "$SHIM_DIR/debug-editor"
+  git config gtr.editor.default debug-editor
+
+  run env PATH="$SHIM_DIR:$PATH" GTR_DEBUG=1 \
+    "$PROJECT_ROOT/bin/git-gtr" editor 1
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"editor ran"* ]]
   [[ "$output" != *"ERROR at "* ]]
 }

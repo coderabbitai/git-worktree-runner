@@ -240,7 +240,7 @@ cfg_get_all() {
 _cfg_read_bool() {
   local key="$1" value status
   shift
-  if value=$(git config "$@" --bool --get "$key" 2>/dev/null); then
+  if value=$(git config "$@" --bool --get "$key" 2>/dev/null || exit $?); then
     printf "%s" "$value"
     return 0
   else
@@ -276,7 +276,7 @@ cfg_bool() {
       global) args=(--global) ;;
       system) args=(--system) ;;
     esac
-    if value=$(_cfg_read_bool "$candidate" "${args[@]}"); then
+    if value=$(_cfg_read_bool "$candidate" "${args[@]}" || exit $?); then
       [ "$value" = "true" ]
       return
     else
@@ -500,7 +500,7 @@ cfg_default() {
 
   # 4. Fall back to environment variable
   if [ -z "$value" ] && [ -n "$env_name" ]; then
-    value=$(printenv "$env_name" 2>/dev/null) || true
+    value=$(printenv "$env_name" 2>/dev/null || true)
   fi
 
   # 5. Use fallback if still empty
@@ -553,7 +553,7 @@ cfg_default_trusted_file() {
 
   # 4. Fall back to environment variable
   if [ -z "$value" ] && [ -n "$env_name" ]; then
-    value=$(printenv "$env_name" 2>/dev/null) || true
+    value=$(printenv "$env_name" 2>/dev/null || true)
   fi
 
   # 5. Use fallback if still empty
