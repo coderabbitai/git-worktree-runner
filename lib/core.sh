@@ -588,7 +588,8 @@ unpack_target() {
 # Sets: _ctx_is_main, _ctx_worktree_path, _ctx_branch
 resolve_worktree() {
   local target
-  target=$(resolve_target "$1" "$2" "$3" "$4") || return 1
+  # Guard the subshell too: a handled miss must not fire Bash 3.2's ERR trap.
+  target=$(resolve_target "$1" "$2" "$3" "$4" || exit 1) || return 1
   unpack_target "$target"
 }
 

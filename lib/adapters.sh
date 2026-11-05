@@ -525,7 +525,7 @@ _load_adapter() {
     registry="$_AI_REGISTRY"
   fi
 
-  if entry=$(_registry_lookup "$registry" "$name"); then
+  if entry=$(_registry_lookup "$registry" "$name" || exit 1); then
     if [ "$type" = "editor" ]; then
       _load_from_editor_registry "$entry"
     else

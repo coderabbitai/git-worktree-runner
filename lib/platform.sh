@@ -93,7 +93,9 @@ spawn_terminal_in() {
       # Escape variables for AppleScript string interpolation
       local shell_path safe_cd safe_title safe_cmd
       # Quote for the terminal shell first, then for the AppleScript string.
-      shell_path="${path//\'/\'\\\'\'}"
+      # A variable preserves replacement backslashes consistently in Bash 3.2+.
+      local escaped_quote="'\\''"
+      shell_path="${path//\'/$escaped_quote}"
       safe_cd=$(_escape_applescript "cd -- '$shell_path'")
       safe_title=$(_escape_applescript "$title")
       safe_cmd=$(_escape_applescript "$cmd")

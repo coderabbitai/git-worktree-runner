@@ -358,7 +358,7 @@ _hooks_get_trusted() {
   # Always include hooks from git config (user controls their own .git/config)
   local git_hooks
   git_hooks=$(git config -z --get-all "gtr.hook.$phase" 2>/dev/null |
-    od -An -v -tx1 | tr -d ' \n') || true
+    od -An -v -tx1 | tr -d ' \n' || true)
 
   # Check .gtrconfig trust before including its hooks
   local config_file
@@ -407,12 +407,12 @@ _hooks_phase_status() {
   local git_hooks="" config_file="" file_hooks=""
   local has_runnable=0 has_untrusted=0
 
-  git_hooks=$(git config --get-all "gtr.hook.$phase" 2>/dev/null) || true
+  git_hooks=$(git config --get-all "gtr.hook.$phase" 2>/dev/null || true)
   [ -n "$git_hooks" ] && has_runnable=1
 
   config_file=$(_gtrconfig_path) || true
   if [ -n "$config_file" ] && [ -f "$config_file" ]; then
-    file_hooks=$(git config -f "$config_file" --get-all "hooks.$phase" 2>/dev/null) || true
+    file_hooks=$(git config -f "$config_file" --get-all "hooks.$phase" 2>/dev/null || true)
     if [ -n "$file_hooks" ]; then
       if _hooks_are_trusted "$config_file"; then
         has_runnable=1
