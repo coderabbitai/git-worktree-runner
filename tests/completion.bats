@@ -109,6 +109,7 @@ setup_homebrew_layout() {
   [[ "$output" == *"Expected either a source checkout (completions/) or a Homebrew install layout."* ]]
 }
 
+# Create a disposable repository with harmless command-substitution and quote fixtures.
 setup_bash_completion_repo() {
   mkdir -p "$TEST_ROOT/repo"
   cd "$TEST_ROOT/repo" || return 1
@@ -120,12 +121,16 @@ setup_bash_completion_repo() {
   # Both are valid refs. Evaluating either creates a harmless marker in this repo.
   DOLLAR_BRANCH='literal$(>completion-dollar-marker)'
   BACKTICK_BRANCH='literal`>completion-backtick-marker`'
+  QUOTED_BRANCH="quote\"and'apostrophe"
   local branch
-  for branch in feature/api feature/auth fix/bug "$DOLLAR_BRANCH" "$BACKTICK_BRANCH"; do
+  for branch in feature/api feature/auth fix/bug \
+    "$DOLLAR_BRANCH" "$BACKTICK_BRANCH" "$QUOTED_BRANCH"; do
     git branch "$branch"
   done
 }
 
+# Complete git gtr arguments, then parse each suggestion as an accepted Bash word.
+# Check both candidate generation and acceptance leave the fixture markers absent.
 run_bash_completion() {
   # Supply bash-completion's context without requiring it to be installed.
   # Use errexit to catch failures when a prefix has no matches.
@@ -142,9 +147,13 @@ run_bash_completion() {
     COMP_WORDS=(git gtr "$@")
     COMP_CWORD=$((${#COMP_WORDS[@]} - 1))
     _git_gtr
-    if [ "${#COMPREPLY[@]}" -gt 0 ]; then
-      printf "%s\n" "${COMPREPLY[@]}"
-    fi
+    for candidate in "${COMPREPLY[@]}"; do
+      # Deliberately parse the suggestion, as Bash does after completion and Enter.
+      # The fixture substitutions only create harmless marker files in this repo.
+      eval "set -- $candidate"
+      [ "$#" -eq 1 ]
+      printf "%s\n" "$1"
+    done
   ' bash "$PROJECT_ROOT/completions/gtr.bash" "$@"
 
   [ ! -e completion-dollar-marker ]
@@ -152,10 +161,11 @@ run_bash_completion() {
   [ "$status" -eq 0 ]
 }
 
+# Verify literal argv round trips, ordinary prefixes, target 1, and no-match behavior.
 assert_literal_branch_completions() {
   local expected
   expected=$(printf '%s\n' 1 feature/api feature/auth fix/bug \
-    "$DOLLAR_BRANCH" "$BACKTICK_BRANCH" main)
+    "$DOLLAR_BRANCH" "$BACKTICK_BRANCH" main "$QUOTED_BRANCH")
   run_bash_completion "$@" ""
   [ "$output" = "$expected" ]
 
@@ -163,6 +173,8 @@ assert_literal_branch_completions() {
   [ "$output" = "$DOLLAR_BRANCH" ]
   run_bash_completion "$@" 'literal`'
   [ "$output" = "$BACKTICK_BRANCH" ]
+  run_bash_completion "$@" quote
+  [ "$output" = "$QUOTED_BRANCH" ]
 
   run_bash_completion "$@" feature/a
   [ "$output" = $'feature/api\nfeature/auth' ]
