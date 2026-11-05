@@ -238,6 +238,112 @@ teardown() {
   [ ! -d "$TEST_WORKTREES_DIR/merged-tip" ]
 }
 
+# Fail only the candidate's tip lookup; all other Git operations remain real.
+setup_unresolved_tip_candidate() {
+  create_test_worktree "unresolved-tip"
+  CLEAN_TIP_STATUS=1
+  CLEAN_TIP_OUTPUT=""
+  git() {
+    if [ "$1" = "-C" ] && [ "$2" = "$TEST_WORKTREES_DIR/unresolved-tip" ] && \
+       [ "$3" = "rev-parse" ]; then
+      printf "%s" "$CLEAN_TIP_OUTPUT"
+      return "$CLEAN_TIP_STATUS"
+    fi
+    case "$1 $2" in
+      "worktree remove"|"branch -d"|"branch -D")
+        printf "%s\n" "$*" >> "$TEST_REPO/removal-calls"
+        ;;
+    esac
+    command git "$@"
+  }
+  _clean_detect_provider() { printf "github"; }
+  ensure_provider_cli() { return 0; }
+  # An old PR/MR would authorize removal if cleanup reached the provider.
+  check_branch_merged() { printf "%s\n" "$2" >> "$TEST_REPO/provider-calls"; }
+  check_branch_closed() { printf "%s\n" "$2" >> "$TEST_REPO/provider-calls"; }
+}
+
+run_clean_with_errexit() {
+  set -e
+  cmd_clean "$@"
+}
+
+assert_unresolved_tip_is_preserved() {
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_REPO/provider-calls" ]
+  [ ! -e "$TEST_REPO/removal-calls" ]
+  [ -d "$TEST_WORKTREES_DIR/unresolved-tip" ]
+  command git show-ref --verify --quiet refs/heads/unresolved-tip
+  [[ "$output" == *"Skipping unresolved-tip (could not resolve HEAD to a commit"* ]]
+  [[ "$output" == *"Skipped: 1"* ]]
+}
+
+@test "cmd_clean skips failed tip lookups before merged or closed provider authorization" {
+  setup_unresolved_tip_candidate
+
+  local mode
+  for mode in --merged --closed; do
+    run run_clean_with_errexit "$mode" --yes
+    assert_unresolved_tip_is_preserved
+
+    run run_clean_with_errexit "$mode" --force --yes
+    assert_unresolved_tip_is_preserved
+  done
+
+  run run_clean_with_errexit --merged --closed --force --yes --dry-run
+  assert_unresolved_tip_is_preserved
+  [[ "$output" != *"Would remove: unresolved-tip"* ]]
+}
+
+@test "cmd_clean rejects failed tip lookups even when Git prints a commit" {
+  setup_unresolved_tip_candidate
+  CLEAN_TIP_OUTPUT=$(command git rev-parse HEAD)
+
+  run run_clean_with_errexit --merged --closed --force --yes
+  assert_unresolved_tip_is_preserved
+}
+
+@test "cmd_clean rejects an empty tip even when lookup succeeds" {
+  setup_unresolved_tip_candidate
+  CLEAN_TIP_STATUS=0
+
+  run run_clean_with_errexit --merged --closed --force --yes
+  assert_unresolved_tip_is_preserved
+}
+
+@test "cmd_clean requires HEAD to resolve to a commit object" {
+  setup_unresolved_tip_candidate
+  unset -f git
+  local blob_tip
+  blob_tip=$(printf "not a commit\n" | git hash-object -w --stdin)
+  # Simulate a damaged branch ref: plain rev-parse HEAD still succeeds.
+  printf "%s\n" "$blob_tip" > "$TEST_REPO/.git/refs/heads/unresolved-tip"
+  [ "$(git -C "$TEST_WORKTREES_DIR/unresolved-tip" rev-parse HEAD)" = "$blob_tip" ]
+
+  run run_clean_with_errexit --merged --closed --force --yes
+  assert_unresolved_tip_is_preserved
+}
+
+@test "cmd_clean continues removing valid candidates after a failed tip lookup" {
+  setup_unresolved_tip_candidate
+  create_test_worktree "valid-tip"
+  local branch_tip
+  branch_tip=$(git -C "$TEST_WORKTREES_DIR/valid-tip" rev-parse HEAD)
+  check_branch_merged() {
+    printf "%s\n" "$2" >> "$TEST_REPO/provider-calls"
+    [ "$2" = "valid-tip" ] && [ "$4" = "$branch_tip" ]
+  }
+
+  run run_clean_with_errexit --merged --force --yes
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_REPO/provider-calls")" = "valid-tip" ]
+  [ -d "$TEST_WORKTREES_DIR/unresolved-tip" ]
+  command git show-ref --verify --quiet refs/heads/unresolved-tip
+  [ ! -d "$TEST_WORKTREES_DIR/valid-tip" ]
+  ! command git show-ref --verify --quiet refs/heads/valid-tip
+  [[ "$output" == *"Removed: 1, Skipped: 1"* ]]
+}
+
 @test "cmd_clean skips dirty worktree before provider lookup" {
   create_test_worktree "dirty-before-provider"
   echo "dirty" > "$TEST_WORKTREES_DIR/dirty-before-provider/dirty.txt"

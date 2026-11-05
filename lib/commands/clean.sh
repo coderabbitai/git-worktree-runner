@@ -177,13 +177,19 @@ _clean_prs() {
     case "$line" in
       "")
         if [ -n "$dir" ] && [ "$is_main" != "1" ]; then
-          local branch_tip
-          branch_tip=$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)
-
           # Skip main repo branch silently (not counted)
           [ "$branch" = "$main_branch" ] && continue
 
           if _clean_should_skip "$dir" "$branch" "$force" "$active_worktree_path"; then
+            skipped=$((skipped + 1))
+            continue
+          fi
+
+          # Never fall back to branch-name-only matching, even with --force.
+          local branch_tip
+          if ! branch_tip=$(git -C "$dir" rev-parse --verify 'HEAD^{commit}' 2>/dev/null) || \
+             [ -z "$branch_tip" ]; then
+            log_warn "Skipping $branch (could not resolve HEAD to a commit in $dir)"
             skipped=$((skipped + 1))
             continue
           fi
