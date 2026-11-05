@@ -6,14 +6,16 @@ cmd_remove() {
   local _spec
   _spec="--delete-branch
 --yes
---force"
+--force
+--dry-run|-n"
   parse_args "$_spec" "$@"
 
-  require_args 1 "Usage: git gtr rm <id|branch> [<id|branch>...] [--delete-branch] [--force] [--yes]"
+  require_args 1 "Usage: git gtr rm <id|branch> [<id|branch>...] [--delete-branch] [--force] [--yes] [--dry-run|-n]"
 
   local delete_branch="${_arg_delete_branch:-0}"
   local yes_mode="${_arg_yes:-0}"
   local force="${_arg_force:-0}"
+  local dry_run="${_arg_dry_run:-0}"
   local had_failure=0
 
   resolve_repo_context || exit 1
@@ -34,6 +36,11 @@ cmd_remove() {
     if [ "$is_main" = "1" ]; then
       log_error "Cannot remove main repository"
       had_failure=1
+      continue
+    fi
+
+    if [ "$dry_run" -eq 1 ]; then
+      _remove_preview "$repo_root" "$worktree_path" "$branch_name" "$delete_branch" "$force" || had_failure=1
       continue
     fi
 
@@ -82,4 +89,75 @@ cmd_remove() {
   done
 
   return "$had_failure"
+}
+
+# Read-only advisory preview. Never enter hook dispatch (including trust checks).
+_remove_preview() {
+  local repo_root="$1" worktree_path="$2" branch_name="$3" delete_branch="$4" force="$5"
+  local state status_output line dirty=no untracked=no locked=no
+  [ "$branch_name" != "(detached)" ] || branch_name=""
+  printf '[dry-run] Worktree: %s\n' "$(_tsv_escape_field "$worktree_path")"
+  printf '  Branch: %s\n' "${branch_name:-detached HEAD}"
+  if [ ! -d "$worktree_path" ]; then
+    log_error "Worktree not found at $worktree_path"
+    return 1
+  fi
+  state=$(worktree_status "$worktree_path") || return 1
+  [ "$state" != locked ] || locked=yes
+  # Avoid refreshing/writing the index. Disable fsmonitor to avoid invoking a
+  # configured external helper while inspecting the worktree.
+  if ! status_output=$(GIT_OPTIONAL_LOCKS=0 git -C "$worktree_path" -c core.fsmonitor=false \
+    status --porcelain=v1 --untracked-files=all --ignore-submodules=none); then
+    log_error "Cannot inspect worktree: $worktree_path"
+    return 1
+  fi
+  while IFS= read -r line; do
+    case "$line" in
+      '') ;;
+      '?? '*) untracked=yes ;;
+      *) dirty=yes ;;
+    esac
+  done <<EOF
+$status_output
+EOF
+  printf '  Dirty (tracked): %s; untracked: %s; locked: %s\n' "$dirty" "$untracked" "$locked"
+  if [ "$locked" = yes ]; then
+    printf '  Blocked: locked worktree; the existing single --force cannot remove it.\n'
+  elif [ "$dirty" = yes ] || [ "$untracked" = yes ]; then
+    if [ "$force" -eq 0 ]; then
+      printf '  Blocked without --force: modified or untracked files.\n'
+    fi
+  fi
+  printf '  Warning: --force can discard uncommitted changes and untracked files.\n'
+  printf '  Hooks: preRemove/postRemove not executed; trust state unchanged.\n'
+  if [ "$delete_branch" -eq 1 ]; then
+    if [ -n "$branch_name" ]; then
+      _remove_preview_branch "$repo_root" "$branch_name"
+    else
+      printf '  Branch deletion: none (detached HEAD).\n'
+    fi
+  fi
+  printf '  Advisory only: hooks and other Git removal restrictions are not evaluated.\n'
+}
+
+_remove_preview_branch() {
+  local repo_root="$1" branch_name="$2" remote default_branch candidate base_ref="" base_oid="" count
+  remote=$(resolve_default_remote)
+  default_branch=$(resolve_default_branch "$repo_root" "$remote")
+  # Follow new's default selection, but never treat its last-resort name as
+  # evidence that a ref exists. Fully qualified refs avoid tag ambiguity.
+  for candidate in "refs/remotes/$remote/$default_branch" "refs/heads/$default_branch"; do
+    if base_oid=$(git rev-parse --verify "$candidate^{commit}" 2>/dev/null); then
+      base_ref="$candidate"
+      break
+    fi
+  done
+  printf '  Branch deletion requested: %s (git branch -D).\n' "$branch_name"
+  if [ -n "$base_ref" ] && count=$(git rev-list --count "$base_oid..refs/heads/$branch_name" -- 2>/dev/null); then
+    printf '  Commits not reachable from %s: %s\n' "$base_ref" "$count"
+  else
+    printf '  Commits not reachable from base: unknown (no verified base or branch tip).\n'
+  fi
+  printf '  Reachability is not a merged/unmerged judgment; squash/rebase can mislead.\n'
+  printf '  Uses local refs only; remote-tracking refs may be stale.\n'
 }

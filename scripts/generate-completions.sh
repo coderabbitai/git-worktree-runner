@@ -133,7 +133,7 @@ _git_gtr() {
       elif [[ "$cur" == -* ]]; then
         case "$cmd" in
           rm)
-            COMPREPLY=($(compgen -W "--delete-branch --force --yes" -- "$cur"))
+            COMPREPLY=($(compgen -W "--delete-branch --force --yes --dry-run -n" -- "$cur"))
             ;;
           mv|rename)
             COMPREPLY=($(compgen -W "--force --yes" -- "$cur"))
@@ -432,6 +432,8 @@ MIDDLE1
         ;;
       rm)
         _arguments \
+          '--dry-run[Preview removal without changes]' \
+          '-n[Preview removal without changes]' \
           '--delete-branch[Delete branch]' \
           '--force[Force removal even if worktree has uncommitted changes or untracked files]' \
           '--yes[Non-interactive mode]'
@@ -601,6 +603,7 @@ complete -c git -n '__fish_git_gtr_using_command pr' -s e -l editor -d 'Open in 
 complete -c git -n '__fish_git_gtr_using_command pr' -s a -l ai -d 'Start AI tool after creation'
 
 # Remove command options
+complete -c git -n '__fish_git_gtr_using_command rm' -l dry-run -s n -d 'Preview removal without changes'
 complete -c git -n '__fish_git_gtr_using_command rm' -l delete-branch -d 'Delete branch'
 complete -c git -n '__fish_git_gtr_using_command rm' -l force -d 'Force removal even if worktree has uncommitted changes or untracked files'
 complete -c git -n '__fish_git_gtr_using_command rm' -l yes -d 'Non-interactive mode'

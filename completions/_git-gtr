@@ -164,6 +164,8 @@ _git-gtr() {
         ;;
       rm)
         _arguments \
+          '--dry-run[Preview removal without changes]' \
+          '-n[Preview removal without changes]' \
           '--delete-branch[Delete branch]' \
           '--force[Force removal even if worktree has uncommitted changes or untracked files]' \
           '--yes[Non-interactive mode]'

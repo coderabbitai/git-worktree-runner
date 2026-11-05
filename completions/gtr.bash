@@ -43,7 +43,7 @@ _git_gtr() {
       elif [[ "$cur" == -* ]]; then
         case "$cmd" in
           rm)
-            COMPREPLY=($(compgen -W "--delete-branch --force --yes" -- "$cur"))
+            COMPREPLY=($(compgen -W "--delete-branch --force --yes --dry-run -n" -- "$cur"))
             ;;
           mv|rename)
             COMPREPLY=($(compgen -W "--force --yes" -- "$cur"))
