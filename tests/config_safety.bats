@@ -113,6 +113,62 @@ assert_unsafe_shell_blocked() {
   assert_unsafe_create_blocked
 }
 
+@test "unsafe absolute symlink target with trailing newlines is rejected" {
+  local target="$SAFETY_FIXTURE/included"$'\n\n'
+  git config -f "$target" gtr.hook.postCreate 'printf linked > "$SAFETY_MARKER"'
+  chmod 0660 "$target"
+  ln -s "$target" "$TEST_REPO/.git/linked-config"
+  git config include.path linked-config
+
+  assert_unsafe_create_blocked
+  [[ "$output" == *"$target"* ]]
+}
+
+@test "unsafe relative symlink target with a trailing newline is rejected" {
+  local target="$TEST_REPO/.git/included"$'\n'
+  git config -f "$target" gtr.hook.postCreate 'printf linked > "$SAFETY_MARKER"'
+  chmod 0660 "$target"
+  ln -s $'included\n' "$TEST_REPO/.git/linked-config"
+  git config include.path linked-config
+
+  assert_unsafe_create_blocked
+  [[ "$output" == *"$target"* ]]
+}
+
+@test "safe symlink target with trailing newlines is used instead of its writable truncated path" {
+  local target="$SAFETY_FIXTURE/included"$'\n\n'
+  git config -f "$target" gtr.hook.postCreate 'printf linked > "$SAFETY_MARKER"'
+  chmod 0600 "$target"
+  : > "$SAFETY_FIXTURE/included"
+  chmod 0660 "$SAFETY_FIXTURE/included"
+  ln -s "$target" "$TEST_REPO/.git/linked-config"
+  git config include.path linked-config
+
+  run "$PROJECT_ROOT/bin/gtr" new safe-newline --from HEAD --no-fetch --no-copy
+  [ "$status" -eq 0 ]
+  [ -d "$SAFETY_FIXTURE/attacker destination/safe-newline" ]
+  [ "$(cat "$SAFETY_MARKER")" = linked ]
+}
+
+@test "readlink failure rejects config even when it prints a safe target" {
+  git config -f "$SAFETY_FIXTURE/protected" gtr.hook.postCreate 'printf linked > "$SAFETY_MARKER"'
+  ln -s "$SAFETY_FIXTURE/protected" "$TEST_REPO/.git/linked-config"
+  git config include.path linked-config
+  readlink() {
+    printf '%s\n' "$SAFETY_FIXTURE/protected"
+    return 1
+  }
+  export SAFETY_FIXTURE
+  export -f readlink
+
+  run "$PROJECT_ROOT/bin/gtr" new unsafe-config --from HEAD --no-fetch --no-copy
+  [ "$status" -ne 0 ]
+  [ ! -e "$SAFETY_MARKER" ]
+  [ ! -e "$SAFETY_FIXTURE/attacker destination" ]
+  run git show-ref --verify --quiet refs/heads/unsafe-config
+  [ "$status" -eq 1 ]
+}
+
 @test "symlink parent permissions are checked before following a safe target" {
   mkdir "$SAFETY_FIXTURE/shared"
   git config -f "$SAFETY_FIXTURE/protected" gtr.hook.postCreate 'printf linked > "$SAFETY_MARKER"'

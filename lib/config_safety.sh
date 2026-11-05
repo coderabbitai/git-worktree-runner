@@ -90,7 +90,9 @@ _config_safety_path() {
     if [ -L "$candidate" ]; then
       links=$((links + 1))
       [ "$links" -le 40 ] || { _config_safety_error "$candidate" 'symlink loop'; return 1; }
-      target=$(readlink "$candidate") || return 1
+      # Suppress readlink's delimiter and keep target newlines with a sentinel.
+      target=$(readlink -n "$candidate" && printf '.') || return 1
+      target="${target%.}"
       case "$target" in /*) current=/ ;; esac
       pending="$target${pending:+/$pending}"
     else
