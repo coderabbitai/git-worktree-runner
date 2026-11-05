@@ -422,6 +422,8 @@ Add to your shell configuration.
 Output is cached under ${XDG_CACHE_HOME:-$HOME/.cache}/gtr/.
 Each invocation checks the installed version and shell integration schema,
 regenerating outdated helpers before returning them.
+New cache directories and files are private. Ownership and write permissions
+are checked through the parent path; unsafe or unavailable caches are bypassed.
 Replace older setup snippets that source a cache directly or check a hard-coded
 'init=' value, then restart your shell or run the matching setup command below.
 Upgrades to the v3 trust format require reviewing commands with 'git gtr trust'.
