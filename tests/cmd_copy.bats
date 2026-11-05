@@ -29,6 +29,19 @@ teardown() {
   [ ! -f "$TEST_WORKTREES_DIR/copy-target/.env" ]
 }
 
+@test "copy command propagates file copy failures with and without errexit" {
+  mkdir "$TEST_WT_PATH/.env"
+
+  run cmd_copy copy-target -- .env
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Failed to copy .env"* ]]
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Failed to copy .env"* ]]
+  [ -d "$TEST_WT_PATH/.env" ]
+}
+
 @test "cmd_copy copies multiple patterns" {
   echo "data" > "$TEST_REPO/config.json"
   run cmd_copy copy-target -- ".env" "config.json"

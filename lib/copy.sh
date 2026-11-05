@@ -225,7 +225,7 @@ _fast_copy_dir() {
 
 # Copy a single file to destination, handling exclusion, path preservation, and dry-run
 # Usage: _copy_pattern_file file dst_root excludes preserve_paths dry_run
-# Returns: 0 if file was copied (or would be in dry-run), 1 if skipped/failed
+# Returns: 0 if copied (or would be in dry-run), 1 if skipped, 2 if copying failed
 _copy_pattern_file() {
   local file="$1"
   local dst_root="$2"
@@ -265,24 +265,28 @@ _copy_pattern_file() {
 
   local dest_dir
   dest_dir=$(dirname "$dest_file")
-  mkdir -p "$dest_dir" || return 1
+  if ! mkdir -p "$dest_dir"; then
+    log_warn "Failed to prepare destination for $file"
+    return 2
+  fi
   if _copy_tree_entry "$file" "$dest_file" 2>/dev/null; then
     log_info "Copied $file"
     return 0
   else
     log_warn "Failed to copy $file"
-    return 1
+    return 2
   fi
 }
 
 # Process a single glob pattern: expand via globstar or find fallback, copy matching files.
 # Must be called from within the source directory with shell options already configured.
 # Prints the number of files copied to stdout.
+# Returns nonzero if any file copy fails; intentional skips do not count as failures.
 # Usage: _expand_and_copy_pattern <pattern> <dst_root> <excludes> <preserve_paths> <dry_run> <have_globstar>
 _expand_and_copy_pattern() {
   local pattern="$1" dst_root="$2" excludes="$3"
   local preserve_paths="$4" dry_run="$5" have_globstar="$6"
-  local count=0
+  local count=0 failed=0 copy_status
 
   if [ "$have_globstar" -eq 0 ] && echo "$pattern" | grep -q '\*\*'; then
     # Fallback to find for ** patterns on Bash 3.2
@@ -309,6 +313,9 @@ _expand_and_copy_pattern() {
       [ -z "$file" ] && continue
       if _copy_pattern_file "$file" "$dst_root" "$excludes" "$preserve_paths" "$dry_run"; then
         count=$((count + 1))
+      else
+        copy_status=$?
+        [ "$copy_status" -eq 1 ] || failed=1
       fi
     done <<EOF
 $_find_results
@@ -319,11 +326,15 @@ EOF
       [ -f "$file" ] || continue
       if _copy_pattern_file "$file" "$dst_root" "$excludes" "$preserve_paths" "$dry_run"; then
         count=$((count + 1))
+      else
+        copy_status=$?
+        [ "$copy_status" -eq 1 ] || failed=1
       fi
     done
   fi
 
   printf "%s" "$count"
+  return "$failed"
 }
 
 # Copy files matching patterns from source to destination
@@ -332,6 +343,7 @@ EOF
 # excludes: newline-separated glob patterns to exclude
 # preserve_paths: true (default) to preserve directory structure
 # dry_run: true to only show what would be copied without copying
+# Returns nonzero if any file copy fails; restores cwd and shell options before returning.
 copy_patterns() {
   local src_root="$1" dst_root="$2" includes="$3" excludes="$4"
   local preserve_paths="${5:-true}" dry_run="${6:-false}"
@@ -351,7 +363,7 @@ copy_patterns() {
   fi
   shopt -s nullglob dotglob 2>/dev/null || true
 
-  local copied_count=0
+  local copied_count=0 failed=0
 
   while IFS= read -r pattern; do
     [ -z "$pattern" ] && continue
@@ -362,7 +374,7 @@ copy_patterns() {
     fi
 
     local pattern_copied
-    pattern_copied=$(_expand_and_copy_pattern "$pattern" "$dst_root" "$excludes" "$preserve_paths" "$dry_run" "$have_globstar")
+    pattern_copied=$(_expand_and_copy_pattern "$pattern" "$dst_root" "$excludes" "$preserve_paths" "$dry_run" "$have_globstar") || failed=1
     copied_count=$((copied_count + pattern_copied))
   done <<EOF
 $includes
@@ -379,7 +391,7 @@ EOF
     fi
   fi
 
-  return 0
+  return "$failed"
 }
 
 # Return the portion of an exclude pattern that is relative to a copied directory.

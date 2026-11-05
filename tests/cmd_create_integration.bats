@@ -228,6 +228,49 @@ _cmd_create_capture_stdout() {
   [[ "$output" == *"copying failed"* ]]
 }
 
+@test "new CLI stops after a file copy failure without hooks or porcelain success records" {
+  mkdir -p "$TEST_REPO/config"
+  echo tracked > "$TEST_REPO/config/keep"
+  git add config/keep
+  git commit -m "directory at copy destination" --quiet
+  # The source worktree has a file where the new checkout will have a directory.
+  rm -rf "$TEST_REPO/config"
+  echo local > "$TEST_REPO/config"
+  git config gtr.copy.include config
+  git config gtr.hook.postCreate 'touch hook-marker'
+  local stdout_file="$BATS_TEST_TMPDIR/stdout" stderr_file="$BATS_TEST_TMPDIR/stderr"
+
+  run bash -c '"$1" new copy-failed --from HEAD --no-fetch --porcelain >"$2" 2>"$3"' \
+    _ "$PROJECT_ROOT/bin/gtr" "$stdout_file" "$stderr_file"
+
+  [ "$status" -eq 1 ]
+  [ -f "$TEST_WORKTREES_DIR/copy-failed/config/keep" ]
+  [ ! -e "$TEST_WORKTREES_DIR/copy-failed/hook-marker" ]
+  [ ! -s "$stdout_file" ]
+  grep -q 'copying failed' "$stderr_file"
+  ! grep -q 'Worktree created:' "$stderr_file"
+}
+
+@test "new CLI copies included files, skips exclusions, and reports porcelain success" {
+  echo value > "$TEST_REPO/keep.txt"
+  echo excluded > "$TEST_REPO/skip.txt"
+  git config gtr.copy.include '*.txt'
+  git config gtr.copy.exclude skip.txt
+  git config gtr.hook.postCreate 'cat keep.txt >> hook-marker'
+  local stdout_file="$BATS_TEST_TMPDIR/stdout" stderr_file="$BATS_TEST_TMPDIR/stderr"
+
+  run bash -c '"$1" new copy-success --from HEAD --no-fetch --porcelain >"$2" 2>"$3"' \
+    _ "$PROJECT_ROOT/bin/gtr" "$stdout_file" "$stderr_file"
+
+  [ "$status" -eq 0 ]
+  local expected_path
+  expected_path=$(canonicalize_path "$TEST_WORKTREES_DIR/copy-success")
+  [ "$(cat "$stdout_file")" = $'path\t'"$expected_path"$'\nbranch\tcopy-success\nhook_status\tran' ]
+  [ "$(cat "$expected_path/keep.txt")" = value ]
+  [ "$(cat "$expected_path/hook-marker")" = value ]
+  [ ! -e "$expected_path/skip.txt" ]
+}
+
 @test "cmd_create runs a copied tool once after successful directory publication" {
   mkdir -p "$TEST_REPO/deps"
   printf 'echo expected >> hook-marker\n' > "$TEST_REPO/deps/tool"
