@@ -145,8 +145,8 @@ cmd_init() {
   case "$cache_dir" in /*) ;; *) cache_dir="$(pwd -P)/$cache_dir" ;; esac
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 13 preserves whole postCd records alongside picker path identities.
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-13}"
+  # Schema 14 quotes Bash cd completion targets before Readline inserts them.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-14}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # A matching public stamp alone does not make executable cache data trusted.
@@ -536,6 +536,16 @@ _init_bash() {
 BASH
   _init_emit_posix_trust_helpers ""
   _init_emit_config_safety_helper bash
+  # Embed the same quoting helper as the standalone completion, under the wrapper's
+  # name. cd completion must also work when the completion asset is not loaded.
+  local completion_helper
+  if [ -n "${ZSH_VERSION:-}" ]; then
+    # shellcheck disable=SC2296,SC2298
+    completion_helper="${${(%):-%x}:h}/../bash_completion.sh"
+  else
+    completion_helper="${BASH_SOURCE[0]%/*}/../bash_completion.sh"
+  fi
+  sed -e '1d' -e 's/_git_gtr_quote_targets/___FUNC___quote_targets/g' "$completion_helper"
   cat <<'BASH'
 __FUNC___run_post_cd_hooks() {
   local dir="$1"
@@ -708,16 +718,10 @@ ___FUNC___completion() {
     # First argument: cd + all git-gtr subcommands
     COMPREPLY=($(compgen -W "cd new pr go run copy editor ai rm mv rename ls list clean doctor adapter config completion init trust help version" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "cd" ] && [ "$COMP_CWORD" -eq 2 ]; then
-    # Keep branch names literal: compgen -W evaluates shell expansions in its word list.
-    local worktrees worktree
+    # Filter and quote registered targets for literal acceptance by Readline.
+    local worktrees
     worktrees="1"$'\n'"$(git gtr list --porcelain 2>/dev/null | cut -f2)" || true
-    COMPREPLY=()
-    while IFS= read -r worktree; do
-      [ -n "$worktree" ] || continue
-      case "$worktree" in
-        "$cur"*) COMPREPLY+=("$worktree") ;;
-      esac
-    done <<< "$worktrees"
+    ___FUNC___quote_targets "$cur" "$worktrees"
   elif { [ "${COMP_WORDS[1]}" = "new" ] || [ "${COMP_WORDS[1]}" = "pr" ]; } && [[ "$cur" == -* ]]; then
     if type _git_gtr &>/dev/null; then
       ___FUNC___delegate_completion

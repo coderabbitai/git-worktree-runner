@@ -262,3 +262,13 @@ assert_literal_branch_completions() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"interactive completion checks passed"* ]]
 }
+
+@test "bash Readline accepts cd targets without standalone completion loaded" {
+  command -v python3 >/dev/null || skip "python3 is required for the Readline PTY test"
+  setup_bash_completion_repo
+
+  run python3 "$PROJECT_ROOT/tests/bash_completion_pty.py" "$PROJECT_ROOT" "$BASH" wrapper-only
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"interactive completion checks passed"* ]]
+}
