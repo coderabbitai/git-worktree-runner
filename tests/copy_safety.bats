@@ -1132,6 +1132,153 @@ _copy_test_mode() {
   [ "$(cat "$dst/cache/value")" = replacement ]
 }
 
+@test "directory merge keeps new nested directories private and preserves source modes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/source space" dst="$_test_tmpdir/destination space"
+  mkdir -p "$src/cache/private/nested" "$dst/cache"
+  echo secret > "$src/cache/private/nested/token"
+  chmod 700 "$src/cache/private"
+  chmod 750 "$src/cache/private/nested"
+  chmod 644 "$src/cache/private/nested/token"
+  cp() {
+    [ "$(_copy_test_mode "$dst/cache/private")" = 700 ] || return 1
+    [ "$(_copy_test_mode "$dst/cache/private/nested")" = 700 ] || return 1
+    command cp "$@"
+  }
+
+  (umask 022; copy_directories "$src" "$dst" cache '')
+
+  [ "$(cat "$dst/cache/private/nested/token")" = secret ]
+  [ "$(_copy_test_mode "$dst/cache/private")" = 700 ]
+  [ "$(_copy_test_mode "$dst/cache/private/nested")" = 750 ]
+  [ "$(_copy_test_mode "$dst/cache/private/nested/token")" = 644 ]
+}
+
+@test "directory merge applies restrictive umasks to new directory modes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" mask expected_parent expected_sub
+  mkdir -p "$src/cache/new/sub" "$dst"
+  echo keep > "$src/cache/new/sub/file"
+  chmod 750 "$src/cache/new"
+  chmod 711 "$src/cache/new/sub"
+
+  for mask in 027 077; do
+    mkdir -p "$dst/$mask/cache"
+    (umask "$mask"; copy_directories "$src" "$dst/$mask" cache '')
+    if [ "$mask" = 027 ]; then
+      expected_parent=750
+      expected_sub=710
+    else
+      expected_parent=700
+      expected_sub=700
+    fi
+    [ "$(cat "$dst/$mask/cache/new/sub/file")" = keep ]
+    [ "$(_copy_test_mode "$dst/$mask/cache/new")" = "$expected_parent" ]
+    [ "$(_copy_test_mode "$dst/$mask/cache/new/sub")" = "$expected_sub" ]
+  done
+}
+
+@test "directory merge populates read-only source directories before finalizing modes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/cache/new/sub" "$dst/cache"
+  echo keep > "$src/cache/new/sub/file"
+  chmod 500 "$src/cache/new"
+  chmod 550 "$src/cache/new/sub"
+  _readonly_copy_paths=("$src/cache/new" "$src/cache/new/sub"
+    "$dst/cache/new" "$dst/cache/new/sub")
+
+  (umask 022; copy_directories "$src" "$dst" cache '')
+
+  [ "$(cat "$dst/cache/new/sub/file")" = keep ]
+  [ "$(_copy_test_mode "$dst/cache/new")" = 500 ]
+  [ "$(_copy_test_mode "$dst/cache/new/sub")" = 550 ]
+}
+
+@test "directory merge preserves existing destination directory modes" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/cache/sub/new" "$dst/cache/sub"
+  echo keep > "$src/cache/sub/new/file"
+  echo sentinel > "$dst/cache/sub/existing"
+  chmod 700 "$src/cache"
+  chmod 755 "$src/cache/sub" "$src/cache/sub/new"
+  chmod 775 "$dst/cache"
+  chmod 710 "$dst/cache/sub"
+
+  (umask 077; copy_directories "$src" "$dst" cache '')
+
+  [ "$(cat "$dst/cache/sub/new/file")" = keep ]
+  [ "$(cat "$dst/cache/sub/existing")" = sentinel ]
+  [ "$(_copy_test_mode "$dst/cache")" = 775 ]
+  [ "$(_copy_test_mode "$dst/cache/sub")" = 710 ]
+  [ "$(_copy_test_mode "$dst/cache/sub/new")" = 700 ]
+}
+
+@test "directory merge keeps partial directories private when a leaf copy fails" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/cache/new/sub" "$dst/cache"
+  echo keep > "$src/cache/new/sub/file"
+  chmod 755 "$src/cache/new" "$src/cache/new/sub"
+  cp() {
+    command cp "$@" || return 1
+    return 1
+  }
+
+  local result=0
+  (umask 022; _fast_copy_dir "$src/cache" "$dst") || result=$?
+
+  [ "$result" -ne 0 ]
+  [ "$(_copy_test_mode "$dst/cache/new")" = 700 ]
+  [ "$(_copy_test_mode "$dst/cache/new/sub")" = 700 ]
+}
+
+@test "directory merge leaves directories private when final chmod fails" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
+  mkdir -p "$src/cache/new/sub" "$dst/cache"
+  echo keep > "$src/cache/new/sub/file"
+  chmod 755 "$src/cache/new" "$src/cache/new/sub"
+  chmod() {
+    [ "$2" != "$dst/cache/new/sub" ] || return 1
+    command chmod "$@"
+  }
+
+  run _fast_copy_dir "$src/cache" "$dst"
+
+  [ "$status" -ne 0 ]
+  [ "$(cat "$dst/cache/new/sub/file")" = keep ]
+  [ "$(_copy_test_mode "$dst/cache/new")" = 700 ]
+  [ "$(_copy_test_mode "$dst/cache/new/sub")" = 700 ]
+}
+
+@test "directory merge never finalizes permissions through a replacement symlink" {
+  _test_tmpdir=$(mktemp -d)
+  local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst" outside="$_test_tmpdir/outside"
+  mkdir -p "$src/cache/new" "$dst/cache" "$outside"
+  echo keep > "$src/cache/new/file"
+  echo sentinel > "$outside/marker"
+  chmod 755 "$src/cache/new"
+  chmod 700 "$outside"
+  rmdir() {
+    command rmdir "$@" || return 1
+    case "$1" in
+      "$dst/cache/new"/.gtr-copy.*)
+        command mv "$dst/cache/new" "$dst/cache/saved"
+        ln -s "$outside" "$dst/cache/new"
+        ;;
+    esac
+  }
+
+  run _fast_copy_dir "$src/cache" "$dst"
+
+  [ "$status" -ne 0 ]
+  [ -L "$dst/cache/new" ]
+  [ "$(_copy_test_mode "$outside")" = 700 ]
+  [ "$(cat "$outside/marker")" = sentinel ]
+}
+
 @test "failed clone fallback only removes its own staging output" {
   _test_tmpdir=$(mktemp -d)
   local src="$_test_tmpdir/src" dst="$_test_tmpdir/dst"
