@@ -127,23 +127,24 @@ normalize_target_ref() {
 }
 
 # Keep only MR records with an explicit top-level state before checking their tips.
-# Without jq, track nesting and strings so nested fields and adjacent records
-# cannot supply the state of an MR. SHA extraction remains in the helper below.
+# Track raw nesting and strings even with jq so duplicate keys, nested fields,
+# and adjacent records cannot supply the state of an MR. SHA extraction remains
+# in the helper below. Escaped keys are conservatively treated as ambiguous.
 # Usage: _gitlab_mrs_in_state <mr_json> <merged|closed>
 # Prints a nonempty JSON array; returns 1 if the state cannot be established.
 _gitlab_mrs_in_state() {
   local mr_result="$1" pr_state="$2"
 
   if command -v jq >/dev/null 2>&1; then
-    printf "%s" "$mr_result" | jq -ce --arg state "$pr_state" \
-      'select(type == "array") | map(select(.state == $state)) | select(length > 0)' \
-      2>/dev/null
-    return
+    # Validate syntax without rewriting the response: jq keeps the last duplicate.
+    printf "%s" "$mr_result" | jq -e 'type == "array"' >/dev/null 2>&1 || return 1
   fi
 
   printf "%s\n" "$mr_result" | awk -v state="$pr_state" '
+    # Count literal top-level state keys and reject keys needing escape decoding.
+    # Reset the field buffer after each property to avoid mixing adjacent keys.
     function check_field() {
-      # Escaped keys could spell a second state field; leave decoding to jq.
+      # Escaped keys could spell a second state field.
       if (field ~ /^"[^"]*\\/) ambiguous = 1
       if (field ~ /^"state":/) {
         state_count++

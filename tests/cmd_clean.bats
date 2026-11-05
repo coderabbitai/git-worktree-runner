@@ -254,15 +254,19 @@ teardown() {
 }
 
 # Exercise the real provider predicate and branch deletion in disposable repos.
+# Usage: assert_gitlab_cleanup <merged|closed> <jq|no-jq>
+# Creates eligible and ineligible MR fixtures, runs cleanup with errexit, and
+# asserts that only the requested unambiguous state loses its worktree and branch.
 assert_gitlab_cleanup() {
   local requested_state="$1" parser="$2" branch tip
-  for branch in merged-tip closed-tip opened-tip mixed-tip unknown-tip; do
+  for branch in merged-tip closed-tip opened-tip mixed-tip unknown-tip duplicate-tip; do
     create_test_worktree "$branch"
   done
   tip=$(git rev-parse HEAD)
 
   _clean_detect_provider() { printf "gitlab"; }
   ensure_provider_cli() { return 0; }
+  # Emit a response for the requested source branch, including adversarial states.
   glab() {
     case "$4" in
       merged-tip) printf '[{"state":"merged","sha":"%s"}]' "$tip" ;;
@@ -273,6 +277,9 @@ assert_gitlab_cleanup() {
           "$requested_state" "$tip"
         ;;
       unknown-tip) printf '[{"sha":"%s"}]' "$tip" ;;
+      duplicate-tip)
+        printf '[{"state":"opened","state":"%s","sha":"%s"}]' "$requested_state" "$tip"
+        ;;
       *) return 1 ;;
     esac
   }
@@ -284,7 +291,7 @@ assert_gitlab_cleanup() {
     run without_jq clean_with_errexit "--$requested_state" --yes
   fi
   [ "$status" -eq 0 ]
-  for branch in merged-tip closed-tip opened-tip mixed-tip unknown-tip; do
+  for branch in merged-tip closed-tip opened-tip mixed-tip unknown-tip duplicate-tip; do
     if [ "$branch" = "$requested_state-tip" ]; then
       [ ! -d "$TEST_WORKTREES_DIR/$branch" ]
       ! git show-ref --verify --quiet "refs/heads/$branch"

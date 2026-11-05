@@ -96,7 +96,10 @@ create_test_worktree() {
 }
 
 # Run a function with jq discovery disabled, without hiding other dependencies.
+# Usage: without_jq <function> [args...]
+# Returns the function status; the subshell keeps discovery unchanged for callers.
 without_jq() (
+  # Hide only command -v jq; delegate every other invocation to the Bash builtin.
   command() {
     if [ "$1" = "-v" ] && [ "${2:-}" = "jq" ]; then
       return 1

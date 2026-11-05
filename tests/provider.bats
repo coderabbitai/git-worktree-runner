@@ -8,6 +8,9 @@ setup() {
 
 # Check each response through both parsing paths. The glab stub deliberately
 # ignores the requested filter: only the returned MR state can authorize cleanup.
+# Usage: assert_gitlab_state <expected_status> <merged|closed> [tip]
+# Reads mr_json and optional glab_status from the calling test; an empty tip
+# exercises state-only checks. Returns nonzero if either parsing path disagrees.
 assert_gitlab_state() {
   local expected_status="$1" state="$2" tip="${3-abc123}"
   glab() { printf '%s\n' "$mr_json"; return "${glab_status:-0}"; }
@@ -151,6 +154,7 @@ assert_gitlab_state() {
 }
 
 @test "check_branch_merged passes target branch and branch tip to glab" {
+  # Verify the complete merged-list invocation and return an eligible MR.
   glab() {
     [ "$1" = "mr" ] || return 1
     [ "$2" = "list" ] || return 1
@@ -170,6 +174,7 @@ assert_gitlab_state() {
 }
 
 @test "check_branch_merged rejects reused GitLab branch names with different HEAD" {
+  # Verify the merged-list filter and return an MR from an older branch tip.
   glab() {
     [ "$1" = "mr" ] || return 1
     [ "$2" = "list" ] || return 1
@@ -189,6 +194,7 @@ assert_gitlab_state() {
 }
 
 @test "check_branch_closed passes target branch and branch tip to glab" {
+  # Verify the complete closed-list invocation and return an eligible MR.
   glab() {
     [ "$1" = "mr" ] || return 1
     [ "$2" = "list" ] || return 1
@@ -216,6 +222,7 @@ assert_gitlab_state() {
   old_path="$PATH"
   PATH="$mock_bin"
 
+  # Keep the CLI argument contract identical while exercising the no-jq path.
   glab() {
     [ "$1" = "mr" ] || return 1
     [ "$2" = "list" ] || return 1
@@ -237,6 +244,7 @@ assert_gitlab_state() {
 }
 
 @test "check_branch_merged accepts GitLab diff_refs head SHA matches" {
+  # Return a merged MR whose source tip is available only through diff_refs.
   glab() {
     [ "$1" = "mr" ] || return 1
     [ "$2" = "list" ] || return 1
@@ -258,6 +266,7 @@ assert_gitlab_state() {
 @test "check_branch_merged ignores unrelated GitLab nested head SHA fields" {
   command -v jq >/dev/null 2>&1 || skip "jq is required for structural GitLab JSON validation"
 
+  # Return an old MR tip with an unrelated nested SHA matching the local branch.
   glab() {
     [ "$1" = "mr" ] || return 1
     [ "$2" = "list" ] || return 1
@@ -277,6 +286,7 @@ assert_gitlab_state() {
 }
 
 @test "check_branch_merged still accepts GitLab merged MR without branch tip" {
+  # Check the list invocation and return state metadata without any tip fields.
   glab() {
     [ "$1" = "mr" ] || return 1
     [ "$2" = "list" ] || return 1
@@ -371,10 +381,27 @@ assert_gitlab_state() {
 }
 
 @test "GitLab ambiguous duplicate state fields cannot authorize cleanup" {
-  local mr_json='[{"state":"merged","state":"opened","sha":"abc123"}]'
-  assert_gitlab_state 1 merged
-  mr_json='[{"state":"merged","st\u0061te":"opened","sha":"abc123"}]'
-  assert_gitlab_state 1 merged
+  local mr_json state state_key
+  for state in merged closed; do
+    for state_key in state 'st\u0061te'; do
+      mr_json="[{\"state\":\"$state\",\"$state_key\":\"opened\",\"sha\":\"abc123\"}]"
+      assert_gitlab_state 1 "$state"
+      assert_gitlab_state 1 "$state" ""
+      mr_json="[{\"state\":\"opened\",\"$state_key\":\"$state\",\"sha\":\"abc123\"}]"
+      assert_gitlab_state 1 "$state"
+      assert_gitlab_state 1 "$state" ""
+    done
+  done
+}
+
+@test "GitLab discards ambiguous state records while retaining unambiguous matches" {
+  local mr_json state
+  for state in merged closed; do
+    mr_json="[{\"state\":\"opened\",\"state\":\"$state\",\"sha\":\"abc123\"},
+      {\"state\":\"$state\",\"sha\":\"def456\"}]"
+    assert_gitlab_state 1 "$state"
+    assert_gitlab_state 0 "$state" def456
+  done
 }
 
 @test "GitLab incomplete responses and CLI errors cannot authorize cleanup" {
