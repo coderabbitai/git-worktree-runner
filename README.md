@@ -330,11 +330,17 @@ git gtr rm feature/auth feature/api --dry-run --delete-branch --force
 tracked changes, untracked files and locks without deleting anything, running
 preRemove/postRemove hooks, or changing hook trust state. Invalid targets produce
 a non-zero exit status while other valid targets are still reported. A preview
-is advisory: hooks and other Git removal restrictions are not evaluated.
+is advisory: hooks and other Git removal restrictions are not evaluated. The status
+check disables fsmonitor and optional index writes, but configured clean/process
+filters can still run and write their own state.
 
-Without `--force`, modified/untracked files block removal; `--force` can discard
-these files. Ignored files do not block removal and are also removed with the
-worktree. Locked worktrees remain blocked even with the existing single `--force`.
+Without `--force`, modified tracked files block removal. Protection for untracked
+files depends on Git status settings: for example, `status.showUntrackedFiles=no`
+can allow actual removal to delete them. The preview explicitly includes untracked
+files even when that setting hides them; its report is advisory. `--force` can
+discard modified and untracked files. Ignored files do not block removal and are
+also removed with the worktree. Locked worktrees remain blocked even with the
+existing single `--force`.
 
 With `--delete-branch`, the preview counts branch commits not reachable from a
 verified base: the default remote/branch selected by `new`, preferring its local

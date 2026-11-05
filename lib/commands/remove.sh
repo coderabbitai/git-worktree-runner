@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-# Remove command
+# Remove explicit worktree targets, or preview them before hook dispatch.
+# Usage: cmd_remove <target>... [--delete-branch] [--force] [--yes] [--dry-run|-n]
 # shellcheck disable=SC2154  # _arg_* _pa_* set by parse_args, _ctx_* set by resolve_*
 cmd_remove() {
   local _spec
@@ -91,7 +92,8 @@ cmd_remove() {
   return "$had_failure"
 }
 
-# Read-only advisory preview. Never enter hook dispatch (including trust checks).
+# Print advisory status without removing targets or entering hook/trust dispatch.
+# Usage: _remove_preview repo_root worktree_path branch_name delete_branch force
 _remove_preview() {
   local repo_root="$1" worktree_path="$2" branch_name="$3" delete_branch="$4" force="$5"
   local state status_output line dirty=no untracked=no locked=no
@@ -105,7 +107,8 @@ _remove_preview() {
   state=$(worktree_status "$worktree_path") || return 1
   [ "$state" != locked ] || locked=yes
   # Avoid refreshing/writing the index. Disable fsmonitor to avoid invoking a
-  # configured external helper while inspecting the worktree.
+  # configured external helper while inspecting the worktree. Configured clean/process
+  # filters may still run and write their own state during this status check.
   if ! status_output=$(GIT_OPTIONAL_LOCKS=0 git -C "$worktree_path" -c core.fsmonitor=false \
     status --porcelain=v1 --untracked-files=all --ignore-submodules=none); then
     log_error "Cannot inspect worktree: $worktree_path"
@@ -125,7 +128,11 @@ EOF
     printf '  Blocked: locked worktree; the existing single --force cannot remove it.\n'
   elif [ "$dirty" = yes ] || [ "$untracked" = yes ]; then
     if [ "$force" -eq 0 ]; then
-      printf '  Blocked without --force: modified or untracked files.\n'
+      if [ "$dirty" = yes ]; then
+        printf '  Blocked without --force: modified tracked files.\n'
+      else
+        printf '  Untracked files may block removal without --force, depending on Git status settings.\n'
+      fi
     fi
   fi
   printf '  Warning: --force can discard uncommitted changes and untracked files.\n'
@@ -140,6 +147,8 @@ EOF
   printf '  Advisory only: hooks and other Git removal restrictions are not evaluated.\n'
 }
 
+# Report advisory reachability against a verified local default-base ref; never fetch.
+# Usage: _remove_preview_branch repo_root branch_name
 _remove_preview_branch() {
   local repo_root="$1" branch_name="$2" remote default_branch candidate base_ref="" base_oid="" count
   remote=$(resolve_default_remote)

@@ -33,7 +33,16 @@ _git_gtr() {
 
   # Commands that take branch names or '1' for main repo
   case "$cmd" in
-    go|run|rm|mv|rename)
+    rm)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--delete-branch --force --yes --dry-run -n" -- "$cur"))
+      else
+        local branches
+        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
+        COMPREPLY=($(compgen -W "$branches" -- "$cur"))
+      fi
+      ;;
+    go|run|mv|rename)
       if [ "$cword" -eq 3 ]; then
         # Complete with branch names and special ID '1' for main repo
         local branches all_options
@@ -42,9 +51,6 @@ _git_gtr() {
         COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
       elif [[ "$cur" == -* ]]; then
         case "$cmd" in
-          rm)
-            COMPREPLY=($(compgen -W "--delete-branch --force --yes --dry-run -n" -- "$cur"))
-            ;;
           mv|rename)
             COMPREPLY=($(compgen -W "--force --yes" -- "$cur"))
             ;;

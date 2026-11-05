@@ -26,6 +26,11 @@ preview() {
   mkdir -p "$XDG_CONFIG_HOME/gtr/trusted"
   echo marker > "$XDG_CONFIG_HOME/gtr/trusted/existing"
   echo keep > "$TEST_WT_PATH/untracked"
+  echo original > "$TEST_WT_PATH/tracked"
+  git -C "$TEST_WT_PATH" add tracked
+  git -C "$TEST_WT_PATH" commit -qm tracked
+  # Make cached stat data stale without changing content before hashing the index.
+  touch -t 200001010000 "$TEST_WT_PATH/tracked"
   local before_refs before_registry before_index
   before_refs=$(git show-ref)
   before_registry=$(git worktree list --porcelain)
@@ -186,4 +191,16 @@ preview() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"Branch: topic"* ]]
   [ -d "$TEST_WT_PATH" ]
+}
+
+@test "rm preview reports untracked files even when Git status hides them" {
+  create_test_worktree topic
+  git config status.showUntrackedFiles no
+  echo keep > "$TEST_WT_PATH/untracked"
+  run preview topic -n
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"untracked: yes"* ]]
+  [[ "$output" == *"depending on Git status settings"* ]]
+  [[ "$output" != *"Blocked without --force"* ]]
+  [ "$(cat "$TEST_WT_PATH/untracked")" = keep ]
 }
