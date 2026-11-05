@@ -15,10 +15,14 @@
 # A bare repository is its own root; its parent is not a checkout.
 # Returns: absolute path to main repo root or empty on failure
 _resolve_main_repo_root() {
-  local git_common_dir repo_root is_bare
+  local git_common_dir git_dir repo_root is_bare
   git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || return 1
 
   [ -n "$git_common_dir" ] || return 1
+  git_common_dir=$(
+    unset CDPATH
+    cd -P -- "$git_common_dir" 2>/dev/null && pwd -P
+  ) || return 1
 
   # Query the common directory, not the current worktree: a linked worktree
   # reports false even when its main repository is bare. Do not infer this
@@ -30,25 +34,36 @@ _resolve_main_repo_root() {
     git --git-dir="$git_common_dir" rev-parse --is-bare-repository 2>/dev/null
   ) || return 1
   if [ "$is_bare" = "true" ]; then
-    repo_root=$(
-      unset CDPATH
-      cd -P -- "$git_common_dir" 2>/dev/null && pwd -P
-    ) || return 1
-    printf "%s" "$repo_root"
+    printf "%s" "$git_common_dir"
     return
   fi
 
-  case "$git_common_dir" in
-    /*)
-      repo_root="${git_common_dir%/.git}"
-      ;;
-    *)
-      repo_root=$(
-        unset CDPATH
-        cd -P -- "$git_common_dir/.." 2>/dev/null && pwd -P
-      ) || return 1
-      ;;
-  esac
+  git_dir=$(git rev-parse --git-dir 2>/dev/null) || return 1
+  git_dir=$(
+    unset CDPATH
+    cd -P -- "$git_dir" 2>/dev/null && pwd -P
+  ) || return 1
+
+  if [ "$git_dir" = "$git_common_dir" ]; then
+    # This is the main worktree, including a .git file created by
+    # --separate-git-dir. rev-parse returns the path without porcelain quoting.
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || return 1
+  else
+    repo_root=$(
+      unset GIT_WORK_TREE GIT_COMMON_DIR
+      if git --git-dir="$git_common_dir" config --get core.worktree >/dev/null 2>&1; then
+        # Query the main repository's config, not config.worktree of the linked
+        # worktree. Let Git resolve relative core.worktree values itself.
+        git --git-dir="$git_common_dir" rev-parse --show-toplevel 2>/dev/null
+      else
+        # Git's worktree list also infers the main path by stripping /.git.
+        # Without core.worktree, only the conventional .git layout identifies
+        # a main checkout. Other metadata directories have no such backlink.
+        [ "${git_common_dir##*/}" = .git ] || return 1
+        printf "%s" "${git_common_dir%/.git}"
+      fi
+    ) || return 1
+  fi
 
   [ -n "$repo_root" ] || return 1
   printf "%s" "$repo_root"
