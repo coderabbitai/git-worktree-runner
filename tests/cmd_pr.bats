@@ -249,6 +249,72 @@ SCRIPT
   [ "$(git config remote.gtr-pr-999-base.gh-resolved)" = "base" ]
 }
 
+mock_failed_native_checkout() {
+  git config url."$TEST_REMOTE_REPO".insteadOf https://github.com/base/example.git
+  cat > "$TEST_MOCK_BIN/gh" <<'SCRIPT'
+#!/usr/bin/env bash
+if [ "$1" = "config" ]; then
+  printf 'https\n'
+elif [ "$1" = "pr" ] && [ "$2" = "view" ]; then
+  printf '123\tfeature/from-pr\tocto\texample\thttps://github.com/base/example/pull/123\ttrue\ttrue\n'
+elif [ "$1" = "pr" ] && [ "$2" = "checkout" ] && [ "$3" = "--help" ]; then
+  printf '      --worktree path\n'
+elif [ "$1" = "pr" ] && [ "$2" = "checkout" ]; then
+  destination="$TEST_WORKTREES_DIR/feature-from-pr"
+  case "${NATIVE_CHECKOUT_FAILURE:-}" in
+    directory) mkdir "$destination"; printf 'preserve me\n' > "$destination/partial" ;;
+    file) printf 'preserve me\n' > "$destination" ;;
+    symlink) ln -s "$destination-missing" "$destination" ;;
+  esac
+  printf "fatal: couldn't find remote ref refs/heads/feature/from-pr\n" >&2
+  exit 1
+fi
+SCRIPT
+}
+
+@test "pr CLI falls back to the pull request ref when native checkout fails" {
+  mock_failed_native_checkout
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  [ "$(git config remote.gtr-pr-123-base.gh-resolved)" = base ]
+  [[ "$output" == *"retrying with the pull request ref"* ]]
+}
+
+@test "pr CLI fallback preserves an existing branch at a different commit" {
+  mock_failed_native_checkout
+  local original_tip
+  original_tip=$(git rev-parse HEAD~1)
+  git branch feature/from-pr "$original_tip"
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --no-copy --no-hooks --yes
+
+  [ "$status" -eq 1 ]
+  [ ! -e "$TEST_WORKTREES_DIR/feature-from-pr" ]
+  [ "$(git rev-parse feature/from-pr)" = "$original_tip" ]
+  [[ "$output" == *"differs from pull request"* ]]
+}
+
+@test "pr CLI preserves partial native checkout destinations without falling back" {
+  mock_failed_native_checkout
+  local mode destination="$TEST_WORKTREES_DIR/feature-from-pr"
+  for mode in directory file symlink; do
+    export NATIVE_CHECKOUT_FAILURE="$mode"
+
+    run "$PROJECT_ROOT/bin/gtr" pr 123 --no-copy --no-hooks --yes
+
+    [ "$status" -eq 1 ]
+    [ ! -e "$TEST_REPO/.git/FETCH_HEAD" ]
+    case "$mode" in
+      directory) [ "$(cat "$destination/partial")" = 'preserve me' ]; rm -r "$destination" ;;
+      file) [ "$(cat "$destination")" = 'preserve me' ]; rm "$destination" ;;
+      symlink) [ -L "$destination" ]; rm "$destination" ;;
+    esac
+  done
+}
+
 @test "cmd_pr preserves existing branch metadata" {
   git branch feature/from-pr "$TEST_PR_SHA"
   git config branch.feature/from-pr.remote keep-remote
