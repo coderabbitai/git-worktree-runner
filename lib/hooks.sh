@@ -125,6 +125,8 @@ _hooks_read_definitions() {
 
 # Select values only from the captured definitions, never from the pathname.
 # An empty key displays every record for the trust confirmation.
+# Mode null emits NUL-terminated values for execution; all/last retain their
+# text output for existing display/default callers and generated shell helpers.
 _hooks_definitions_get() {
   local definitions="$1" key="${2:-}" mode="${3:-all}" record record_key value last_value=""
   key=$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]')
@@ -137,12 +139,20 @@ _hooks_definitions_get() {
     elif [ "$record_key" = "$key" ]; then
       if [ "$mode" = last ]; then
         last_value="$value"
+      elif [ "$mode" = null ]; then
+        printf '%s\0' "$value"
       else
         printf '%s\n' "$value"
       fi
     fi
   done < <(printf '%b' "$(printf '%s' "$definitions" | sed 's/../\\x&/g')")
   if [ "$mode" = last ]; then printf '%s\n' "$last_value"; fi
+}
+
+# Decode hex records to a stream, never to a shell variable (which cannot hold
+# NUL bytes). Consumers use read -d '' so trailing value newlines also survive.
+_hooks_decode_records() {
+  printf '%b' "$(printf '%s' "$1" | sed 's/../\\x&/g')"
 }
 
 # Validate a captured snapshot against its repository-scoped marker.
@@ -339,13 +349,16 @@ _hooks_mark_trusted() {
 
 # Get hooks, filtering out untrusted .gtrconfig hooks with a warning
 # Usage: _hooks_get_trusted <phase>
+# Returns hex-encoded, NUL-terminated complete values, in first-seen order.
+# This internal execution interface must not be consumed as lines of shell code.
 _hooks_get_trusted() {
   local phase="$1"
   _gtr_config_check || return 1
 
   # Always include hooks from git config (user controls their own .git/config)
   local git_hooks
-  git_hooks=$(git config --get-all "gtr.hook.$phase" 2>/dev/null) || true
+  git_hooks=$(git config -z --get-all "gtr.hook.$phase" 2>/dev/null |
+    od -An -v -tx1 | tr -d ' \n') || true
 
   # Check .gtrconfig trust before including its hooks
   local config_file
@@ -355,7 +368,8 @@ _hooks_get_trusted() {
   if [ -n "$config_file" ] && [ -f "$config_file" ]; then
     local definitions
     definitions=$(_hooks_read_definitions "$config_file") || true
-    file_hooks=$(_hooks_definitions_get "$definitions" "hooks.$phase")
+    file_hooks=$(_hooks_definitions_get "$definitions" "hooks.$phase" null |
+      od -An -v -tx1 | tr -d ' \n')
     if ! _hooks_snapshot_is_trusted "$config_file" "$definitions"; then
       if [ -n "$file_hooks" ]; then
         log_warn "Untrusted .gtrconfig hooks for '$phase' phase — skipping"
@@ -365,11 +379,24 @@ _hooks_get_trusted() {
     fi
   fi
 
-  # Merge and deduplicate
-  {
-    [ -n "$git_hooks" ] && printf '%s\n' "$git_hooks"
-    [ -n "$file_hooks" ] && printf '%s\n' "$file_hooks"
-  } | awk '!seen[$0]++'
+  # Deduplicate complete values, not their physical lines. Indexed arrays work
+  # in Bash 3.2; no delimiter can collide with text inside a hook value.
+  local seen=()
+  local hook previous duplicate
+  while IFS= read -r -d '' hook; do
+    [ -n "$hook" ] || continue
+    duplicate=0
+    for previous in "${seen[@]}"; do
+      if [ "$hook" = "$previous" ]; then
+        duplicate=1
+        break
+      fi
+    done
+    [ "$duplicate" -eq 0 ] || continue
+    seen+=("$hook")
+    printf '%s\0' "$hook"
+  done < <(_hooks_decode_records "$git_hooks$file_hooks") |
+    od -An -v -tx1 | tr -d ' \n'
 }
 
 # Report the outcome a successful hook phase will have without executing it.
@@ -424,14 +451,14 @@ run_hooks() {
 
   log_step "Running $phase hooks..."
 
-  local hook_count=0
+  local hook hook_count=0
   local failed=0
 
   # Capture environment variable assignments in array to preserve quoting
   local envs=("$@")
 
   # Execute each hook in a subshell to isolate side effects
-  while IFS= read -r hook; do
+  while IFS= read -r -d '' hook; do
     [ -z "$hook" ] && continue
 
     hook_count=$((hook_count + 1))
@@ -453,9 +480,7 @@ run_hooks() {
       log_error "Hook $hook_count failed with exit code $rc"
       failed=$((failed + 1))
     fi
-  done <<EOF
-$hooks
-EOF
+  done < <(_hooks_decode_records "$hooks")
 
   if [ "$failed" -gt 0 ]; then
     log_warn "$failed hook(s) failed"
@@ -515,8 +540,8 @@ run_hooks_export() {
     export "$kv"
   done
 
-  local hook_count=0
-  while IFS= read -r hook; do
+  local hook hook_count=0
+  while IFS= read -r -d '' hook; do
     [ -z "$hook" ] && continue
 
     hook_count=$((hook_count + 1))
@@ -524,7 +549,5 @@ run_hooks_export() {
 
     # eval directly (no subshell) so exports persist
     eval "$hook" </dev/null || log_warn "Hook $hook_count failed (continuing)"
-  done <<EOF
-$hooks
-EOF
+  done < <(_hooks_decode_records "$hooks")
 }

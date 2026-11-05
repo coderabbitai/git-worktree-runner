@@ -14,6 +14,8 @@ setup() {
   git -C "$TEST_REPO" config user.name "Test User"
   git -C "$TEST_REPO" config user.email "test@example.com"
   mkdir -p "$TEST_REPO/apps/web" "$TEST_REPO/apps/api" "$TEST_REPO/packages" "$TEST_REPO/docs"
+  # Git 2.25 sparse init needs a root file to avoid an empty initial checkout.
+  echo root > "$TEST_REPO/README.md"
   echo web > "$TEST_REPO/apps/web/file.txt"
   echo api > "$TEST_REPO/apps/api/file.txt"
   echo pkg > "$TEST_REPO/packages/file.txt"
@@ -41,18 +43,47 @@ teardown() {
   rm -rf "$TEST_REPO" "$TEST_WORKTREES_DIR"
 }
 
+# Sparse-checkout became a command in Git 2.25; native worktree inheritance
+# arrived in 2.36. Keep ordinary ref resolution and dense creation ungated.
+require_sparse_checkout() {
+  _git_version_at_least 2 25 || skip "git sparse-checkout requires Git 2.25+"
+}
+
+require_sparse_inheritance() {
+  _git_version_at_least 2 36 || skip "sparse-checkout inheritance requires Git 2.36+"
+}
+
+make_worktree() {
+  # worktree add --quiet is unavailable on Git 2.17.
+  git -C "$TEST_REPO" worktree add -b "$2" "$1" HEAD >/dev/null
+}
+
+init_sparse_checkout() {
+  require_sparse_checkout
+  local path="$1" pattern_file
+  shift
+  (
+    cd "$path" || exit 1
+    # Git 2.25 init does not create info/ in a linked worktree's gitdir.
+    pattern_file=$(git rev-parse --git-path info/sparse-checkout) || exit 1
+    mkdir -p "$(dirname "$pattern_file")" || exit 1
+    git sparse-checkout init "$@" >/dev/null
+  )
+}
+
 # Create a cone-sparse worktree on a branch checking out only the given dirs.
 # Usage: make_sparse_worktree <path> <branch> <dir>...
 make_sparse_worktree() {
+  require_sparse_checkout
   local path="$1" branch="$2"
   shift 2
-  git -C "$TEST_REPO" worktree add --quiet -b "$branch" "$path" HEAD
-  git -C "$path" sparse-checkout init --cone >/dev/null
+  make_worktree "$path" "$branch"
+  init_sparse_checkout "$path" --cone
   git -C "$path" sparse-checkout set "$@" >/dev/null
 }
 
 @test "_worktree_path_for_ref finds the worktree holding a branch" {
-  make_sparse_worktree "$TEST_WORKTREES_DIR/base" base apps/web packages
+  make_worktree "$TEST_WORKTREES_DIR/base" base
   git -C "$TEST_REPO" tag base
 
   result=$(_worktree_path_for_ref base)
@@ -65,7 +96,7 @@ make_sparse_worktree() {
 }
 
 @test "_worktree_path_for_ref matches remote-prefixed refs by short name" {
-  make_sparse_worktree "$TEST_WORKTREES_DIR/base" base apps/web
+  make_worktree "$TEST_WORKTREES_DIR/base" base
   result=$(_worktree_path_for_ref origin/base)
   [ "$result" = "$TEST_WORKTREES_DIR/base" ]
 
@@ -75,7 +106,7 @@ make_sparse_worktree() {
     [ "$result" = "$TEST_WORKTREES_DIR/base" ]
   done
 
-  make_sparse_worktree "$TEST_WORKTREES_DIR/literal-remote" remotes/origin/base docs
+  make_worktree "$TEST_WORKTREES_DIR/literal-remote" remotes/origin/base
   result=$(_worktree_path_for_ref remotes/origin/base)
   [ -z "$result" ]
   result=$(_worktree_path_for_ref refs/remotes/origin/base)
@@ -83,8 +114,8 @@ make_sparse_worktree() {
 }
 
 @test "_worktree_path_for_ref follows Git namespace shorthand resolution" {
-  make_sparse_worktree "$TEST_WORKTREES_DIR/heads-literal" heads/only apps/web
-  make_sparse_worktree "$TEST_WORKTREES_DIR/tags-literal" tags/only docs
+  make_worktree "$TEST_WORKTREES_DIR/heads-literal" heads/only
+  make_worktree "$TEST_WORKTREES_DIR/tags-literal" tags/only
 
   result=$(_worktree_path_for_ref heads/only)
   [ "$result" = "$TEST_WORKTREES_DIR/heads-literal" ]
@@ -93,7 +124,7 @@ make_sparse_worktree() {
 }
 
 @test "_worktree_path_for_ref preserves slash branch path after remote name" {
-  make_sparse_worktree "$TEST_WORKTREES_DIR/auth" feature/user-auth apps/web
+  make_worktree "$TEST_WORKTREES_DIR/auth" feature/user-auth
   result=$(_worktree_path_for_ref origin/feature/user-auth)
   [ "$result" = "$TEST_WORKTREES_DIR/auth" ]
 }
@@ -101,7 +132,7 @@ make_sparse_worktree() {
 @test "_worktree_path_for_ref uses the longest configured remote prefix" {
   git -C "$TEST_REPO" config gtr.defaultRemote team
   git -C "$TEST_REPO" remote add team/upstream https://example.com/upstream.git
-  make_sparse_worktree "$TEST_WORKTREES_DIR/auth" feature/user-auth apps/web
+  make_worktree "$TEST_WORKTREES_DIR/auth" feature/user-auth
 
   result=$(_worktree_path_for_ref team/upstream/feature/user-auth)
   [ "$result" = "$TEST_WORKTREES_DIR/auth" ]
@@ -109,14 +140,14 @@ make_sparse_worktree() {
 
 @test "_worktree_path_for_ref does not shorten an exact local slash ref" {
   git -C "$TEST_REPO" branch feature/user-auth
-  make_sparse_worktree "$TEST_WORKTREES_DIR/short" user-auth apps/web
+  make_worktree "$TEST_WORKTREES_DIR/short" user-auth
 
   result=$(_worktree_path_for_ref feature/user-auth)
   [ -z "$result" ]
 }
 
 @test "_worktree_path_for_ref does not reinterpret an exact branch or tag as remote" {
-  make_sparse_worktree "$TEST_WORKTREES_DIR/short" foo apps/web
+  make_worktree "$TEST_WORKTREES_DIR/short" foo
   git -C "$TEST_REPO" branch origin/foo
 
   result=$(_worktree_path_for_ref origin/foo)
@@ -129,9 +160,8 @@ make_sparse_worktree() {
 }
 
 @test "_resolve_sparse_source refuses an ambiguous duplicate branch" {
-  make_sparse_worktree "$TEST_WORKTREES_DIR/shared-one" shared apps/web
-  git -C "$TEST_REPO" worktree add --force --quiet "$TEST_WORKTREES_DIR/shared-two" shared
-  git -C "$TEST_WORKTREES_DIR/shared-two" sparse-checkout set docs >/dev/null
+  make_worktree "$TEST_WORKTREES_DIR/shared-one" shared
+  git -C "$TEST_REPO" worktree add --force "$TEST_WORKTREES_DIR/shared-two" shared >/dev/null
 
   run _worktree_path_for_ref shared
   [ "$status" -eq 2 ]
@@ -153,14 +183,15 @@ make_sparse_worktree() {
 }
 
 @test "_resolve_sparse_source returns empty when base is not sparse" {
-  git -C "$TEST_REPO" worktree add --quiet -b plain "$TEST_WORKTREES_DIR/plain" HEAD
+  make_worktree "$TEST_WORKTREES_DIR/plain" plain
   result=$(_resolve_sparse_source plain)
   [ -z "$result" ]
 }
 
 @test "_resolve_sparse_source falls back to current worktree" {
+  require_sparse_checkout
   # No worktree holds 'origin/main'; cwd (main repo) is sparse
-  git -C "$TEST_REPO" sparse-checkout init --cone >/dev/null
+  init_sparse_checkout "$TEST_REPO" --cone
   git -C "$TEST_REPO" sparse-checkout set apps/web >/dev/null
   result=$(_resolve_sparse_source origin/main)
   [ "$result" = "$TEST_REPO" ]
@@ -169,6 +200,7 @@ make_sparse_worktree() {
 }
 
 @test "cmd_create inherits a cone from the base worktree" {
+  require_sparse_inheritance
   source_gtr_commands
   make_sparse_worktree "$TEST_WORKTREES_DIR/base" base apps/web packages
 
@@ -193,8 +225,9 @@ make_sparse_worktree() {
 }
 
 @test "cmd_create uses a shorthand base ref's sparse worktree" {
+  require_sparse_inheritance
   source_gtr_commands
-  git -C "$TEST_REPO" sparse-checkout init --cone >/dev/null
+  init_sparse_checkout "$TEST_REPO" --cone
   git -C "$TEST_REPO" sparse-checkout set apps/api >/dev/null
   make_sparse_worktree "$TEST_WORKTREES_DIR/base source" base docs
   git -C "$TEST_WORKTREES_DIR/base source" commit --allow-empty -m "advance base" --quiet
@@ -211,8 +244,9 @@ make_sparse_worktree() {
 }
 
 @test "cmd_create keeps tag start points separate from same-named branch settings" {
+  require_sparse_inheritance
   source_gtr_commands
-  git -C "$TEST_REPO" sparse-checkout init --cone >/dev/null
+  init_sparse_checkout "$TEST_REPO" --cone
   git -C "$TEST_REPO" sparse-checkout set apps/api >/dev/null
   make_sparse_worktree "$TEST_WORKTREES_DIR/base" base docs
   git -C "$TEST_WORKTREES_DIR/base" commit --allow-empty -m "advance base" --quiet
@@ -230,6 +264,7 @@ make_sparse_worktree() {
 }
 
 @test "cmd_create inherits a dash-prefixed cone directory" {
+  require_sparse_inheritance
   source_gtr_commands
   mkdir -p "$TEST_REPO/-app"
   echo dash > "$TEST_REPO/-app/file.txt"
@@ -245,9 +280,10 @@ make_sparse_worktree() {
 }
 
 @test "cmd_create preserves sparse-index mode" {
+  require_sparse_inheritance
   source_gtr_commands
   git -C "$TEST_REPO" worktree add --quiet -b base "$TEST_WORKTREES_DIR/base" HEAD
-  if ! git -C "$TEST_WORKTREES_DIR/base" sparse-checkout init --cone --sparse-index >/dev/null 2>&1; then
+  if ! init_sparse_checkout "$TEST_WORKTREES_DIR/base" --cone --sparse-index 2>&1; then
     skip "git does not support sparse-index mode"
   fi
   git -C "$TEST_WORKTREES_DIR/base" sparse-checkout set apps/web packages >/dev/null
@@ -263,10 +299,11 @@ make_sparse_worktree() {
 }
 
 @test "cmd_create inherits non-cone patterns" {
+  require_sparse_inheritance
   source_gtr_commands
   # Source uses non-cone (raw pattern) sparse-checkout.
   git -C "$TEST_REPO" worktree add --quiet -b base "$TEST_WORKTREES_DIR/base" HEAD
-  git -C "$TEST_WORKTREES_DIR/base" sparse-checkout init --no-cone >/dev/null
+  init_sparse_checkout "$TEST_WORKTREES_DIR/base" --no-cone
   git -C "$TEST_WORKTREES_DIR/base" sparse-checkout set "/apps/web/" "/docs/" >/dev/null
 
   run cmd_create feat --from base --yes --no-fetch --no-hooks --no-copy
@@ -289,9 +326,10 @@ make_sparse_worktree() {
 }
 
 @test "cmd_create falls back to a full checkout when source patterns are missing" {
+  require_sparse_inheritance
   source_gtr_commands
   git -C "$TEST_REPO" worktree add --quiet -b base "$TEST_WORKTREES_DIR/base" HEAD
-  git -C "$TEST_WORKTREES_DIR/base" sparse-checkout init --no-cone >/dev/null
+  init_sparse_checkout "$TEST_WORKTREES_DIR/base" --no-cone
   git -C "$TEST_WORKTREES_DIR/base" sparse-checkout set "/apps/web/" >/dev/null
 
   pattern_file=$(git -C "$TEST_WORKTREES_DIR/base" rev-parse --git-path info/sparse-checkout)
@@ -310,8 +348,9 @@ make_sparse_worktree() {
 }
 
 @test "cmd_create does not replace a broken base with the current sparse worktree" {
+  require_sparse_inheritance
   source_gtr_commands
-  git -C "$TEST_REPO" sparse-checkout init --cone >/dev/null
+  init_sparse_checkout "$TEST_REPO" --cone
   git -C "$TEST_REPO" sparse-checkout set apps/web >/dev/null
   git -C "$TEST_REPO" worktree add --quiet -b broken "$TEST_WORKTREES_DIR/broken" HEAD
   git -C "$TEST_WORKTREES_DIR/broken" sparse-checkout set docs >/dev/null
@@ -346,8 +385,9 @@ make_sparse_worktree() {
 }
 
 @test "cmd_create --no-sparse from the current sparse worktree creates a dense checkout" {
+  require_sparse_checkout
   source_gtr_commands
-  git -C "$TEST_REPO" sparse-checkout init --cone >/dev/null
+  init_sparse_checkout "$TEST_REPO" --cone
   git -C "$TEST_REPO" sparse-checkout set apps/web >/dev/null
 
   run cmd_create feat-current-full --from-current --no-sparse --yes --no-fetch --no-hooks --no-copy
@@ -376,9 +416,10 @@ make_sparse_worktree() {
 }
 
 @test "cmd_create respects sparse.inherit=false from .gtrconfig" {
+  require_sparse_checkout
   source_gtr_commands
   git -C "$TEST_REPO" config -f "$TEST_REPO/.gtrconfig" sparse.inherit false
-  git -C "$TEST_REPO" sparse-checkout init --cone >/dev/null
+  init_sparse_checkout "$TEST_REPO" --cone
   git -C "$TEST_REPO" sparse-checkout set apps/web >/dev/null
 
   run cmd_create feat-file-cfg --from-current --yes --no-fetch --no-hooks --no-copy
@@ -392,8 +433,9 @@ make_sparse_worktree() {
 }
 
 @test "worktree-local sparse config overrides .gtrconfig" {
+  require_sparse_checkout
   source_gtr_commands
-  git -C "$TEST_REPO" sparse-checkout init --cone >/dev/null
+  init_sparse_checkout "$TEST_REPO" --cone
   git -C "$TEST_REPO" sparse-checkout set apps/web >/dev/null
   git -C "$TEST_REPO" config -f "$TEST_REPO/.gtrconfig" sparse.inherit true
   git -C "$TEST_REPO" config --worktree gtr.sparse.inherit false
@@ -409,6 +451,7 @@ make_sparse_worktree() {
 }
 
 @test "cmd_create --sparse overrides gtr.sparse.inherit=false" {
+  require_sparse_inheritance
   source_gtr_commands
   git -C "$TEST_REPO" config gtr.sparse.inherit false
   make_sparse_worktree "$TEST_WORKTREES_DIR/base" base apps/web
@@ -426,24 +469,29 @@ make_sparse_worktree() {
 
 @test "cmd_create --sparse falls back to dense when Git lacks native inheritance" {
   source_gtr_commands
-  make_sparse_worktree "$TEST_WORKTREES_DIR/base" base apps/web
-  _git_supports_sparse_inheritance() { return 1; }
+  make_worktree "$TEST_WORKTREES_DIR/base" base
+  if _git_version_at_least 2 36; then
+    _git_supports_sparse_inheritance() { return 1; }
+  fi
 
   run cmd_create feat-old-git --from base --sparse --yes --no-fetch --no-hooks --no-copy
   [ "$status" -eq 0 ]
   [[ "$output" == *"requires Git 2.36+"* ]]
 
   wt="$TEST_WORKTREES_DIR/feat-old-git"
-  [ -d "$wt/apps/web" ]
-  [ -d "$wt/apps/api" ]
-  [ -d "$wt/docs" ]
+  [ -f "$wt/apps/web/file.txt" ]
+  [ -f "$wt/apps/api/file.txt" ]
+  [ -f "$wt/packages/file.txt" ]
+  [ -f "$wt/docs/file.txt" ]
   [ "$(git -C "$wt" config --bool core.sparseCheckout 2>/dev/null || echo false)" != "true" ]
 }
 
 @test "cmd_create skips sparse config lookup when Git cannot inherit" {
   source_gtr_commands
-  make_sparse_worktree "$TEST_WORKTREES_DIR/base" base apps/web
-  _git_supports_sparse_inheritance() { return 1; }
+  make_worktree "$TEST_WORKTREES_DIR/base" base
+  if _git_version_at_least 2 36; then
+    _git_supports_sparse_inheritance() { return 1; }
+  fi
   cfg_bool() {
     printf "unexpected cfg_bool call\n" >&2
     return 1
@@ -452,15 +500,74 @@ make_sparse_worktree() {
   run cmd_create feat-old-default --from base --yes --no-fetch --no-hooks --no-copy
   [ "$status" -eq 0 ]
   [[ "$output" != *"unexpected cfg_bool call"* ]]
-  [ -d "$TEST_WORKTREES_DIR/feat-old-default/apps/api" ]
+  [[ "$output" != *"requires Git 2.36+"* ]]
+  wt="$TEST_WORKTREES_DIR/feat-old-default"
+  [ -f "$wt/apps/web/file.txt" ]
+  [ -f "$wt/apps/api/file.txt" ]
+  [ -f "$wt/packages/file.txt" ]
+  [ -f "$wt/docs/file.txt" ]
+  [ "$(git -C "$wt" config --bool core.sparseCheckout 2>/dev/null || echo false)" != "true" ]
 }
 
-@test "_git_version_at_least parses vendor-suffixed versions" {
+# On Git 2.25-2.35 the source can be sparse, but new worktrees stay dense.
+# Stub the inheritance capability only on newer Git; older Git uses its real gate.
+# The caller remains dense, avoiding newer Git's automatic sparse inheritance.
+@test "cmd_create falls back to dense from a sparse base without native inheritance" {
+  source_gtr_commands
+  make_sparse_worktree "$TEST_WORKTREES_DIR/base" base apps/web
+  if _git_version_at_least 2 36; then
+    _git_supports_sparse_inheritance() { return 1; }
+  fi
+
+  run cmd_create feat-old-base --from base --yes --no-fetch --no-hooks --no-copy
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"requires Git 2.36+"* ]]
+  [[ "$output" != *"Inherited sparse-checkout"* ]]
+
+  wt="$TEST_WORKTREES_DIR/feat-old-base"
+  [ -f "$wt/apps/web/file.txt" ]
+  [ -f "$wt/apps/api/file.txt" ]
+  [ -f "$wt/packages/file.txt" ]
+  [ -f "$wt/docs/file.txt" ]
+  [ "$(git -C "$wt" config --bool core.sparseCheckout 2>/dev/null || echo false)" != "true" ]
+}
+
+@test "cmd_create --sparse warns and stays dense from a sparse base without native inheritance" {
+  source_gtr_commands
+  make_sparse_worktree "$TEST_WORKTREES_DIR/base" base apps/web
+  if _git_version_at_least 2 36; then
+    _git_supports_sparse_inheritance() { return 1; }
+  fi
+
+  run cmd_create feat-old-base-explicit --from base --sparse --yes --no-fetch --no-hooks --no-copy
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"requires Git 2.36+"* ]]
+  [[ "$output" != *"Inherited sparse-checkout"* ]]
+
+  wt="$TEST_WORKTREES_DIR/feat-old-base-explicit"
+  [ -f "$wt/apps/web/file.txt" ]
+  [ -f "$wt/apps/api/file.txt" ]
+  [ -f "$wt/packages/file.txt" ]
+  [ -f "$wt/docs/file.txt" ]
+  [ "$(git -C "$wt" config --bool core.sparseCheckout 2>/dev/null || echo false)" != "true" ]
+}
+
+@test "Git version checks enforce the inheritance boundary and handle vendor suffixes" {
   git() {
     [ "$1" = "--version" ] || return 1
-    printf "git version 2.36.6 (Vendor Git-1)\n"
+    printf "git version %s\n" "$test_git_version"
   }
 
+  for test_git_version in 2.17.6 2.24.4 2.25.5 2.35.8; do
+    run _git_supports_sparse_inheritance
+    [ "$status" -eq 1 ]
+  done
+  for test_git_version in 2.36.0 "2.36.6 (Vendor Git-1)" 3.0.0; do
+    run _git_supports_sparse_inheritance
+    [ "$status" -eq 0 ]
+  done
+
+  test_git_version="2.36.6 (Vendor Git-1)"
   _git_version_at_least 2 36
   run _git_version_at_least 2 37
   [ "$status" -eq 1 ]
@@ -468,7 +575,7 @@ make_sparse_worktree() {
 
 @test "cmd_create with non-sparse base produces a full checkout" {
   source_gtr_commands
-  git -C "$TEST_REPO" worktree add --quiet -b plain "$TEST_WORKTREES_DIR/plain" HEAD
+  make_worktree "$TEST_WORKTREES_DIR/plain" plain
 
   run cmd_create feat-plain --from plain --yes --no-fetch --no-hooks --no-copy
   [ "$status" -eq 0 ]

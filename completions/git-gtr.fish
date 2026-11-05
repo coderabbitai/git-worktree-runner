@@ -108,7 +108,9 @@ complete -c git -n '__fish_git_gtr_using_command copy' -l from -d 'Source worktr
 
 # List command options
 complete -c git -n '__fish_git_gtr_using_command list' -l porcelain -d 'Machine-readable output'
+complete -c git -n '__fish_git_gtr_using_command list' -l ids -d 'Machine-readable registered identities'
 complete -c git -n '__fish_git_gtr_using_command ls' -l porcelain -d 'Machine-readable output'
+complete -c git -n '__fish_git_gtr_using_command ls' -l ids -d 'Machine-readable registered identities'
 
 # Editor command options
 complete -c git -n '__fish_git_gtr_using_command editor' -l editor -d 'Editor to use' -r -a 'antigravity atom cursor emacs idea nano none nvim pycharm sublime vim vscode webstorm zed'

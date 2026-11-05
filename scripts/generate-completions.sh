@@ -86,6 +86,7 @@ CONFIG_KEYS=$(get_config_keys)
 
 # ── Generators ───────────────────────────────────────────────────────────────
 
+# Emit the Bash completion asset, including literal target matching and shell quoting.
 generate_bash() {
   cat <<'HEADER'
 #!/usr/bin/env bash
@@ -106,6 +107,96 @@ generate_bash() {
 #   Add to your ~/.bashrc:
 #     source /path/to/git-worktree-runner/completions/gtr.bash
 
+# Fill COMPREPLY with safely quoted local branches and target 1 matching the typed prefix.
+# Decode only quoting syntax in the prefix; never evaluate shell expansions.
+# Escape each candidate for the active single/double/unquoted context.
+_git_gtr_complete_targets() {
+  local raw_prefix="$1" prefix="" quote="" before_quote="" escaped=0 char i
+  local branch branches quoted fragment ansi=0 dollar=0 was_dollar
+  local single_escape="'\\''" ansi_escape="\\'"
+  local dollar_escape='\$' tick_escape='\`' double_escape='\"' history_escape='"\!"'
+  for ((i=0; i<${#raw_prefix}; i++)); do
+    char="${raw_prefix:i:1}"
+    was_dollar="$dollar"
+    dollar=0
+    if [ "$escaped" -eq 1 ]; then
+      # Double quotes only consume backslashes before these shell characters.
+      if [ "$quote" = '"' ]; then
+        case "$char" in
+          '"'|'$'|'`'|'\') ;;
+          *) prefix+='\' ;;
+        esac
+      fi
+      prefix+="$char"
+      escaped=0
+    elif [ "$char" = "$quote" ]; then
+      quote=""
+      before_quote=""
+      ansi=0
+    elif [ "$quote" = "'" ]; then
+      if [ "$ansi" -eq 1 ] && [ "$char" = '\' ]; then
+        escaped=1
+      else
+        prefix+="$char"
+      fi
+    else
+      case "$char" in
+        '\') escaped=1 ;;
+        "'"|'"')
+          if [ -z "$quote" ]; then
+            if [ "$char" = "'" ] && [ "$was_dollar" -eq 1 ]; then
+              ansi=1
+              prefix="${prefix%?}"
+            fi
+            quote="$char"
+            before_quote="$prefix"
+          else
+            prefix+="$char"
+          fi
+          ;;
+        '$') prefix+="$char"; [ -n "$quote" ] || dollar=1 ;;
+        *) prefix+="$char" ;;
+      esac
+    fi
+  done
+  branches=$(git branch --no-column --format='%(refname:short)' 2>/dev/null || true)
+  COMPREPLY=()
+  # compgen -W evaluates its word list; treat branch names as literal data instead.
+  while IFS= read -r branch; do
+    printf -v quoted '%q' "$branch"
+    if [[ -n "$branch" && ( "$branch" == "$prefix"* || "$quoted" == "$raw_prefix"* ) ]]; then
+      # Readline retains text before an opening quote within the current word.
+      fragment="${branch#"$before_quote"}"
+      case "$quote" in
+        "'")
+          if [ "$ansi" -eq 1 ]; then
+            quoted="${fragment//\'/$ansi_escape}"
+          else
+            quoted="${fragment//\'/$single_escape}"
+          fi
+          quoted+="'"
+          ;;
+        '"')
+          quoted="${fragment//\$/$dollar_escape}"
+          quoted="${quoted//\`/$tick_escape}"
+          quoted="${quoted//\"/$double_escape}"
+          # Leave double quotes to escape history expansion without adding a backslash.
+          quoted="${quoted//!/$history_escape}"
+          quoted+='"'
+          ;;
+      esac
+      COMPREPLY+=("$quoted")
+    fi
+  done <<EOF
+1
+$branches
+EOF
+  # Candidates are already escaped; avoid a second quoting pass on newer Bash.
+  builtin compopt +o fullquote 2>/dev/null || true
+  builtin compopt -o noquote +o filenames 2>/dev/null || true
+}
+
+# Dispatch git gtr completion using the current word and arguments from bash-completion.
 _git_gtr() {
   local cur prev words cword
   _init_completion || return
@@ -126,10 +217,7 @@ _git_gtr() {
     go|run|rm|mv|rename)
       if [ "$cword" -eq 3 ]; then
         # Complete with branch names and special ID '1' for main repo
-        local branches all_options
-        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
-        all_options="1 $branches"
-        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+        _git_gtr_complete_targets "$cur"
       elif [[ "$cur" == -* ]]; then
         case "$cmd" in
           rm)
@@ -149,10 +237,7 @@ HEADER
   printf '        COMPREPLY=($(compgen -W "%s" -- "$cur"))\n' "$EDITORS"
   cat <<'MIDDLE1'
       else
-        local branches all_options
-        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
-        all_options="1 $branches"
-        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+        _git_gtr_complete_targets "$cur"
       fi
       ;;
     ai)
@@ -163,15 +248,12 @@ MIDDLE1
   printf '        COMPREPLY=($(compgen -W "%s" -- "$cur"))\n' "$AI_TOOLS"
   cat <<'MIDDLE2'
       else
-        local branches all_options
-        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
-        all_options="1 $branches"
-        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+        _git_gtr_complete_targets "$cur"
       fi
       ;;
     ls|list)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--porcelain" -- "$cur"))
+        COMPREPLY=($(compgen -W "--porcelain --ids" -- "$cur"))
       fi
       ;;
     clean)
@@ -184,10 +266,7 @@ MIDDLE1
         COMPREPLY=($(compgen -W "-n --dry-run -a --all --from" -- "$cur"))
       else
         # Complete with branch names and special ID '1' for main repo
-        local branches all_options
-        branches=$(git branch --format='%(refname:short)' 2>/dev/null || true)
-        all_options="1 $branches"
-        COMPREPLY=($(compgen -W "$all_options" -- "$cur"))
+        _git_gtr_complete_targets "$cur"
       fi
       ;;
     new)
@@ -385,7 +464,7 @@ _git-gtr() {
 
   # Early handler for `list/ls` command - add --porcelain
   if (( CURRENT >= 4 )) && [[ $words[3] == (list|ls) ]]; then
-    _arguments '--porcelain[Machine-readable output]'
+    _arguments '--porcelain[Machine-readable output]' '--ids[Machine-readable registered identities]'
     return
   fi
 
@@ -618,7 +697,9 @@ complete -c git -n '__fish_git_gtr_using_command copy' -l from -d 'Source worktr
 
 # List command options
 complete -c git -n '__fish_git_gtr_using_command list' -l porcelain -d 'Machine-readable output'
+complete -c git -n '__fish_git_gtr_using_command list' -l ids -d 'Machine-readable registered identities'
 complete -c git -n '__fish_git_gtr_using_command ls' -l porcelain -d 'Machine-readable output'
+complete -c git -n '__fish_git_gtr_using_command ls' -l ids -d 'Machine-readable registered identities'
 
 # Editor command options
 HEADER

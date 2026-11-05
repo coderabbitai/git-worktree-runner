@@ -71,6 +71,36 @@ If you get an error about a branch already being checked out, the branch exists 
 2. Remove the existing worktree first: `git gtr rm <branch>`
 3. Use `--force --name <suffix>` to create a second worktree on the same branch (advanced)
 
+### Separate Git Directory
+
+Repositories created with `git init --separate-git-dir` keep their metadata outside
+the main checkout. Commands run from the main checkout discover it directly.
+For commands run from linked worktrees, record the main checkout path in Git's
+`core.worktree` setting. Run this **from the main checkout**:
+
+```bash
+git config core.worktree "$(git rev-parse --show-toplevel)"
+```
+
+Git does not otherwise store a backlink from a separate metadata directory to the
+main checkout; even `git worktree list` may display the metadata path as the main
+worktree. From a linked worktree without `core.worktree`, gtr stops when the
+separate metadata directory has a name other than `.git`.
+
+**Separate metadata named `.git` is ambiguous.** Git treats its parent as a
+checkout, just as it does for an ordinary repository. There is no Git metadata
+that distinguishes these layouts. To preserve ordinary linked worktrees, gtr
+retains that parent-directory fallback. Set `core.worktree` before running gtr
+from linked worktrees in this layout; otherwise `.gtrconfig`, copy sources,
+target `1`, and worktree placement can use the metadata directory's parent.
+
+Update `core.worktree` if you move the main checkout. With
+`extensions.worktreeConfig` enabled, run this from the main checkout instead:
+
+```bash
+git config --worktree core.worktree "$(git rev-parse --show-toplevel)"
+```
+
 ---
 
 ## Editor Issues

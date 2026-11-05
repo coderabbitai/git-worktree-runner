@@ -238,6 +238,275 @@ teardown() {
   [ ! -d "$TEST_WORKTREES_DIR/merged-tip" ]
 }
 
+# Keep Git and hook execution real; only stub the hosting service response.
+setup_validated_tip_candidate() {
+  create_test_worktree "validated-tip"
+  git -C "$TEST_WT_PATH" commit --allow-empty -m "PR tip" --quiet
+  CLEAN_VALIDATED_TIP=$(git -C "$TEST_WT_PATH" rev-parse HEAD)
+  git config branch.validated-tip.description "Keep until branch deletion succeeds"
+  git config gtr.hook.postRemove 'printf "post\n" >> "$REPO_ROOT/hook-order"'
+  _clean_detect_provider() { printf "github"; }
+  ensure_provider_cli() { return 0; }
+  check_branch_merged() { [ "$2" = validated-tip ] && [ "$4" = "$CLEAN_VALIDATED_TIP" ]; }
+  check_branch_closed() { check_branch_merged "$@"; }
+}
+
+# Assert cleanup skipped a candidate after preRemove without removing its worktree
+# or invoking postRemove. Reads BATS status/output and the fixture's hook log.
+assert_changed_candidate_is_preserved() {
+  [ "$status" -eq 0 ]
+  [ -d "$TEST_WT_PATH" ]
+  [ "$(cat "$TEST_REPO/hook-order")" = pre ]
+  [[ "$output" == *"Skipping validated-tip"* ]]
+  [[ "$output" == *"after preRemove"* ]]
+  [[ "$output" == *"Removed: 0, Skipped: 1"* ]]
+}
+
+# Run cleanup with the supplied mode/flags and verify that a preRemove commit
+# preserves the worktree, updated branch, and branch metadata.
+assert_cleanup_preserves_hook_commit() {
+  setup_validated_tip_candidate
+  git config gtr.hook.preRemove \
+    'printf "pre\n" >> "$REPO_ROOT/hook-order"; git commit --allow-empty -m "New unmatched work" --quiet'
+
+  run run_clean_with_errexit "$@" --yes
+  assert_changed_candidate_is_preserved
+  [ "$(git rev-parse refs/heads/validated-tip)" != "$CLEAN_VALIDATED_TIP" ]
+  [ -n "$(git config branch.validated-tip.description)" ]
+}
+
+@test "cmd_clean preserves a branch advanced by preRemove" {
+  assert_cleanup_preserves_hook_commit --merged
+}
+
+@test "cmd_clean --closed --force cannot bypass the post-hook tip check" {
+  assert_cleanup_preserves_hook_commit --closed --force
+}
+
+@test "cmd_clean skips a hook checkout even when both branches have the same tip" {
+  setup_validated_tip_candidate
+  git branch other-tip "$CLEAN_VALIDATED_TIP"
+  git config gtr.hook.preRemove \
+    'printf "pre\n" >> "$REPO_ROOT/hook-order"; git checkout --quiet other-tip'
+
+  run run_clean_with_errexit --merged --force --yes
+  assert_changed_candidate_is_preserved
+  [ "$(git -C "$TEST_WT_PATH" symbolic-ref HEAD)" = refs/heads/other-tip ]
+  [ "$(git rev-parse refs/heads/validated-tip)" = "$CLEAN_VALIDATED_TIP" ]
+}
+
+@test "cmd_clean skips a hook that detaches HEAD at the validated tip" {
+  setup_validated_tip_candidate
+  git config gtr.hook.preRemove \
+    'printf "pre\n" >> "$REPO_ROOT/hook-order"; git checkout --quiet --detach HEAD'
+
+  run run_clean_with_errexit --merged --force --yes
+  assert_changed_candidate_is_preserved
+  if git -C "$TEST_WT_PATH" symbolic-ref --quiet HEAD >/dev/null; then
+    false
+  fi
+  [ "$(git rev-parse refs/heads/validated-tip)" = "$CLEAN_VALIDATED_TIP" ]
+}
+
+@test "cmd_clean skips a hook that renames the validated branch" {
+  setup_validated_tip_candidate
+  git config gtr.hook.preRemove \
+    'printf "pre\n" >> "$REPO_ROOT/hook-order"; git branch -m renamed-tip'
+
+  run run_clean_with_errexit --closed --force --yes
+  assert_changed_candidate_is_preserved
+  [ "$(git -C "$TEST_WT_PATH" symbolic-ref HEAD)" = refs/heads/renamed-tip ]
+  [ "$(git rev-parse refs/heads/renamed-tip)" = "$CLEAN_VALIDATED_TIP" ]
+  [ -n "$(git config branch.renamed-tip.description)" ]
+}
+
+@test "cmd_clean fails closed when post-hook branch state cannot be established" {
+  setup_validated_tip_candidate
+  git config gtr.hook.preRemove 'printf "pre\n" > "$REPO_ROOT/hook-order"'
+  # Fail only the selected post-hook lookup; preserve all other Git behavior.
+  git() {
+    if [ "$1" = -C ] && [ "$2" = "$TEST_WT_PATH" ] && \
+       [ "$3" = "$CLEAN_FAIL_COMMAND" ] && [ -e "$TEST_REPO/hook-order" ]; then
+      printf "%s" "$CLEAN_LOOKUP_OUTPUT"
+      return "$CLEAN_LOOKUP_STATUS"
+    fi
+    command git "$@"
+  }
+
+  local CLEAN_FAIL_COMMAND CLEAN_LOOKUP_OUTPUT CLEAN_LOOKUP_STATUS
+  for CLEAN_FAIL_COMMAND in symbolic-ref rev-parse; do
+    # Failed lookups must fail closed even if they print the expected value.
+    if [ "$CLEAN_FAIL_COMMAND" = symbolic-ref ]; then
+      CLEAN_LOOKUP_OUTPUT=refs/heads/validated-tip
+    else
+      CLEAN_LOOKUP_OUTPUT="$CLEAN_VALIDATED_TIP"
+    fi
+    CLEAN_LOOKUP_STATUS=1
+    run run_clean_with_errexit --merged --force --yes
+    assert_changed_candidate_is_preserved
+    rm "$TEST_REPO/hook-order"
+
+    CLEAN_LOOKUP_OUTPUT=""
+    CLEAN_LOOKUP_STATUS=0
+    run run_clean_with_errexit --closed --force --yes
+    assert_changed_candidate_is_preserved
+    rm "$TEST_REPO/hook-order"
+  done
+  [ "$(command git rev-parse refs/heads/validated-tip)" = "$CLEAN_VALIDATED_TIP" ]
+}
+
+@test "cmd_clean removes unchanged validated tips and metadata after hooks" {
+  local mode
+  for mode in --merged --closed; do
+    setup_validated_tip_candidate
+    git config branch.validated-tip.remote origin
+    git config branch.validated-tip.merge refs/heads/validated-tip
+    git config gtr.hook.preRemove \
+      'test -d "$WORKTREE_PATH" && printf "pre\n" > "$REPO_ROOT/hook-order"'
+    git config gtr.hook.postRemove \
+      'test ! -d "$WORKTREE_PATH" && ! git show-ref --verify --quiet "refs/heads/$BRANCH" && printf "post\n" >> "$REPO_ROOT/hook-order"'
+
+    run run_clean_with_errexit "$mode" --yes
+    [ "$status" -eq 0 ]
+    [ ! -d "$TEST_WT_PATH" ]
+    if git show-ref --verify --quiet refs/heads/validated-tip; then
+      false
+    fi
+    if git config --get-regexp '^branch\.validated-tip\.' >/dev/null; then
+      false
+    fi
+    [ "$(cat "$TEST_REPO/hook-order")" = $'pre\npost' ]
+    [[ "$output" == *"Removed: 1, Skipped: 0"* ]]
+    [[ "$output" != *"Post-remove hook failed"* ]]
+  done
+}
+
+# Inject an update immediately before branch deletion, then assert cleanup keeps
+# the new tip and metadata for the supplied cleanup mode/flags.
+assert_cleanup_preserves_racing_tip() {
+  setup_validated_tip_candidate
+  local new_tip
+  new_tip=$(printf "Concurrent work\n" | git commit-tree "$CLEAN_VALIDATED_TIP^{tree}" -p "$CLEAN_VALIDATED_TIP")
+  git config gtr.hook.preRemove 'printf "pre\n" > "$REPO_ROOT/hook-order"'
+  # Inject the update at the final deletion command, after all validation and
+  # worktree removal. Run the actual Git deletion to exercise its atomic check.
+  git() {
+    local args=" $* "
+    case "$args" in
+      *" update-ref "*" -d refs/heads/validated-tip "*|*" branch -d validated-tip "*|*" branch -D validated-tip "*)
+        command git -C "$TEST_REPO" update-ref refs/heads/validated-tip "$new_tip"
+        printf "raced\n" > "$TEST_REPO/race-injected"
+        ;;
+    esac
+    command git "$@"
+  }
+
+  run run_clean_with_errexit "$@" --yes
+  [ "$status" -eq 0 ]
+  [ -e "$TEST_REPO/race-injected" ]
+  [ ! -d "$TEST_WT_PATH" ]
+  [ "$(command git rev-parse refs/heads/validated-tip)" = "$new_tip" ]
+  [ -n "$(command git config branch.validated-tip.description)" ]
+  [ "$(cat "$TEST_REPO/hook-order")" = $'pre\npost' ]
+  [[ "$output" == *"Kept branch validated-tip"* ]]
+}
+
+@test "cmd_clean preserves an update racing the final branch deletion" {
+  assert_cleanup_preserves_racing_tip --merged
+}
+
+@test "cmd_clean --closed --force cannot bypass the atomic tip check" {
+  assert_cleanup_preserves_racing_tip --closed --force
+}
+
+@test "cmd_clean keeps a validated branch still checked out in another worktree" {
+  setup_validated_tip_candidate
+  git worktree add --quiet --force "$TEST_WORKTREES_DIR/still-active" validated-tip
+  cd "$TEST_WORKTREES_DIR/still-active"
+
+  run run_clean_with_errexit --merged --force --yes
+  [ "$status" -eq 0 ]
+  [ ! -d "$TEST_WT_PATH" ]
+  [ -d "$TEST_WORKTREES_DIR/still-active" ]
+  [ "$(git rev-parse refs/heads/validated-tip)" = "$CLEAN_VALIDATED_TIP" ]
+  [ -n "$(git config branch.validated-tip.description)" ]
+  [ "$(cat "$TEST_REPO/hook-order")" = post ]
+  [[ "$output" == *"Kept branch validated-tip (still checked out"* ]]
+}
+
+@test "cmd_clean keeps branch metadata if remaining worktrees cannot be checked" {
+  setup_validated_tip_candidate
+  # Fail worktree enumeration only after the candidate directory is removed.
+  git() {
+    if [ "$1" = -C ] && [ "$2" = "$TEST_REPO" ] && \
+       [ "$3 $4" = "worktree list" ] && [ ! -d "$TEST_WT_PATH" ]; then
+      return 1
+    fi
+    command git "$@"
+  }
+
+  run run_clean_with_errexit --closed --force --yes
+  [ "$status" -eq 0 ]
+  [ ! -d "$TEST_WT_PATH" ]
+  [ "$(command git rev-parse refs/heads/validated-tip)" = "$CLEAN_VALIDATED_TIP" ]
+  [ -n "$(command git config branch.validated-tip.description)" ]
+  [ "$(cat "$TEST_REPO/hook-order")" = post ]
+  [[ "$output" == *"Kept branch validated-tip (could not verify remaining worktrees)"* ]]
+}
+
+# Model the supplied rebase/bisect state file and branch value in another worktree,
+# then verify cleanup preserves the reserved branch and its metadata.
+assert_cleanup_preserves_in_progress_branch() {
+  local state_file="$1" state_branch="$2" state_path
+  setup_validated_tip_candidate
+  git worktree add --quiet --detach "$TEST_WORKTREES_DIR/in-progress" "$CLEAN_VALIDATED_TIP"
+  # Model Git's branch reservation while HEAD is detached by rebase/bisect.
+  state_path=$(git -C "$TEST_WORKTREES_DIR/in-progress" rev-parse --git-path "$state_file")
+  mkdir -p "$(dirname "$state_path")"
+  printf '%s\n' "$state_branch" > "$state_path"
+
+  run run_clean_with_errexit --merged --force --yes
+  [ "$status" -eq 0 ]
+  [ ! -d "$TEST_WT_PATH" ]
+  [ -d "$TEST_WORKTREES_DIR/in-progress" ]
+  [ "$(git rev-parse refs/heads/validated-tip)" = "$CLEAN_VALIDATED_TIP" ]
+  [ -n "$(git config branch.validated-tip.description)" ]
+  [[ "$output" == *"Kept branch validated-tip (rebase or bisect in progress)"* ]]
+}
+
+@test "cmd_clean preserves branch protection during a merge-backend rebase" {
+  assert_cleanup_preserves_in_progress_branch rebase-merge/head-name refs/heads/validated-tip
+}
+
+@test "cmd_clean preserves branch protection during an apply-backend rebase" {
+  assert_cleanup_preserves_in_progress_branch rebase-apply/head-name refs/heads/validated-tip
+}
+
+@test "cmd_clean preserves branch protection during bisect" {
+  assert_cleanup_preserves_in_progress_branch BISECT_START validated-tip
+}
+
+@test "cmd_clean never follows a symbolic branch ref during final deletion" {
+  setup_validated_tip_candidate
+  git branch other-tip "$CLEAN_VALIDATED_TIP"
+  # Replace the branch with a symbolic ref at the final deletion command.
+  git() {
+    case " $* " in
+      *" update-ref "*" -d refs/heads/validated-tip "*)
+        command git -C "$TEST_REPO" symbolic-ref refs/heads/validated-tip refs/heads/other-tip
+        printf "raced\n" > "$TEST_REPO/race-injected"
+        ;;
+    esac
+    command git "$@"
+  }
+
+  run run_clean_with_errexit --merged --force --yes
+  [ "$status" -eq 0 ]
+  [ -e "$TEST_REPO/race-injected" ]
+  [ ! -d "$TEST_WT_PATH" ]
+  [ "$(command git rev-parse refs/heads/other-tip)" = "$CLEAN_VALIDATED_TIP" ]
+}
+
 # Fail only the candidate's tip lookup; all other Git operations remain real.
 setup_unresolved_tip_candidate() {
   create_test_worktree "unresolved-tip"

@@ -896,39 +896,39 @@ run_generated_v2_trust_upgrade() (
 @test "bash fzf ctrl-d runs git gtr rm and reloads list" {
   run cmd_init bash
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)"* ]]
+  [[ "$output" == *"ctrl-d:execute(git gtr rm {s1} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --ids)"* ]]
 }
 
 @test "zsh fzf ctrl-d runs git gtr rm and reloads list" {
   run cmd_init zsh
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)"* ]]
+  [[ "$output" == *"ctrl-d:execute(git gtr rm {s1} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --ids)"* ]]
 }
 
 @test "fish fzf ctrl-d runs git gtr rm and reloads list" {
   run cmd_init fish
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ctrl-d:execute(git gtr rm {2} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --porcelain)"* ]]
+  [[ "$output" == *"ctrl-d:execute(git gtr rm {s1} > /dev/tty 2>&1 < /dev/tty)+reload(git gtr list --ids)"* ]]
 }
 
 # ── fzf: ctrl-y (copy) ──────────────────────────────────────────────────────
 
-@test "bash fzf ctrl-y runs git gtr copy on selected branch" {
+@test "bash fzf ctrl-y runs git gtr copy on selected identity" {
   run cmd_init bash
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)"* ]]
+  [[ "$output" == *"ctrl-y:execute(git gtr copy {s1} > /dev/tty 2>&1 < /dev/tty)"* ]]
 }
 
-@test "zsh fzf ctrl-y runs git gtr copy on selected branch" {
+@test "zsh fzf ctrl-y runs git gtr copy on selected identity" {
   run cmd_init zsh
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)"* ]]
+  [[ "$output" == *"ctrl-y:execute(git gtr copy {s1} > /dev/tty 2>&1 < /dev/tty)"* ]]
 }
 
-@test "fish fzf ctrl-y runs git gtr copy on selected branch" {
+@test "fish fzf ctrl-y runs git gtr copy on selected identity" {
   run cmd_init fish
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ctrl-y:execute(git gtr copy {2} > /dev/tty 2>&1 < /dev/tty)"* ]]
+  [[ "$output" == *"ctrl-y:execute(git gtr copy {s1} > /dev/tty 2>&1 < /dev/tty)"* ]]
 }
 
 # ── fzf: ctrl-r (refresh) ───────────────────────────────────────────────────
@@ -936,19 +936,19 @@ run_generated_v2_trust_upgrade() (
 @test "bash fzf ctrl-r reloads worktree list" {
   run cmd_init bash
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ctrl-r:reload(git gtr list --porcelain)"* ]]
+  [[ "$output" == *"ctrl-r:reload(git gtr list --ids)"* ]]
 }
 
 @test "zsh fzf ctrl-r reloads worktree list" {
   run cmd_init zsh
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ctrl-r:reload(git gtr list --porcelain)"* ]]
+  [[ "$output" == *"ctrl-r:reload(git gtr list --ids)"* ]]
 }
 
 @test "fish fzf ctrl-r reloads worktree list" {
   run cmd_init fish
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ctrl-r:reload(git gtr list --porcelain)"* ]]
+  [[ "$output" == *"ctrl-r:reload(git gtr list --ids)"* ]]
 }
 
 # ── fzf: preview window ─────────────────────────────────────────────────────
@@ -957,8 +957,8 @@ run_generated_v2_trust_upgrade() (
   run cmd_init bash
   [ "$status" -eq 0 ]
   [[ "$output" == *"--preview="* ]]
-  [[ "$output" == *"git -C {1} log --oneline --graph --color=always"* ]]
-  [[ "$output" == *"git -C {1} status --short"* ]]
+  [[ "$output" == *"git gtr run {s1} git log --oneline --graph --color=always"* ]]
+  [[ "$output" == *"git gtr run {s1} git status --short"* ]]
   [[ "$output" == *"--preview-window=right:50%"* ]]
 }
 
@@ -966,8 +966,8 @@ run_generated_v2_trust_upgrade() (
   run cmd_init zsh
   [ "$status" -eq 0 ]
   [[ "$output" == *"--preview="* ]]
-  [[ "$output" == *"git -C {1} log --oneline --graph --color=always"* ]]
-  [[ "$output" == *"git -C {1} status --short"* ]]
+  [[ "$output" == *"git gtr run {s1} git log --oneline --graph --color=always"* ]]
+  [[ "$output" == *"git gtr run {s1} git status --short"* ]]
   [[ "$output" == *"--preview-window=right:50%"* ]]
 }
 
@@ -975,8 +975,8 @@ run_generated_v2_trust_upgrade() (
   run cmd_init fish
   [ "$status" -eq 0 ]
   [[ "$output" == *"--preview="* ]]
-  [[ "$output" == *"git -C {1} log --oneline --graph --color=always"* ]]
-  [[ "$output" == *"git -C {1} status --short"* ]]
+  [[ "$output" == *"git gtr run {s1} git log --oneline --graph --color=always"* ]]
+  [[ "$output" == *"git gtr run {s1} git status --short"* ]]
   [[ "$output" == *"--preview-window=right:50%"* ]]
 }
 
@@ -1148,14 +1148,14 @@ run_generated_v2_trust_upgrade() (
   mkdir -p "$XDG_CACHE_HOME/gtr"
   for shell_name in bash zsh fish; do
     for func_name in gtr gwtr; do
-      for schema in 11 10 9 8 7 6; do
+      for schema in 12 11 10 9 8 7 6; do
         cache_file="$XDG_CACHE_HOME/gtr/init-$func_name.$shell_name"
         printf '# gtr-cache: version=test init=%s func=%s shell=%s\nold-cache\n' \
           "$schema" "$func_name" "$shell_name" > "$cache_file"
         run cmd_init "$shell_name" --as "$func_name"
         [ "$status" -eq 0 ]
         [[ "$output" != *old-cache* ]]
-        [[ "$(head -1 "$cache_file")" == *"init=12"* ]]
+        [[ "$(head -1 "$cache_file")" == *"init=13"* ]]
       done
     done
   done
@@ -1184,15 +1184,15 @@ run_documented_init_upgrade() (
     if [ "$shell_name" = zsh ]; then
       snippet='compdef() { :; }'$'\n'"$snippet"
     fi
-    for schema in 6 7 8 9 10 11 12; do
+    for schema in 6 7 8 9 10 11 12 13; do
       version="$cli_version"
-      [ "$schema" != 12 ] || version=old-version
+      [ "$schema" != 13 ] || version=old-version
       printf '# gtr-cache: version=%s init=%s func=gtr shell=%s\n' \
         "$version" "$schema" "$shell_name" > "$cache_file"
       printf '%s\n' 'echo stale > "$STALE_CACHE_MARKER"' >> "$cache_file"
       "$shell_name" -c "$snippet"
       [ ! -f "$STALE_CACHE_MARKER" ]
-      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=12 "* ]]
+      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=13 "* ]]
     done
   done
 )

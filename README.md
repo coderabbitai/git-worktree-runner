@@ -292,6 +292,8 @@ gtr cd 1
 The cache lives under `${XDG_CACHE_HOME:-$HOME/.cache}/gtr/`. New cache directories and files are private to your user. Each invocation checks ownership and write permissions, including parent directories and any XDG symlink targets. If the location is unsafe or unavailable, `git gtr init` returns fresh shell integration without reading or updating that cache.
 
 With [fzf](https://github.com/junegunn/fzf) installed, `gtr cd` (no arguments) opens a command palette with git log preview and keybindings: `ctrl-e` editor, `ctrl-a` AI, `ctrl-d` delete, `ctrl-y` copy, `ctrl-r` refresh.
+The picker shows each worktree's branch and path, and actions apply to the selected
+registered path even when branches or detached labels repeat.
 
 > **Note:** If `gtr` conflicts with another command (e.g., GNU `tr` from coreutils), use `--as` to pick a different name:
 >
@@ -355,9 +357,13 @@ git gtr copy my-feature -n -- "**/.env*"      # Dry-run preview
 - `-a, --all`: Copy to all worktrees
 - `--from <source>`: Copy from different worktree (default: main repo)
 
-### `git gtr list [--porcelain]`
+### `git gtr list [--porcelain | --ids]`
 
 List all worktrees. Use `--porcelain` for machine-readable output.
+Use `--ids` for tab-separated registered identity, branch, and status fields.
+Pass the first field as a quoted command target to select one exact worktree.
+See [registered identities](docs/advanced-usage.md#multiple-worktrees-same-branch)
+for the path escaping rules.
 
 ### `git gtr config {get|set|add|unset|list} <key> [value] [--global]`
 

@@ -393,6 +393,150 @@ EOF
   [ "$(tail -1 "$TEST_REPO/order")" = "third" ]
 }
 
+@test "hook runners keep multiline bodies inside false guards from both sources" {
+  git config --add gtr.hook.postCd $'if false; then\n  touch "$REPO_ROOT/git-unguarded"\nfi'
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd \
+    $'if false; then\n  touch "$REPO_ROOT/file-unguarded"\nfi'
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+
+  local runner
+  for runner in run_hooks run_hooks_export; do
+    run "$runner" postCd REPO_ROOT="$TEST_REPO"
+    [ ! -e "$TEST_REPO/git-unguarded" ]
+    [ ! -e "$TEST_REPO/file-unguarded" ]
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "hook runners preserve multiline functions heredocs and repeated body lines" {
+  local source runner hook
+  IFS= read -r -d '' hook <<'HOOK' || true
+record_hook() {
+  printf '%s\n' 'repeated command' >> "$REPO_ROOT/records"
+  printf '%s\n' 'repeated command' >> "$REPO_ROOT/records"
+}
+if true; then
+  record_hook
+fi
+cat >> "$REPO_ROOT/records" <<'DATA'
+repeated data
+repeated data
+literal $HOME \n ' "
+
+DATA
+HOOK
+  cat > "$TEST_REPO/expected" <<'EXPECTED'
+repeated command
+repeated command
+repeated data
+repeated data
+literal $HOME \n ' "
+
+EXPECTED
+  for source in git file; do
+    git config --unset-all gtr.hook.postCd || true
+    rm -f "$TEST_REPO/.gtrconfig"
+    if [ "$source" = git ]; then
+      git config --add gtr.hook.postCd "$hook"
+    else
+      git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd "$hook"
+      _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+    fi
+    for runner in run_hooks run_hooks_export; do
+      rm -f "$TEST_REPO/records"
+      run "$runner" postCd REPO_ROOT="$TEST_REPO"
+      [ "$status" -eq 0 ]
+      cmp "$TEST_REPO/expected" "$TEST_REPO/records"
+    done
+  done
+}
+
+@test "hook runners deduplicate whole values within and across sources in order" {
+  local first second runner
+  first=$'echo shared >> "$REPO_ROOT/order"\necho first >> "$REPO_ROOT/order"'
+  second=$'echo shared >> "$REPO_ROOT/order"\necho second >> "$REPO_ROOT/order"'
+  git config --add gtr.hook.postCd "$first"
+  git config --add gtr.hook.postCd "$first"
+  git config --add gtr.hook.postCd 'echo middle >> "$REPO_ROOT/order"'
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd "$first"
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd "$second"
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd "$second"
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+
+  for runner in run_hooks run_hooks_export; do
+    rm -f "$TEST_REPO/order"
+    run "$runner" postCd REPO_ROOT="$TEST_REPO"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$TEST_REPO/order")" = $'shared\nfirst\nmiddle\nshared\nsecond' ]
+  done
+}
+
+@test "hook runners distinguish values with trailing newlines during deduplication" {
+  local hook='printf x >> "$REPO_ROOT/bytes"' runner
+  git config --add gtr.hook.postCd "$hook"
+  git config --add gtr.hook.postCd "$hook"$'\n\n'
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd "$hook"$'\n\n'
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd "$hook"$'\n'
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+
+  for runner in run_hooks run_hooks_export; do
+    rm -f "$TEST_REPO/bytes"
+    run "$runner" postCd REPO_ROOT="$TEST_REPO"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$TEST_REPO/bytes")" = xxx ]
+  done
+}
+
+@test "hook runners preserve failure policy and continue after complete multiline hooks" {
+  git config --add gtr.hook.postCd $'if true; then\n  false\nfi'
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd \
+    $'failing_hook() {\n  return 7\n}\nfailing_hook'
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd 'touch "$REPO_ROOT/continued"'
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+
+  run run_hooks postCd REPO_ROOT="$TEST_REPO"
+  [ "$status" -eq 1 ]
+  [ -f "$TEST_REPO/continued" ]
+  [[ "$output" == *'2 hook(s) failed'* ]]
+  rm "$TEST_REPO/continued"
+  run run_hooks_export postCd REPO_ROOT="$TEST_REPO"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_REPO/continued" ]
+  [[ "$output" == *'Hook 2 failed (continuing)'* ]]
+}
+
+@test "run_hooks_export preserves multiline environment changes from both sources" {
+  git config --add gtr.hook.postCd \
+    $'if true; then\n  export GTR_RECORD_NATIVE="native value"\nfi'
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd \
+    $'set_record_env() {\n  export GTR_RECORD_SHARED="$(\n    printf "%s" "$GTR_RECORD_NATIVE"\n    printf "%s" " shared value"\n  )"\n}\nset_record_env'
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+
+  (
+    run_hooks_export postCd REPO_ROOT="$TEST_REPO"
+    bash -c 'printf "%s\n%s\n" "$GTR_RECORD_NATIVE" "$GTR_RECORD_SHARED"' > "$TEST_REPO/env"
+  )
+  [ "$(cat "$TEST_REPO/env")" = $'native value\nnative value shared value' ]
+  [ -z "${GTR_RECORD_NATIVE:-}" ]
+  [ -z "${GTR_RECORD_SHARED:-}" ]
+}
+
+@test "hook runners skip untrusted multiline values while executing Git hooks" {
+  git config --add gtr.hook.postCd $'if true; then\n  touch "$REPO_ROOT/git-ran"\nfi'
+  git config -f "$TEST_REPO/.gtrconfig" --add hooks.postCd \
+    $'if true; then\n  touch "$REPO_ROOT/untrusted-ran"\nfi'
+
+  local runner
+  for runner in run_hooks run_hooks_export; do
+    rm -f "$TEST_REPO/git-ran"
+    run "$runner" postCd REPO_ROOT="$TEST_REPO"
+    [ "$status" -eq 0 ]
+    [ -f "$TEST_REPO/git-ran" ]
+    [ ! -e "$TEST_REPO/untrusted-ran" ]
+    [[ "$output" == *'Untrusted .gtrconfig hooks'* ]]
+  done
+}
+
 @test "trust encoding distinguishes multiline defaults from added hook records" {
   git config -f "$TEST_REPO/.gtrconfig" defaults.ai $'echo safe\nhooks.postcd echo attacker'
   _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
@@ -402,16 +546,16 @@ EOF
 }
 
 @test "hook execution uses the captured definitions after config replacement" {
-  git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'echo approved'
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'echo approved > "$REPO_ROOT/captured"'
   _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
   eval "$(declare -f _hooks_snapshot_is_trusted | sed '1s/_hooks_snapshot_is_trusted/_original_snapshot_is_trusted/')"
   _hooks_snapshot_is_trusted() {
     _original_snapshot_is_trusted "$@" || return 1
-    git config -f "$1" hooks.postCd 'echo attacker'
+    git config -f "$1" hooks.postCd 'echo attacker > "$REPO_ROOT/captured"'
   }
-  run _hooks_get_trusted postCd
+  run run_hooks_export postCd REPO_ROOT="$TEST_REPO"
   [ "$status" -eq 0 ]
-  [ "$output" = 'echo approved' ]
+  [ "$(cat "$TEST_REPO/captured")" = approved ]
 }
 
 @test "trusted defaults are selected from the snapshot whose marker is checked" {

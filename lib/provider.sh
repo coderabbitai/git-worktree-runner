@@ -220,43 +220,163 @@ _gitlab_mrs_in_state() {
 }
 
 # Check whether state-filtered GitLab MR JSON has a source-head SHA matching branch_tip.
-# Uses jq when available; otherwise falls back to exact JSON key extraction to
-# keep GitLab cleanup usable on systems without jq.
+# Uses jq when available; otherwise validates the complete response with
+# POSIX awk, keeping cleanup usable without adding a runtime dependency.
 # Usage: _gitlab_mr_matches_tip <mr_json> <branch_tip>
 _gitlab_mr_matches_tip() {
   local mr_result="$1"
   local branch_tip="$2"
-  local mr_matches
+
+  [ -n "$branch_tip" ] || return 1
 
   if command -v jq >/dev/null 2>&1; then
-    mr_matches=$(printf "%s" "$mr_result" | jq --arg branch_tip "$branch_tip" 'map(select((.sha // "") == $branch_tip or (.head_sha // "") == $branch_tip or (.diff_refs.head_sha // "") == $branch_tip)) | length' 2>/dev/null || true)
-    [ "${mr_matches:-0}" -gt 0 ]
+    printf "%s" "$mr_result" | jq -e -s --arg branch_tip "$branch_tip" '
+      if length == 1 and (.[0] | type == "array") then
+        .[0] | if all(.[]; type == "object") then
+          map(select((.sha // "") == $branch_tip or
+                     (.head_sha // "") == $branch_tip or
+                     (.diff_refs.head_sha // "") == $branch_tip)) | length > 0
+        else false end
+      else false end
+    ' >/dev/null 2>&1 || return 1
     return
   fi
 
-  local compact_result objects object sha_field head_sha_field diff_refs
-  compact_result=$(printf "%s" "$mr_result" | tr -d '[:space:]')
-  objects=$(printf "%s" "$compact_result" | sed 's/},{/}\
-{/g')
-
-  while IFS= read -r object; do
-    sha_field=$(printf "%s" "$object" | sed -n 's/^[^{]*{[^{}]*"sha":"\([^"]*\)".*/\1/p')
-    [ "$sha_field" = "$branch_tip" ] && return 0
-
-    head_sha_field=$(printf "%s" "$object" | sed -n 's/^[^{]*{[^{}]*"head_sha":"\([^"]*\)".*/\1/p')
-    [ "$head_sha_field" = "$branch_tip" ] && return 0
-
-    diff_refs=$(printf "%s" "$object" | sed -n 's/.*"diff_refs":{\([^}]*\)}.*/\1/p')
-    case "$diff_refs" in
-      *"\"head_sha\":\"$branch_tip\""*)
-        return 0
-        ;;
-    esac
-  done <<EOF
-$objects
-EOF
-
-  return 1
+  # Track grammar and context separately: root -> MR -> diff_refs -> SHA.
+  # Validate even ignored values and the suffix after a match. Duplicate keys
+  # and excessive nesting fail closed. Hex-encoded UTF-8 strings keep escaped
+  # keys/values comparable without relying on awk support for embedded NULs.
+  printf "%s" "$mr_result" | GTR_MR_TIP="$branch_tip" LC_ALL=C awk '
+    function fail() { exit 1 }
+    function whitespace() {
+      while (substr(json, pos, 1) ~ /^[ \t\r\n]$/) pos++
+    }
+    function encode(text,    i, result) {
+      for (i = 1; i <= length(text); i++) result = result bytes[substr(text, i, 1)]
+      return result
+    }
+    function hex4(    text, i, n) {
+      text = tolower(substr(json, pos, 4))
+      if (length(text) != 4 || text ~ /[^0-9a-f]/) fail()
+      pos += 4
+      for (i = 1; i <= 4; i++) n = n * 16 + index("0123456789abcdef", substr(text, i, 1)) - 1
+      return n
+    }
+    function unicode(n) {
+      if (n < 128) return sprintf("%02x", n)
+      if (n < 2048) return sprintf("%02x%02x", 192 + int(n / 64), 128 + n % 64)
+      if (n < 65536)
+        return sprintf("%02x%02x%02x", 224 + int(n / 4096), 128 + int(n / 64) % 64, 128 + n % 64)
+      return sprintf("%02x%02x%02x%02x", 240 + int(n / 262144),
+                     128 + int(n / 4096) % 64, 128 + int(n / 64) % 64, 128 + n % 64)
+    }
+    function utf8(n,    count, minimum, next_byte) {
+      if (n < 128) return sprintf("%02x", n)
+      if (n >= 194 && n <= 223) { count = 1; minimum = 128; n -= 192 }
+      else if (n >= 224 && n <= 239) { count = 2; minimum = 2048; n -= 224 }
+      else if (n >= 240 && n <= 244) { count = 3; minimum = 65536; n -= 240 }
+      else fail()
+      while (count-- > 0) {
+        next_byte = ord[substr(json, pos++, 1)]
+        if (next_byte < 128 || next_byte > 191) fail()
+        n = n * 64 + next_byte - 128
+      }
+      if (n < minimum || n > 1114111 || (n >= 55296 && n <= 57343)) fail()
+      return unicode(n)
+    }
+    function string(    c, escape, n, low, result) {
+      if (substr(json, pos++, 1) != "\"") fail()
+      while (pos <= length(json)) {
+        c = substr(json, pos++, 1)
+        if (c == "\"") return result
+        if (ord[c] < 32) fail()
+        if (c != "\\") {
+          result = result utf8(ord[c])
+          continue
+        }
+        escape = substr(json, pos++, 1)
+        if (escape == "u") {
+          n = hex4()
+          if (n >= 55296 && n <= 56319) {
+            if (substr(json, pos, 2) != "\\u") fail()
+            pos += 2
+            low = hex4()
+            if (low < 56320 || low > 57343) fail()
+            n = 65536 + (n - 55296) * 1024 + low - 56320
+          } else if (n >= 56320 && n <= 57343) fail()
+          result = result unicode(n)
+        } else if (escape in escapes) {
+          result = result escapes[escape]
+        } else fail()
+      }
+      fail()
+    }
+    function value(context, depth,    c, closing, id, key, child, token, text) {
+      if (depth > 128) fail()
+      whitespace()
+      c = substr(json, pos, 1)
+      if (context == "root" && c != "[") fail()
+      if (context == "mr" && c != "{") fail()
+      if (context == "diff" && c != "{" && substr(json, pos, 4) != "null") fail()
+      if (c == "{" || c == "[") {
+        closing = (c == "{" ? "}" : "]")
+        id = ++object_id
+        pos++
+        whitespace()
+        if (substr(json, pos, 1) == closing) { pos++; return }
+        while (1) {
+          child = "ignore"
+          if (c == "{") {
+            key = string()
+            if ((id SUBSEP key) in seen) fail()
+            seen[id, key] = 1
+            whitespace()
+            if (substr(json, pos++, 1) != ":") fail()
+            if (context == "mr" && (key == sha_key || key == head_key)) child = "sha"
+            if (context == "mr" && key == diff_key) child = "diff"
+            if (context == "diff" && key == head_key) child = "sha"
+          } else if (context == "root") child = "mr"
+          value(child, depth + 1)
+          whitespace()
+          token = substr(json, pos++, 1)
+          if (token == closing) return
+          if (token != ",") fail()
+          whitespace()
+        }
+      }
+      if (c == "\"") {
+        text = string()
+        if (context == "sha" && text == tip) matched = 1
+        return
+      }
+      text = substr(json, pos)
+      if (match(text, /^(true|false|null)/) ||
+          match(text, /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/)) {
+        pos += RLENGTH
+        return
+      }
+      fail()
+    }
+    BEGIN {
+      for (i = 1; i < 256; i++) {
+        c = sprintf("%c", i)
+        bytes[c] = sprintf("%02x", i)
+        ord[c] = i
+      }
+      escapes["\""] = "22"; escapes["\\"] = "5c"; escapes["/"] = "2f"
+      escapes["b"] = "08"; escapes["f"] = "0c"; escapes["n"] = "0a"
+      escapes["r"] = "0d"; escapes["t"] = "09"
+      sha_key = encode("sha"); head_key = encode("head_sha"); diff_key = encode("diff_refs")
+      tip = encode(ENVIRON["GTR_MR_TIP"])
+    }
+    { json = json $0 "\n" }
+    END {
+      pos = 1
+      value("root", 0)
+      whitespace()
+      if (pos <= length(json) || !matched) fail()
+    }
+  '
 }
 
 # Check if a branch has a PR/MR with the requested state on the detected provider.

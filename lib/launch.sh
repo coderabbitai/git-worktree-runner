@@ -56,10 +56,11 @@ _auto_launch_ai() {
     if [ -n "$repo_root" ] && [ -n "$branch" ]; then
       (
         cd "$worktree_path" || exit 1
+        # The warning handler suppresses errexit; explicitly stop on dispatch failure.
         run_hooks_export "postCd" \
           REPO_ROOT="$repo_root" \
           WORKTREE_PATH="$worktree_path" \
-          BRANCH="$branch"
+          BRANCH="$branch" || exit 1
         ai_start "$worktree_path"
       ) || log_warn "Failed to start AI tool"
     else
