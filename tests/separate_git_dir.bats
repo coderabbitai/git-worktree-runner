@@ -3,6 +3,9 @@
 
 load test_helper
 
+# Create an isolated main checkout with external metadata and a linked worktree.
+# Sets TEST_FIXTURE, TEST_MAIN, TEST_METADATA, and TEST_LINKED; isolates Git/XDG
+# settings, loads the libraries, and leaves the test in the main checkout.
 setup() {
   TEST_FIXTURE=$(cd -P "$(mktemp -d)" && pwd)
   TEST_MAIN="$TEST_FIXTURE/main checkout"
@@ -22,6 +25,7 @@ setup() {
   cd "$TEST_MAIN"
 }
 
+# Leave the fixture before removing its checkout, metadata, and linked worktrees.
 teardown() {
   cd /
   rm -rf "$TEST_FIXTURE"
@@ -87,6 +91,33 @@ teardown() {
     cd "$context"
     [ "$(_resolve_main_repo_root)" = "$main" ]
   done
+}
+
+@test "core.worktree disambiguates .git metadata that Git also sees as a conventional checkout" {
+  local conventional="$TEST_FIXTURE/conventional" linked="$TEST_FIXTURE/conventional-linked"
+  local separate="$TEST_FIXTURE/separate" registry config
+  git clone --quiet "$TEST_MAIN" "$conventional"
+  git -C "$conventional" worktree add --quiet -b conventional-linked "$linked" HEAD
+  cd "$linked"
+  [ "$(_resolve_main_repo_root)" = "$conventional" ]
+  registry=$(git worktree list --porcelain)
+  config=$(git --git-dir="$conventional/.git" config --local --list)
+
+  # Creating a separate checkout adds no main-checkout backlink to the shared
+  # metadata. A Git checkout probe accepts both roots, including the old parent.
+  git init --quiet --separate-git-dir="$conventional/.git" "$separate"
+  [ "$(git worktree list --porcelain)" = "$registry" ]
+  [ "$(git --git-dir="$conventional/.git" config --local --list)" = "$config" ]
+  [ "$(git -C "$conventional" rev-parse --show-toplevel)" = "$conventional" ]
+  [ "$(git -C "$separate" rev-parse --show-toplevel)" = "$separate" ]
+
+  git -C "$separate" config core.worktree "$separate"
+  git config -f "$conventional/.gtrconfig" copy.include parent.txt
+  git config -f "$separate/.gtrconfig" copy.include checkout.txt
+  [ "$(_resolve_main_repo_root)" = "$separate" ]
+  [ "$(cfg_get_all_file copy.include)" = checkout.txt ]
+  [ "$(resolve_base_dir "$(_resolve_main_repo_root)")" = "${separate}-worktrees" ]
+  [ "$("$PROJECT_ROOT/bin/gtr" go 1 2>/dev/null)" = "$separate" ]
 }
 
 @test "main config is used even when a linked worktree has its own core.worktree" {

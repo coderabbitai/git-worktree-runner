@@ -13,7 +13,11 @@
 # Resolve the main repo root from the current git context.
 # Works from the main repo root, a subdirectory, or a linked worktree.
 # A bare repository is its own root; its parent is not a checkout.
+# Linked separate-directory layouts require core.worktree. Without it, a .git
+# basename is ambiguous and retains Git's conventional parent-directory fallback.
+# Usage: _resolve_main_repo_root (uses the caller's Git context; no arguments)
 # Returns: absolute path to main repo root or empty on failure
+# Exit code: 0 on success, 1 when Git context or a main root cannot be resolved
 _resolve_main_repo_root() {
   local git_common_dir git_dir repo_root is_bare
   git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || return 1
@@ -56,9 +60,11 @@ _resolve_main_repo_root() {
         # worktree. Let Git resolve relative core.worktree values itself.
         git --git-dir="$git_common_dir" rev-parse --show-toplevel 2>/dev/null
       else
-        # Git's worktree list also infers the main path by stripping /.git.
-        # Without core.worktree, only the conventional .git layout identifies
-        # a main checkout. Other metadata directories have no such backlink.
+        # Preserve conventional linked worktrees. Git cannot distinguish their
+        # .git directory from external metadata also named .git: even probing
+        # the parent with --show-toplevel returns that parent in both layouts.
+        # Separate-directory users must set core.worktree to disambiguate;
+        # rejecting this fallback would also reject ordinary linked worktrees.
         [ "${git_common_dir##*/}" = .git ] || return 1
         printf "%s" "${git_common_dir%/.git}"
       fi

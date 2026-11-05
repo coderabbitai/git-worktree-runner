@@ -84,10 +84,22 @@ git config core.worktree "$(git rev-parse --show-toplevel)"
 
 Git does not otherwise store a backlink from a separate metadata directory to the
 main checkout; even `git worktree list` may display the metadata path as the main
-worktree. If the main checkout cannot be resolved, gtr stops instead of using the
-metadata directory for `.gtrconfig`, copy sources, or worktree placement. Update
-`core.worktree` if you move the main checkout. With `extensions.worktreeConfig`
-enabled, use `git config --worktree core.worktree` for the main checkout's setting.
+worktree. From a linked worktree without `core.worktree`, gtr stops when the
+separate metadata directory has a name other than `.git`.
+
+**Separate metadata named `.git` is ambiguous.** Git treats its parent as a
+checkout, just as it does for an ordinary repository. There is no Git metadata
+that distinguishes these layouts. To preserve ordinary linked worktrees, gtr
+retains that parent-directory fallback. Set `core.worktree` before running gtr
+from linked worktrees in this layout; otherwise `.gtrconfig`, copy sources,
+target `1`, and worktree placement can use the metadata directory's parent.
+
+Update `core.worktree` if you move the main checkout. With
+`extensions.worktreeConfig` enabled, run this from the main checkout instead:
+
+```bash
+git config --worktree core.worktree "$(git rev-parse --show-toplevel)"
+```
 
 ---
 
