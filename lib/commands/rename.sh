@@ -89,6 +89,6 @@ cmd_rename() {
     echo ""
     log_warn "Remote branch 'origin/$old_branch' still exists"
     log_info "To update remote, run:"
-    echo "  git push origin :$old_branch $new_name"
+    printf '  git push origin %q %q\n' ":$old_branch" "$new_name"
   fi
 }
