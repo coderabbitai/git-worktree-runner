@@ -189,10 +189,10 @@ teardown() {
   local duplicate="$TEST_WORKTREES_DIR/nested/duplicate"
   local detached="$TEST_WORKTREES_DIR/detached"
   local external="$(cd "$BATS_TEST_TMPDIR" && pwd -P)/external checkout"
-  git worktree add --quiet --force "$duplicate" copy-target
-  git worktree add --quiet --detach "$detached" HEAD
+  git worktree add --force "$duplicate" copy-target
+  git worktree add --detach "$detached" HEAD
   # A linked checkout of the main branch must not resolve back to the source.
-  git worktree add --quiet --force "$external" "$(get_current_branch "$TEST_REPO")"
+  git worktree add --force "$external" "$(get_current_branch "$TEST_REPO")"
   mkdir -p "$TEST_WORKTREES_DIR/stray"
 
   run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
@@ -210,7 +210,7 @@ teardown() {
 @test "copy --all succeeds when the only linked worktree is detached" {
   git worktree remove "$TEST_WT_PATH"
   local detached="$TEST_WORKTREES_DIR/detached"
-  git worktree add --quiet --detach "$detached" HEAD
+  git worktree add --detach "$detached" HEAD
 
   run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
 
@@ -222,8 +222,8 @@ teardown() {
 @test "copy --all --from skips only the source checkout of a shared branch" {
   local duplicate="$TEST_WORKTREES_DIR/duplicate"
   local detached="$TEST_WORKTREES_DIR/detached"
-  git worktree add --quiet --force "$duplicate" copy-target
-  git worktree add --quiet --detach "$detached" HEAD
+  git worktree add --force "$duplicate" copy-target
+  git worktree add --detach "$detached" HEAD
   echo 'source=value' > "$TEST_WT_PATH/.env"
 
   run "$PROJECT_ROOT/bin/gtr" copy --all --from copy-target -- .env
@@ -238,7 +238,7 @@ teardown() {
 
 @test "copy --all accepts a detached source and deduplicates overlapping explicit targets" {
   local detached="$TEST_WORKTREES_DIR/detached"
-  git worktree add --quiet --detach "$detached" HEAD
+  git worktree add --detach "$detached" HEAD
   echo 'source=value' > "$detached/.env"
 
   run "$PROJECT_ROOT/bin/gtr" copy 1 copy-target "path:$TEST_WT_PATH" \
@@ -253,7 +253,7 @@ teardown() {
 
 @test "copy --all preserves escaped path characters with old Git listing fallback" {
   local path="$TEST_WORKTREES_DIR/\"quotes\" café \\n \\t \$(touch should-not-exist)"$'\t'
-  git worktree add --quiet --detach "$path" HEAD
+  git worktree add --detach "$path" HEAD
   git() {
     case "$*" in *"worktree list --porcelain -z") return 1 ;; esac
     command git "$@"
@@ -274,8 +274,8 @@ teardown() {
   fi
   local newline_path="$TEST_WORKTREES_DIR/line"$'\n'
   local literal_path="$TEST_WORKTREES_DIR/line\\n"
-  git worktree add --quiet --detach "$newline_path" HEAD
-  git worktree add --quiet --detach "$literal_path" HEAD
+  git worktree add --detach "$newline_path" HEAD
+  git worktree add --detach "$literal_path" HEAD
 
   run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
 
@@ -290,8 +290,8 @@ teardown() {
 @test "copy --all dry-run and configured patterns cover each duplicate and detached checkout once" {
   local duplicate="$TEST_WORKTREES_DIR/duplicate"
   local detached="$TEST_WORKTREES_DIR/detached"
-  git worktree add --quiet --force "$duplicate" copy-target
-  git worktree add --quiet --detach "$detached" HEAD
+  git worktree add --force "$duplicate" copy-target
+  git worktree add --detach "$detached" HEAD
   mkdir -p "$TEST_REPO/vendor/cache"
   echo settings > "$TEST_REPO/vendor/settings.json"
   echo excluded > "$TEST_REPO/vendor/token.pem"
@@ -332,7 +332,7 @@ teardown() {
 
 @test "copy --all propagates copy failures in detached worktrees" {
   local detached="$TEST_WORKTREES_DIR/detached"
-  git worktree add --quiet --detach "$detached" HEAD
+  git worktree add --detach "$detached" HEAD
   mkdir "$detached/.env"
 
   run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
@@ -356,7 +356,7 @@ teardown() {
 
 @test "cmd_copy --all copies to nested registered worktree only" {
   mkdir -p "$TEST_WORKTREES_DIR/jsmith"
-  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature --quiet
+  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature
 
   run cmd_copy --all -- ".env"
   [ "$status" -eq 0 ]
