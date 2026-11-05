@@ -8,6 +8,24 @@ _config_safety_error() {
   return 1
 }
 
+# POSIX ACL write access is bounded by the group-class mode bits. macOS ACLs
+# are independent of those bits; conservatively reject write-capable grants.
+# Shared by configuration and trust storage checks. Call only for non-symlinks.
+# Usage: _config_safety_acl_check <path> <os>; prints a reason only on failure.
+_config_safety_acl_check() {
+  local node="$1" os="$2" acl
+  [ "$os" = Darwin ] || return 0
+  acl=$(LC_ALL=C ls -lde "$node" 2>/dev/null || exit 1) || {
+    printf '%s\n' 'cannot inspect ACL'
+    return 1
+  }
+  if printf '%s\n' "$acl" | sed '1d' | grep -Eq '^[[:space:]]*[0-9]+:.* allow (.*[, ])?(write|append|delete|add_file|add_subdirectory|delete_child|writeattr|writeextattr|writesecurity|chown)(,|$| )'; then
+    printf '%s\n' 'write-capable ACL'
+    return 1
+  fi
+  return 0
+}
+
 # Check a single path component without following symlinks. The caller walks
 # both the link's parent chain and its target. Dynamic locals belong to
 # _gtr_config_check; never accept a caller-supplied cached validation result.
@@ -46,15 +64,8 @@ _config_safety_node() {
       _config_safety_error "$path" 'writable by group or other users'; return 1
     fi
   fi
-  # POSIX ACL write access is bounded by the group-class mode bits. macOS ACLs
-  # are independent of those bits; conservatively reject write-capable grants.
-  if [ "$_config_safety_os" = Darwin ]; then
-    acl=$(LC_ALL=C ls -lde "$path" 2>/dev/null) ||
-      { _config_safety_error "$path" 'cannot inspect ACL'; return 1; }
-    if printf '%s\n' "$acl" | sed '1d' | grep -Eq '^[[:space:]]*[0-9]+:.* allow (.*[, ])?(write|append|delete|add_file|add_subdirectory|delete_child|writeattr|writeextattr|writesecurity|chown)(,|$| )'; then
-      _config_safety_error "$path" 'write-capable ACL'; return 1
-    fi
-  fi
+  acl=$(_config_safety_acl_check "$path" "$_config_safety_os") ||
+    { _config_safety_error "$path" "$acl"; return 1; }
   if [ "$_config_safety_sticky" -eq 0 ]; then
     _config_safety_checked+=("$path")
   fi
