@@ -11,6 +11,70 @@ if ! command -v _gtr_config_check >/dev/null 2>&1; then
   fi
 fi
 
+# Cache contents are executable code. Reuse the config validator's component
+# walk so safe XDG symlinks work without hiding writable link parents/targets.
+_init_cache_path_is_safe() {
+  local _config_safety_uid _config_safety_os _config_safety_sticky=0
+  local _config_safety_checked=()
+  _config_safety_uid=$(id -u) || return 1
+  _config_safety_os=$(uname -s) || return 1
+  _config_safety_path "$1" || return 1
+  # Sticky ancestors can protect existing owned entries (e.g. under /tmp),
+  # but the cache directory itself must not be writable by other users.
+  [ "$_config_safety_sticky" -eq 0 ] || return 1
+  if [ "$#" -gt 1 ]; then
+    # Retain checked components only within this validation, not across I/O.
+    _config_safety_path "$2" || return 1
+  fi
+  return 0
+}
+
+_init_cache_is_safe() {
+  local cache_dir="$1" cache_file="$2"
+  [ ! -L "$cache_dir" ] && [ -d "$cache_dir" ] && [ -O "$cache_dir" ] || return 1
+  [ ! -L "$cache_file" ] || return 1
+  if [ -e "$cache_file" ]; then
+    [ -f "$cache_file" ] && [ -O "$cache_file" ] || return 1
+  fi
+  _init_cache_path_is_safe "$cache_dir" "$cache_file"
+}
+
+# Create one missing component at a time after checking its parent. In
+# particular, mkdir -p could traverse unchecked paths after a missing/.. pair.
+_init_cache_mkdir() {
+  local dir="$1" parent
+  if [ -d "$dir" ]; then
+    _init_cache_path_is_safe "$dir"
+    return $?
+  fi
+  [ ! -e "$dir" ] && [ ! -L "$dir" ] || return 1
+  parent="${dir%/*}"
+  _init_cache_mkdir "${parent:-/}" || return 1
+  _init_cache_path_is_safe "$dir" || return 1
+  mkdir -m 700 -- "$dir" || return 1
+  _init_cache_path_is_safe "$dir"
+}
+
+_init_cache_write() {
+  local cache_dir="$1" cache_file="$2" stamp="$3" output="$4" temp_file
+  [ ! -L "$cache_dir" ] || return 1
+  if [ ! -d "$cache_dir" ]; then
+    _init_cache_mkdir "$cache_dir" || return 1
+  fi
+  _init_cache_is_safe "$cache_dir" "$cache_file" || return 1
+  # mktemp creates a new 0600 file even under umask 000. Atomic replacement
+  # avoids following a cache-file link or exposing a partially written cache.
+  temp_file=$(mktemp "$cache_dir/.init.XXXXXX") || return 1
+  if _init_cache_is_safe "$cache_dir" "$temp_file" &&
+    printf '%s\n%s\n' "$stamp" "$output" > "$temp_file" &&
+    _init_cache_is_safe "$cache_dir" "$cache_file" &&
+    mv -f -- "$temp_file" "$cache_file"; then
+    return 0
+  fi
+  rm -f -- "$temp_file" || true
+  return 1
+}
+
 # Init command (generate shell integration for cd support)
 cmd_init() {
   local shell="" func_name="gtr"
@@ -78,29 +142,29 @@ cmd_init() {
 
   # Generate output (cached to ~/.cache/gtr/, auto-invalidates on shell integration changes)
   local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gtr"
+  case "$cache_dir" in /*) ;; *) cache_dir="$(pwd -P)/$cache_dir" ;; esac
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
   # Schema 10 replaces shell-expanded Bash cd candidates with literal filtering.
   local cache_schema="${GTR_INIT_CACHE_VERSION:-10}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
-  # Return cached output if version matches
-  if [ -f "$cache_file" ]; then
-    local first_line
-    first_line="$(head -1 "$cache_file")"
-    if [ "$first_line" = "$cache_stamp" ]; then
-      tail -n +2 "$cache_file"
-      return 0
-    fi
+  # A matching public stamp alone does not make executable cache data trusted.
+  local first_line cached_output
+  if _init_cache_is_safe "$cache_dir" "$cache_file" 2>/dev/null &&
+    [ -f "$cache_file" ] &&
+    first_line="$(head -1 "$cache_file" 2>/dev/null)" &&
+    [ "$first_line" = "$cache_stamp" ] &&
+    cached_output="$(tail -n +2 "$cache_file" 2>/dev/null)"; then
+    printf '%s\n' "$cached_output"
+    return 0
   fi
 
   # Generate, output, and cache (output first so set -e cache failures don't swallow it)
   local output
   output="$("$generator" | sed "s/__FUNC__/$func_name/g")"
   printf '%s\n' "$output"
-  if mkdir -p "$cache_dir" 2>/dev/null; then
-    printf '%s\n%s\n' "$cache_stamp" "$output" > "$cache_file" 2>/dev/null || true
-  fi
+  _init_cache_write "$cache_dir" "$cache_file" "$cache_stamp" "$output" 2>/dev/null || true
 }
 
 # Run the exact CLI validator in Bash for every generated shell. Embedding the

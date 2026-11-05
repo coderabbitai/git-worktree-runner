@@ -6,12 +6,13 @@ load test_helper
 setup() {
   source "$PROJECT_ROOT/lib/commands/init.sh"
   # Isolate cache to temp dir so tests don't pollute ~/.cache or each other
-  export XDG_CACHE_HOME="$BATS_TMPDIR/gtr-init-cache-$$"
+  INIT_CACHE_TEST_ROOT=$(mktemp -d "$BATS_TMPDIR/gtr-init-cache.XXXXXX")
+  export XDG_CACHE_HOME="$INIT_CACHE_TEST_ROOT/cache"
   export GTR_VERSION="test"
 }
 
 teardown() {
-  rm -rf "$BATS_TMPDIR/gtr-init-cache-$$"
+  rm -rf "$INIT_CACHE_TEST_ROOT"
 }
 
 run_generated_bash_wrapper_completion() {

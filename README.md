@@ -289,6 +289,8 @@ gtr cd 1
 
 `git gtr init <shell>` reuses cached output only when both the installed version and shell integration schema match. Keep the invocation in your shell configuration so upgrades refresh the helpers automatically. If your existing setup sources a cache file directly or checks a hard-coded `init=` value, replace it with the setup above, then restart your shell or run the matching setup command in the current shell. Upgrades to the v3 trust format require reviewing commands again with `git gtr trust`.
 
+The cache lives under `${XDG_CACHE_HOME:-$HOME/.cache}/gtr/`. New cache directories and files are private to your user. Each invocation checks ownership and write permissions, including parent directories and any XDG symlink targets. If the location is unsafe or unavailable, `git gtr init` returns fresh shell integration without reading or updating that cache.
+
 With [fzf](https://github.com/junegunn/fzf) installed, `gtr cd` (no arguments) opens a command palette with git log preview and keybindings: `ctrl-e` editor, `ctrl-a` AI, `ctrl-d` delete, `ctrl-y` copy, `ctrl-r` refresh.
 
 > **Note:** If `gtr` conflicts with another command (e.g., GNU `tr` from coreutils), use `--as` to pick a different name:
