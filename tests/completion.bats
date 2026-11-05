@@ -115,6 +115,7 @@ setup_bash_completion_repo() {
   cd "$TEST_ROOT/repo" || return 1
   git init --quiet
   git symbolic-ref HEAD refs/heads/main
+  git config branch.sort refname
   git -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false \
     commit --allow-empty --quiet -m init
 
@@ -129,8 +130,8 @@ setup_bash_completion_repo() {
   done
 }
 
-# Complete git gtr arguments, then parse each suggestion as an accepted Bash word.
-# Check both candidate generation and acceptance leave the fixture markers absent.
+# Complete git gtr arguments and parse each unquoted suggestion as an accepted word.
+# Interactive acceptance and quote handling are exercised by the PTY regression below.
 run_bash_completion() {
   # Supply bash-completion's context without requiring it to be installed.
   # Use errexit to catch failures when a prefix has no matches.
@@ -148,8 +149,7 @@ run_bash_completion() {
     COMP_CWORD=$((${#COMP_WORDS[@]} - 1))
     _git_gtr
     for candidate in "${COMPREPLY[@]}"; do
-      # Deliberately parse the suggestion, as Bash does after completion and Enter.
-      # The fixture substitutions only create harmless marker files in this repo.
+      # Fixtures are harmless if evaluated; this models acceptance of an unquoted word.
       eval "set -- $candidate"
       [ "$#" -eq 1 ]
       printf "%s\n" "$1"
@@ -242,4 +242,23 @@ assert_literal_branch_completions() {
     run_bash_completion "$cmd" "$common_prefix-m"
     [ "$output" = "$DOLLAR_BRANCH-more" ]
   done
+}
+
+@test "bash branch completion ignores column.branch=always" {
+  setup_bash_completion_repo
+  git config column.branch always
+  local cmd
+  for cmd in go editor ai copy; do
+    assert_literal_branch_completions "$cmd"
+  done
+}
+
+@test "bash Readline accepts branch names literally in every quoting context" {
+  command -v python3 >/dev/null || skip "python3 is required for the Readline PTY test"
+  setup_bash_completion_repo
+
+  run python3 "$PROJECT_ROOT/tests/bash_completion_pty.py" "$PROJECT_ROOT" "$BASH"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"interactive completion checks passed"* ]]
 }
