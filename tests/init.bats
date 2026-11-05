@@ -1074,19 +1074,19 @@ run_generated_v2_trust_upgrade() (
   [[ "$stamp" == *"init=2"* ]]
 }
 
-@test "init invalidates schema 6 and PR207 schema 7 at the same CLI version" {
+@test "init invalidates older trust helpers at the same CLI version" {
   local shell_name func_name schema cache_file
   mkdir -p "$XDG_CACHE_HOME/gtr"
   for shell_name in bash zsh fish; do
     for func_name in gtr gwtr; do
-      for schema in 7 6; do
+      for schema in 8 7 6; do
         cache_file="$XDG_CACHE_HOME/gtr/init-$func_name.$shell_name"
         printf '# gtr-cache: version=test init=%s func=%s shell=%s\nold-cache\n' \
           "$schema" "$func_name" "$shell_name" > "$cache_file"
         run cmd_init "$shell_name" --as "$func_name"
         [ "$status" -eq 0 ]
         [[ "$output" != *old-cache* ]]
-        [[ "$(head -1 "$cache_file")" == *"init=8"* ]]
+        [[ "$(head -1 "$cache_file")" == *"init=9"* ]]
       done
     done
   done
@@ -1115,15 +1115,15 @@ run_documented_init_upgrade() (
     if [ "$shell_name" = zsh ]; then
       snippet='compdef() { :; }'$'\n'"$snippet"
     fi
-    for schema in 6 7 8; do
+    for schema in 6 7 8 9; do
       version="$cli_version"
-      [ "$schema" != 8 ] || version=old-version
+      [ "$schema" != 9 ] || version=old-version
       printf '# gtr-cache: version=%s init=%s func=gtr shell=%s\n' \
         "$version" "$schema" "$shell_name" > "$cache_file"
       printf '%s\n' 'echo stale > "$STALE_CACHE_MARKER"' >> "$cache_file"
       "$shell_name" -c "$snippet"
       [ ! -f "$STALE_CACHE_MARKER" ]
-      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=8 "* ]]
+      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=9 "* ]]
     done
   done
 )

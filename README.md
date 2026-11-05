@@ -408,6 +408,8 @@ Trust is bound to the repository path, the filesystem identity of its common Git
 
 Approval covers command definitions and the behavior they delegate to. It does not hash or pin scripts, dependencies, or tools: for example, approving `sh ./scripts/setup.sh` allows subsequent changes to that script within the same repository. Review delegated code and trust the repository's contributors before approving commands.
 
+Trust markers and their directory must be owned by you, must not be symlinks, and must not be writable by other users. Ancestor directories and config-home symlink targets must also be protected from replacement by other users. New trust directories are created with mode `0700` and markers with mode `0600`, regardless of your umask. Unsafe existing storage is rejected without changing its permissions; move it aside and review commands again with `git gtr trust` after securing the parent directories.
+
 Trust requires a known filesystem birth time for the Git directory. If `stat` cannot provide it, `.gtrconfig` executable commands remain untrusted.
 
 ### Other Commands
