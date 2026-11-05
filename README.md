@@ -415,6 +415,10 @@ See [configuration safety](docs/configuration.md#configuration-safety).
 
 Approval covers command definitions and the behavior they delegate to. It does not hash or pin scripts, dependencies, or tools: for example, approving `sh ./scripts/setup.sh` allows subsequent changes to that script within the same repository. Review delegated code and trust the repository's contributors before approving commands.
 
+Trust markers must be regular files. Both the markers and their directory must be owned by you, must not be symlinks, and must not be group-writable or world-writable. Modes such as `0775` for a directory or `0664` for a marker are rejected even if the group contains only you. Ancestor directories and config-home symlink targets must be owned by you or root and protected from replacement by other users. A group-writable or world-writable ancestor is accepted only when it has the sticky bit; the trust directory itself must still have both write bits disabled.
+
+New trust directories are created with mode `0700` and markers with mode `0600`, regardless of your umask. Unsafe existing storage is rejected without changing its permissions. For an existing trust directory you own and have verified is not a symlink, `chmod 700 "${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"` repairs only that directory's permissions, not its markers or parent directories. Secure writable parent directories as well. If the store contains non-regular markers (such as directories or FIFOs), or other users could have modified it, move it aside before reviewing commands again with `git gtr trust` to create fresh approvals; changing permissions alone does not validate the old markers.
+
 Trust requires a known filesystem birth time for the Git directory. If `stat` cannot provide it, `.gtrconfig` executable commands remain untrusted.
 
 ### Other Commands

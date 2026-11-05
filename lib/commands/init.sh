@@ -80,8 +80,8 @@ cmd_init() {
   local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gtr"
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 10 replaces shell-expanded Bash cd candidates with literal filtering.
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-10}"
+  # Schema 11 also validates trust storage before accepting v3 approval markers.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-11}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # Return cached output if version matches
@@ -155,12 +155,114 @@ __FUNC___hooks_definitions_get() {
 SNAPSHOT
 }
 
+# Keep this template identical to the storage helpers in lib/hooks.sh; tests
+# compare them so the CLI and generated shells enforce the same trust boundary.
+_init_emit_trust_storage_helpers() {
+  cat <<'STORAGE'
+# Read ownership and permission bits on both GNU and BSD systems.
+_hooks_storage_stat() {
+  local metadata
+  metadata=$(stat -c '%u:%a' "$1" 2>/dev/null) ||
+    metadata=$(stat -f '%u:%Lp' "$1" 2>/dev/null) || return 1
+  case "$metadata" in
+    *[!0-9:]*|:*|*:) return 1 ;;
+  esac
+  case "${metadata#*:}" in *[!0-7]*) return 1 ;; esac
+  printf '%s\n' "$metadata"
+}
+
+# Validate every ancestor before traversing or creating it. Safe config-home
+# symlinks and system aliases (/tmp and /var on macOS) remain supported: check
+# the link's owner and its target's full path, with a bounded symlink walk.
+# Sticky system temp directories are safe ancestors, but never trust stores.
+# Usage: _hooks_trust_directory <directory> [create]
+# Prints the physical directory; new components are private even with umask 000.
+_hooks_trust_directory() {
+  local remaining="$1" action="${2:-}" current="/" component candidate metadata owner mode
+  local link_target links=0 current_uid
+  current_uid=$(id -u) || return 1
+  case "$remaining" in
+    /*) ;;
+    *) remaining="$(pwd -P)/$remaining" ;;
+  esac
+  while [ -n "$remaining" ]; do
+    component="${remaining%%/*}"
+    if [ "$component" = "$remaining" ]; then remaining=""; else remaining="${remaining#*/}"; fi
+    case "$component" in
+      ''|.) continue ;;
+      ..) current="${current%/*}"; [ -n "$current" ] || current="/"; continue ;;
+    esac
+    candidate="${current%/}/$component"
+    if [ -L "$candidate" ]; then
+      # The trust directory itself must be a real directory.
+      [ -n "$remaining" ] || return 1
+      links=$((links + 1))
+      [ "$links" -le 40 ] || return 1
+      metadata=$(_hooks_storage_stat "$candidate") || return 1
+      owner="${metadata%%:*}"
+      [ "$owner" = "$current_uid" ] || [ "$owner" = 0 ] || return 1
+      link_target=$(readlink "$candidate") || return 1
+      case "$link_target" in /*) current="/" ;; esac
+      remaining="$link_target/$remaining"
+      continue
+    fi
+    if [ ! -e "$candidate" ] && [ "$action" = create ]; then
+      (umask 077; mkdir -- "$candidate") || return 1
+    fi
+    [ -d "$candidate" ] && [ ! -L "$candidate" ] || return 1
+    metadata=$(_hooks_storage_stat "$candidate") || return 1
+    owner="${metadata%%:*}"
+    mode="${metadata#*:}"
+    [ "$owner" = "$current_uid" ] || [ "$owner" = 0 ] || return 1
+    if [ "$((8#$mode & 8#22))" -ne 0 ]; then
+      [ "$((8#$mode & 8#1000))" -ne 0 ] || return 1
+    fi
+    current="$candidate"
+  done
+  # Even a sticky or root-owned trust store cannot hold this user's approvals.
+  metadata=$(_hooks_storage_stat "$current") || return 1
+  [ "${metadata%%:*}" = "$current_uid" ] || return 1
+  mode="${metadata#*:}"
+  [ "$((8#$mode & 8#22))" -eq 0 ] || return 1
+  printf '%s\n' "$current"
+}
+
+# Only accept regular, user-owned, non-writable-by-others marker files. Resolve
+# the validated directory once so subsequent operations use its physical path.
+# In create mode a missing marker is allowed, but an unsafe existing one is not.
+_hooks_safe_trust_path() {
+  local trust_path="$1" action="${2:-}" directory name metadata mode current_uid
+  name="${trust_path##*/}"
+  case "$name" in ''|*[!0-9a-f]*) return 1 ;; esac
+  [ "${#name}" -eq 64 ] || return 1
+  directory=$(_hooks_trust_directory "${trust_path%/*}" "$action") || return 1
+  trust_path="$directory/$name"
+  [ ! -L "$trust_path" ] || return 1
+  if [ -e "$trust_path" ]; then
+    [ -f "$trust_path" ] || return 1
+    metadata=$(_hooks_storage_stat "$trust_path") || return 1
+    current_uid=$(id -u) || return 1
+    [ "${metadata%%:*}" = "$current_uid" ] || return 1
+    mode="${metadata#*:}"
+    [ "$((8#$mode & 8#22))" -eq 0 ] || return 1
+  else
+    [ "$action" = create ] || return 1
+  fi
+  printf '%s\n' "$trust_path"
+}
+STORAGE
+}
+
+# Emit Bash/Zsh trust helpers with the requested per-function shell setup.
+# Usage: _init_emit_posix_trust_helpers <shell_prelude>
+# Prints definitions with __FUNC__ placeholders for cmd_init to substitute.
 _init_emit_posix_trust_helpers() {
   local shell_prelude="$1"
   local template
 
   # Keep the snapshot encoding and extraction identical to the CLI.
   _init_emit_snapshot_helpers
+  _init_emit_trust_storage_helpers | sed 's/_hooks_/__FUNC___hooks_/g'
 
   # Keep case patterns balanced inside this substitution for Bash 3.2's parser.
   template=$(cat <<'EOF'
@@ -238,7 +340,7 @@ __SHELL_PRELUDE__
   local _gtr_trust_path="$1"
   local _gtr_config_file="$2"
   local _gtr_marker _gtr_canonical_config
-  [ -f "$_gtr_trust_path" ] || return 1
+  _gtr_trust_path="$(__FUNC___hooks_safe_trust_path "$_gtr_trust_path")" || return 1
   _gtr_marker="$(cat "$_gtr_trust_path" 2>/dev/null)" || return 1
   _gtr_canonical_config="$(__FUNC___hooks_canonical_config_path "$_gtr_config_file" 2>/dev/null)" || return 1
   [ "$_gtr_marker" = "$_gtr_canonical_config" ]
@@ -258,14 +360,20 @@ EOF
   printf '%s\n' "${template//__SHELL_PRELUDE__/$shell_prelude}"
 }
 
+# Emit Fish trust helpers, embedding the shared Bash snapshot/storage logic.
+# Usage: _init_emit_fish_trust_helpers
+# Prints self-contained definitions with __FUNC__ placeholders; runs no hooks.
 _init_emit_fish_trust_helpers() {
-  local snapshot_helpers
+  local snapshot_helpers storage_helpers
   # Quote for a Fish single-quoted string. Bash 3.2's parameter substitution
   # over-escapes single quotes here, so use sed for consistent generated code.
   snapshot_helpers=$(_init_emit_snapshot_helpers |
     sed -e 's/__FUNC___hooks_/_hooks_/g; s/\\/\\\\/g' -e "s/'/\\\\'/g")
   printf "function __FUNC___hooks_read_definitions\n  command bash -c '%s\n_hooks_read_definitions \"\$1\"' bash \"\$argv[1]\"\nend\n" "$snapshot_helpers"
   printf "function __FUNC___hooks_definitions_get\n  command bash -c '%s\n_hooks_definitions_get \"\$1\" \"\$2\"' bash \"\$argv[1]\" \"\$argv[2]\"\nend\n" "$snapshot_helpers"
+  storage_helpers=$(_init_emit_trust_storage_helpers |
+    sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g")
+  printf "function __FUNC___hooks_safe_trust_path\n  command bash -c '%s\n_hooks_safe_trust_path \"\$1\"' bash \"\$argv[1]\"\nend\n" "$storage_helpers"
   cat <<'FISH'
 function __FUNC___gtrconfig_path
   set -l _gtr_git_common_dir (git rev-parse --git-common-dir 2>/dev/null)
@@ -337,7 +445,8 @@ end
 function __FUNC___hooks_marker_matches_config
   set -l _gtr_trust_path "$argv[1]"
   set -l _gtr_config_file "$argv[2]"
-  test -f "$_gtr_trust_path"; or return 1
+  set _gtr_trust_path (__FUNC___hooks_safe_trust_path "$_gtr_trust_path")
+  or return 1
   set -l _gtr_marker (cat "$_gtr_trust_path" 2>/dev/null)
   set -l _gtr_canonical_config (__FUNC___hooks_canonical_config_path "$_gtr_config_file" 2>/dev/null)
   test "$_gtr_marker" = "$_gtr_canonical_config"
