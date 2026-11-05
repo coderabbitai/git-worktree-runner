@@ -171,9 +171,15 @@ assert_literal_branch_completions() {
 
   run_bash_completion "$@" 'literal$('
   [ "$output" = "$DOLLAR_BRANCH" ]
+  run_bash_completion "$@" 'literal\$\('
+  [ "$output" = "$DOLLAR_BRANCH" ]
   run_bash_completion "$@" 'literal`'
   [ "$output" = "$BACKTICK_BRANCH" ]
+  run_bash_completion "$@" 'literal\`'
+  [ "$output" = "$BACKTICK_BRANCH" ]
   run_bash_completion "$@" quote
+  [ "$output" = "$QUOTED_BRANCH" ]
+  run_bash_completion "$@" 'quote\"'
   [ "$output" = "$QUOTED_BRANCH" ]
 
   run_bash_completion "$@" feature/a
@@ -208,4 +214,32 @@ assert_literal_branch_completions() {
   setup_bash_completion_repo
   assert_literal_branch_completions copy
   assert_literal_branch_completions copy --from
+}
+
+@test "bash completion retains matches after inserting an escaped common prefix" {
+  setup_bash_completion_repo
+  git branch "$DOLLAR_BRANCH-more"
+  # shellcheck disable=SC1091
+  source "$PROJECT_ROOT/completions/gtr.bash"
+
+  _git_gtr_complete_targets literal
+  [ "${#COMPREPLY[@]}" -eq 3 ]
+  _git_gtr_complete_targets 'literal$('
+  [ "${#COMPREPLY[@]}" -eq 2 ]
+
+  # Readline inserts the common prefix of escaped candidates on the first Tab.
+  local common_prefix="${COMPREPLY[0]}"
+  while [[ "${COMPREPLY[1]}" != "$common_prefix"* ]]; do
+    common_prefix="${common_prefix%?}"
+  done
+  [ "$common_prefix" = 'literal\$\(\>completion-dollar-marker\)' ]
+
+  # Subsequent completion must keep both matches and allow narrowing to one.
+  local cmd
+  for cmd in go run rm mv rename editor ai copy; do
+    run_bash_completion "$cmd" "$common_prefix"
+    [ "$output" = "$DOLLAR_BRANCH"$'\n'"$DOLLAR_BRANCH-more" ]
+    run_bash_completion "$cmd" "$common_prefix-m"
+    [ "$output" = "$DOLLAR_BRANCH-more" ]
+  done
 }

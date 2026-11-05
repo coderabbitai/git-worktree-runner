@@ -107,7 +107,8 @@ generate_bash() {
 #   Add to your ~/.bashrc:
 #     source /path/to/git-worktree-runner/completions/gtr.bash
 
-# Fill COMPREPLY with shell-escaped local branches and target 1 matching a literal prefix.
+# Fill COMPREPLY with shell-escaped local branches and target 1.
+# Match raw prefixes as well as escaped prefixes inserted by Readline.
 # Quoting protects both completion generation and subsequent command-line acceptance.
 _git_gtr_complete_targets() {
   local prefix="$1" branch branches quoted
@@ -115,8 +116,8 @@ _git_gtr_complete_targets() {
   COMPREPLY=()
   # compgen -W evaluates its word list; treat branch names as literal data instead.
   while IFS= read -r branch; do
-    if [[ -n "$branch" && "$branch" == "$prefix"* ]]; then
-      printf -v quoted '%q' "$branch"
+    printf -v quoted '%q' "$branch"
+    if [[ -n "$branch" && ( "$branch" == "$prefix"* || "$quoted" == "$prefix"* ) ]]; then
       COMPREPLY+=("$quoted")
     fi
   done <<EOF
