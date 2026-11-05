@@ -126,7 +126,99 @@ normalize_target_ref() {
   esac
 }
 
-# Check whether GitLab MR JSON includes a source-head SHA matching branch_tip.
+# Keep only MR records with an explicit top-level state before checking their tips.
+# Without jq, track nesting and strings so nested fields and adjacent records
+# cannot supply the state of an MR. SHA extraction remains in the helper below.
+# Usage: _gitlab_mrs_in_state <mr_json> <merged|closed>
+# Prints a nonempty JSON array; returns 1 if the state cannot be established.
+_gitlab_mrs_in_state() {
+  local mr_result="$1" pr_state="$2"
+
+  if command -v jq >/dev/null 2>&1; then
+    printf "%s" "$mr_result" | jq -ce --arg state "$pr_state" \
+      'select(type == "array") | map(select(.state == $state)) | select(length > 0)' \
+      2>/dev/null
+    return
+  fi
+
+  printf "%s\n" "$mr_result" | awk -v state="$pr_state" '
+    function check_field() {
+      # Escaped keys could spell a second state field; leave decoding to jq.
+      if (field ~ /^"[^"]*\\/) ambiguous = 1
+      if (field ~ /^"state":/) {
+        state_count++
+        state_matches = (field == "\"state\":\"" state "\"")
+      }
+      field = ""
+    }
+    BEGIN { expect = "array" }
+    {
+      for (i = 1; i <= length($0); i++) {
+        c = substr($0, i, 1)
+        if (quoted) {
+          record = record c
+          if (depth == 2) field = field c
+          if (escaped) escaped = 0
+          else if (c == "\\") escaped = 1
+          else if (c == "\"") quoted = 0
+          continue
+        }
+        if (c ~ /[[:space:]]/) continue
+        if (depth == 0) {
+          if (expect != "array" || c != "[") { invalid = 1; exit }
+          depth = 1
+          expect = "first"
+          continue
+        }
+        if (depth == 1) {
+          if (c == "{" && (expect == "first" || expect == "record")) {
+            stack[++depth] = c
+            record = c
+            field = ""
+            state_count = state_matches = ambiguous = 0
+          } else if (c == "," && expect == "comma") {
+            expect = "record"
+          } else if (c == "]" && (expect == "first" || expect == "comma")) {
+            depth = 0
+            expect = "end"
+          } else { invalid = 1; exit }
+          continue
+        }
+        record = record c
+        if (c == "\"") {
+          quoted = 1
+          if (depth == 2) field = field c
+        } else if (c == "{" || c == "[") {
+          if (depth == 2) field = field c
+          stack[++depth] = c
+        } else if (c == "}" || c == "]") {
+          if ((c == "}" && stack[depth] != "{") ||
+              (c == "]" && stack[depth] != "[")) { invalid = 1; exit }
+          if (depth == 2) {
+            check_field()
+            if (state_count == 1 && state_matches && !ambiguous) {
+              matches = matches separator record
+              separator = ","
+              count++
+            }
+            expect = "comma"
+          }
+          depth--
+          if (depth == 2) field = field c
+        } else if (c == "," && depth == 2) {
+          check_field()
+        } else if (depth == 2) field = field c
+      }
+      if (quoted) { invalid = 1; exit }
+    }
+    END {
+      if (invalid || depth != 0 || expect != "end" || !count) exit 1
+      print "[" matches "]"
+    }
+  '
+}
+
+# Check whether state-filtered GitLab MR JSON has a source-head SHA matching branch_tip.
 # Uses jq when available; otherwise falls back to exact JSON key extraction to
 # keep GitLab cleanup usable on systems without jq.
 # Usage: _gitlab_mr_matches_tip <mr_json> <branch_tip>
@@ -205,13 +297,14 @@ check_branch_pr_state() {
     gitlab)
       local mr_result
       local -a glab_args
-      glab_args=(mr list --source-branch "$branch" "--$pr_state" --all --output json)
+      # --all overrides --merged/--closed in glab; it is not a pagination flag.
+      glab_args=(mr list --source-branch "$branch" "--$pr_state" --output json)
       if [ -n "$normalized_target_ref" ]; then
         glab_args+=(--target-branch "$normalized_target_ref")
       fi
 
-      mr_result=$(glab "${glab_args[@]}" 2>/dev/null || true)
-      [ -n "$mr_result" ] && [ "$mr_result" != "[]" ] && [ "$mr_result" != "null" ] || return 1
+      mr_result=$(glab "${glab_args[@]}" 2>/dev/null) || return 1
+      mr_result=$(_gitlab_mrs_in_state "$mr_result" "$pr_state") || return 1
 
       if [ -n "$branch_tip" ]; then
         _gitlab_mr_matches_tip "$mr_result" "$branch_tip"

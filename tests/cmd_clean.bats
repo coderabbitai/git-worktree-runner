@@ -253,6 +253,66 @@ teardown() {
   [[ "$output" != *"provider lookup should not run"* ]]
 }
 
+# Exercise the real provider predicate and branch deletion in disposable repos.
+assert_gitlab_cleanup() {
+  local requested_state="$1" parser="$2" branch tip
+  for branch in merged-tip closed-tip opened-tip mixed-tip unknown-tip; do
+    create_test_worktree "$branch"
+  done
+  tip=$(git rev-parse HEAD)
+
+  _clean_detect_provider() { printf "gitlab"; }
+  ensure_provider_cli() { return 0; }
+  glab() {
+    case "$4" in
+      merged-tip) printf '[{"state":"merged","sha":"%s"}]' "$tip" ;;
+      closed-tip) printf '[{"state":"closed","sha":"%s"}]' "$tip" ;;
+      opened-tip) printf '[{"state":"opened","sha":"%s"}]' "$tip" ;;
+      mixed-tip)
+        printf '[{"state":"%s","sha":"old123"},{"state":"opened","sha":"%s"}]' \
+          "$requested_state" "$tip"
+        ;;
+      unknown-tip) printf '[{"sha":"%s"}]' "$tip" ;;
+      *) return 1 ;;
+    esac
+  }
+  clean_with_errexit() { set -e; cmd_clean "$@"; }
+
+  if [ "$parser" = jq ]; then
+    run clean_with_errexit "--$requested_state" --yes
+  else
+    run without_jq clean_with_errexit "--$requested_state" --yes
+  fi
+  [ "$status" -eq 0 ]
+  for branch in merged-tip closed-tip opened-tip mixed-tip unknown-tip; do
+    if [ "$branch" = "$requested_state-tip" ]; then
+      [ ! -d "$TEST_WORKTREES_DIR/$branch" ]
+      ! git show-ref --verify --quiet "refs/heads/$branch"
+    else
+      [ -d "$TEST_WORKTREES_DIR/$branch" ]
+      git show-ref --verify --quiet "refs/heads/$branch"
+    fi
+  done
+}
+
+@test "GitLab merged cleanup removes only a merged MR at the current tip with jq" {
+  command -v jq >/dev/null 2>&1 || skip "jq not installed"
+  assert_gitlab_cleanup merged jq
+}
+
+@test "GitLab closed cleanup removes only a closed MR at the current tip with jq" {
+  command -v jq >/dev/null 2>&1 || skip "jq not installed"
+  assert_gitlab_cleanup closed jq
+}
+
+@test "GitLab merged cleanup preserves open and mismatched MRs without jq" {
+  assert_gitlab_cleanup merged no-jq
+}
+
+@test "GitLab closed cleanup preserves open and mismatched MRs without jq" {
+  assert_gitlab_cleanup closed no-jq
+}
+
 # ── Locked entries with missing directories (#180) ──────────────────────────
 
 # Create a locked worktree whose directory has been deleted out from under git

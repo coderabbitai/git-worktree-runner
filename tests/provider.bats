@@ -6,6 +6,20 @@ setup() {
   source "$PROJECT_ROOT/lib/provider.sh"
 }
 
+# Check each response through both parsing paths. The glab stub deliberately
+# ignores the requested filter: only the returned MR state can authorize cleanup.
+assert_gitlab_state() {
+  local expected_status="$1" state="$2" tip="${3-abc123}"
+  glab() { printf '%s\n' "$mr_json"; return "${glab_status:-0}"; }
+
+  if command -v jq >/dev/null 2>&1; then
+    run check_branch_pr_state gitlab feature/test "$state" main "$tip"
+    [ "$status" -eq "$expected_status" ] || return 1
+  fi
+  run without_jq check_branch_pr_state gitlab feature/test "$state" main "$tip"
+  [ "$status" -eq "$expected_status" ]
+}
+
 # ── extract_hostname ─────────────────────────────────────────────────────────
 
 @test "extract_hostname from SSH shorthand" {
@@ -143,12 +157,12 @@ setup() {
     [ "$3" = "--source-branch" ] || return 1
     [ "$4" = "feature/test" ] || return 1
     [ "$5" = "--merged" ] || return 1
-    [ "$6" = "--all" ] || return 1
-    [ "$7" = "--output" ] || return 1
-    [ "$8" = "json" ] || return 1
-    [ "${9}" = "--target-branch" ] || return 1
-    [ "${10}" = "main" ] || return 1
-    printf '[{"iid":1,"sha":"abc123"}]'
+    [ "$6" = "--output" ] || return 1
+    [ "$7" = "json" ] || return 1
+    [ "$8" = "--target-branch" ] || return 1
+    [ "$9" = "main" ] || return 1
+    [ "$#" -eq 9 ] || return 1
+    printf '[{"iid":1,"state":"merged","sha":"abc123"}]'
   }
 
   run check_branch_merged gitlab feature/test origin/main abc123
@@ -162,12 +176,12 @@ setup() {
     [ "$3" = "--source-branch" ] || return 1
     [ "$4" = "feature/test" ] || return 1
     [ "$5" = "--merged" ] || return 1
-    [ "$6" = "--all" ] || return 1
-    [ "$7" = "--output" ] || return 1
-    [ "$8" = "json" ] || return 1
-    [ "${9}" = "--target-branch" ] || return 1
-    [ "${10}" = "main" ] || return 1
-    printf '[{"iid":1,"sha":"old123"}]'
+    [ "$6" = "--output" ] || return 1
+    [ "$7" = "json" ] || return 1
+    [ "$8" = "--target-branch" ] || return 1
+    [ "$9" = "main" ] || return 1
+    [ "$#" -eq 9 ] || return 1
+    printf '[{"iid":1,"state":"merged","sha":"old123"}]'
   }
 
   run check_branch_merged gitlab feature/test main def456
@@ -181,12 +195,12 @@ setup() {
     [ "$3" = "--source-branch" ] || return 1
     [ "$4" = "feature/test" ] || return 1
     [ "$5" = "--closed" ] || return 1
-    [ "$6" = "--all" ] || return 1
-    [ "$7" = "--output" ] || return 1
-    [ "$8" = "json" ] || return 1
-    [ "${9}" = "--target-branch" ] || return 1
-    [ "${10}" = "main" ] || return 1
-    printf '[{"iid":1,"sha":"abc123"}]'
+    [ "$6" = "--output" ] || return 1
+    [ "$7" = "json" ] || return 1
+    [ "$8" = "--target-branch" ] || return 1
+    [ "$9" = "main" ] || return 1
+    [ "$#" -eq 9 ] || return 1
+    printf '[{"iid":1,"state":"closed","sha":"abc123"}]'
   }
 
   run check_branch_closed gitlab feature/test main abc123
@@ -198,6 +212,7 @@ setup() {
   mock_bin=$(mktemp -d)
   ln -s "$(command -v sed)" "$mock_bin/sed"
   ln -s "$(command -v tr)" "$mock_bin/tr"
+  ln -s "$(command -v awk)" "$mock_bin/awk"
   old_path="$PATH"
   PATH="$mock_bin"
 
@@ -207,12 +222,12 @@ setup() {
     [ "$3" = "--source-branch" ] || return 1
     [ "$4" = "feature/test" ] || return 1
     [ "$5" = "--merged" ] || return 1
-    [ "$6" = "--all" ] || return 1
-    [ "$7" = "--output" ] || return 1
-    [ "$8" = "json" ] || return 1
-    [ "${9}" = "--target-branch" ] || return 1
-    [ "${10}" = "main" ] || return 1
-    printf '[{"iid":1,"head_sha":"abc123"}]'
+    [ "$6" = "--output" ] || return 1
+    [ "$7" = "json" ] || return 1
+    [ "$8" = "--target-branch" ] || return 1
+    [ "$9" = "main" ] || return 1
+    [ "$#" -eq 9 ] || return 1
+    printf '[{"iid":1,"state":"merged","head_sha":"abc123"}]'
   }
 
   run check_branch_merged gitlab feature/test main abc123
@@ -228,12 +243,12 @@ setup() {
     [ "$3" = "--source-branch" ] || return 1
     [ "$4" = "feature/test" ] || return 1
     [ "$5" = "--merged" ] || return 1
-    [ "$6" = "--all" ] || return 1
-    [ "$7" = "--output" ] || return 1
-    [ "$8" = "json" ] || return 1
-    [ "${9}" = "--target-branch" ] || return 1
-    [ "${10}" = "main" ] || return 1
-    printf '[{"iid":1,"diff_refs":{"head_sha":"abc123"}}]'
+    [ "$6" = "--output" ] || return 1
+    [ "$7" = "json" ] || return 1
+    [ "$8" = "--target-branch" ] || return 1
+    [ "$9" = "main" ] || return 1
+    [ "$#" -eq 9 ] || return 1
+    printf '[{"iid":1,"state":"merged","diff_refs":{"head_sha":"abc123"}}]'
   }
 
   run check_branch_merged gitlab feature/test main abc123
@@ -249,12 +264,12 @@ setup() {
     [ "$3" = "--source-branch" ] || return 1
     [ "$4" = "feature/test" ] || return 1
     [ "$5" = "--merged" ] || return 1
-    [ "$6" = "--all" ] || return 1
-    [ "$7" = "--output" ] || return 1
-    [ "$8" = "json" ] || return 1
-    [ "${9}" = "--target-branch" ] || return 1
-    [ "${10}" = "main" ] || return 1
-    printf '[{"iid":1,"sha":"old123","metadata":{"head_sha":"abc123"}}]'
+    [ "$6" = "--output" ] || return 1
+    [ "$7" = "json" ] || return 1
+    [ "$8" = "--target-branch" ] || return 1
+    [ "$9" = "main" ] || return 1
+    [ "$#" -eq 9 ] || return 1
+    printf '[{"iid":1,"state":"merged","sha":"old123","metadata":{"head_sha":"abc123"}}]'
   }
 
   run check_branch_merged gitlab feature/test main abc123
@@ -268,14 +283,104 @@ setup() {
     [ "$3" = "--source-branch" ] || return 1
     [ "$4" = "feature/test" ] || return 1
     [ "$5" = "--merged" ] || return 1
-    [ "$6" = "--all" ] || return 1
-    [ "$7" = "--output" ] || return 1
-    [ "$8" = "json" ] || return 1
-    [ "${9}" = "--target-branch" ] || return 1
-    [ "${10}" = "main" ] || return 1
-    printf '[{"iid":1}]'
+    [ "$6" = "--output" ] || return 1
+    [ "$7" = "json" ] || return 1
+    [ "$8" = "--target-branch" ] || return 1
+    [ "$9" = "main" ] || return 1
+    [ "$#" -eq 9 ] || return 1
+    printf '[{"iid":1,"state":"merged"}]'
   }
 
   run check_branch_merged gitlab feature/test main
   [ "$status" -eq 0 ]
+}
+
+@test "GitLab open MR at current tip never matches merged or closed cleanup" {
+  local mr_json='[{"state":"opened","sha":"abc123"}]' state
+  for state in merged closed; do
+    assert_gitlab_state 1 "$state"
+    assert_gitlab_state 1 "$state" ""
+  done
+}
+
+@test "GitLab state and all supported tip fields match on the same MR" {
+  local mr_json state tip_field
+  for state in merged closed; do
+    for tip_field in '"sha":"abc123"' '"head_sha":"abc123"' '"diff_refs":{"head_sha":"abc123"}'; do
+      mr_json="[{\"state\":\"$state\",$tip_field}]"
+      assert_gitlab_state 0 "$state"
+      assert_gitlab_state 1 "$state" def456
+    done
+    assert_gitlab_state 0 "$state" ""
+  done
+}
+
+@test "GitLab merged and closed states are not interchangeable" {
+  local mr_json='[{"state":"merged","sha":"abc123"}]'
+  assert_gitlab_state 1 closed
+  mr_json='[{"state":"closed","sha":"abc123"}]'
+  assert_gitlab_state 1 merged
+}
+
+@test "GitLab mixed states cannot borrow the current tip from an open MR" {
+  local mr_json state
+  for state in merged closed; do
+    mr_json="[{\"state\":\"$state\",\"sha\":\"old123\"},{\"state\":\"opened\",\"sha\":\"abc123\"}]"
+    assert_gitlab_state 1 "$state"
+    mr_json="[{\"state\":\"opened\",\"sha\":\"abc123\"},{\"state\":\"$state\",\"diff_refs\":{\"head_sha\":\"old123\"}}]"
+    assert_gitlab_state 1 "$state"
+    mr_json="[{\"state\":\"opened\",\"sha\":\"old123\"},{\"state\":\"$state\",\"sha\":\"abc123\"}]"
+    assert_gitlab_state 0 "$state"
+  done
+}
+
+@test "GitLab requires an explicit top-level state even without a tip" {
+  local mr_json state
+  for state in merged closed; do
+    for mr_json in \
+      '[{"sha":"abc123"}]' \
+      '[{"state":null,"sha":"abc123"}]' \
+      '[{"state":"unknown","sha":"abc123"}]' \
+      '[{"metadata":{"state":"merged"},"sha":"abc123"}]' \
+      '[{"metadata":{"state":"closed"},"sha":"abc123"}]' \
+      '{"record":{"state":"merged","sha":"abc123"}}' \
+      '[]' 'null' 'not JSON'; do
+      assert_gitlab_state 1 "$state"
+      assert_gitlab_state 1 "$state" ""
+    done
+  done
+}
+
+@test "GitLab nested records and quoted object delimiters cannot supply MR state" {
+  local mr_json='[
+    {"state":"opened","sha":"abc123","reviewers":[
+      {"id":1},{"state":"merged","sha":"abc123"}
+    ],"title":"text },{ \"state\":\"closed\",\"sha\":\"abc123\""}
+  ]'
+  assert_gitlab_state 1 merged
+  assert_gitlab_state 1 closed
+}
+
+@test "GitLab finds MR state after nested fields and preserves spaces in state values" {
+  local mr_json='[
+    {"sha":"abc123", "author":{"state":"active"}, "labels":["a", "b"], "state":"merged"}
+  ]'
+  assert_gitlab_state 0 merged
+  mr_json='[{"state":"mer ged","sha":"abc123"}]'
+  assert_gitlab_state 1 merged
+}
+
+@test "GitLab ambiguous duplicate state fields cannot authorize cleanup" {
+  local mr_json='[{"state":"merged","state":"opened","sha":"abc123"}]'
+  assert_gitlab_state 1 merged
+  mr_json='[{"state":"merged","st\u0061te":"opened","sha":"abc123"}]'
+  assert_gitlab_state 1 merged
+}
+
+@test "GitLab incomplete responses and CLI errors cannot authorize cleanup" {
+  local mr_json='[{"state":"merged","sha":"abc123"}'
+  assert_gitlab_state 1 merged
+  mr_json='[{"state":"merged","sha":"abc123"}]'
+  local glab_status=1
+  assert_gitlab_state 1 merged
 }
