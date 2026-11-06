@@ -191,9 +191,25 @@ SH
 }
 
 assert_cleanup_identity() {
-  local mode="$1"
+  local mode="$1" legacy_lookup="${2:-0}"
   attach_named_branch
   setup_cleanup_provider
+
+  if [ "$legacy_lookup" -eq 1 ]; then
+    # Exercise the real rev-parse fallback on current Git as well as Git 2.17.
+    export DETACHED_TEST_REAL_GIT
+    DETACHED_TEST_REAL_GIT=$(command -v git)
+    cat > "$TEST_REPO/mock-bin/git" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = -C ] && [ "${3:-}" = branch ] && [ "${4:-}" = --show-current ]; then
+  exit 129
+fi
+exec "$DETACHED_TEST_REAL_GIT" "$@"
+SH
+    chmod +x "$TEST_REPO/mock-bin/git"
+    run get_current_branch "$TEST_REPO"
+    [ "$status" -ne 0 ]
+  fi
 
   run "$PROJECT_ROOT/bin/gtr" clean "$mode" --force --yes --dry-run
   [ "$status" -eq 0 ]
@@ -225,6 +241,32 @@ assert_cleanup_identity() {
 @test "cleanup processes real detached-named branch when main is detached too" {
   git checkout --quiet --detach HEAD
   assert_cleanup_identity --merged
+}
+
+assert_unborn_main_cleanup() {
+  local mode="$1" legacy_lookup="${2:-0}"
+  git checkout --quiet --orphan unborn-main
+  ! git rev-parse --verify HEAD
+
+  assert_cleanup_identity "$mode" "$legacy_lookup"
+
+  # Cleanup must leave the unborn main checkout and its original history alone.
+  [ -d "$TEST_REPO/.git" ]
+  [ "$(git symbolic-ref HEAD)" = refs/heads/unborn-main ]
+  ! git show-ref --verify --quiet refs/heads/unborn-main
+  [ "$(git show-ref --heads)" = "$(printf '%s\n' "$ORIGINAL_REFS" | grep -vF 'refs/heads/(detached)')" ]
+}
+
+@test "merged cleanup processes linked worktrees when main has an unborn branch" {
+  assert_unborn_main_cleanup --merged
+}
+
+@test "merged cleanup tolerates failed legacy branch lookup on unborn main" {
+  assert_unborn_main_cleanup --merged 1
+}
+
+@test "closed cleanup tolerates failed legacy branch lookup on unborn main" {
+  assert_unborn_main_cleanup --closed 1
 }
 
 @test "cleanup never queries an unchecked-out branch through a detached worktree" {
