@@ -38,7 +38,8 @@ jobs:
           blob_sha=$(jq -r '.sha' formula.json)
           jq -r '.content' formula.json | base64 -d > git-gtr.rb
 
-          if grep -qF "  url \"${url}\"" git-gtr.rb; then
+          if grep -qF "  url \"${url}\"" git-gtr.rb &&
+             grep -qF "  sha256 \"${sha256}\"" git-gtr.rb; then
             echo "Formula already at ${TAG_NAME}; nothing to do."
             exit 0
           fi
