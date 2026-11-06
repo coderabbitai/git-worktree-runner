@@ -377,7 +377,11 @@ cmd_pr() {
   echo "Local branch: $branch_name"
 
   local worktree_path native_checkout=0
-  if [ -z "$remote_arg" ] && [ "$force" -eq 0 ] && _pr_gh_supports_worktree; then
+  # Native gh uses a fast-forward-only merge for existing branches, which can
+  # retain an ahead local tip. Use the exact-tip validation below before reuse.
+  if [ -z "$remote_arg" ] && [ "$force" -eq 0 ] \
+    && ! git show-ref --verify --quiet "refs/heads/$branch_name" \
+    && _pr_gh_supports_worktree; then
     local gh_checkout_args=(pr checkout "$selector" --worktree "$expected_worktree_path" --branch "$branch_name")
     [ -n "$repo_arg" ] && gh_checkout_args+=(--repo "$repo_arg")
     mkdir -p "$base_dir"
