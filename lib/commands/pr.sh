@@ -238,6 +238,9 @@ EOF
 # Print the fetched commit, never FETCH_HEAD: another fetch in this worktree
 # can replace FETCH_HEAD before validation or creation. The subshell keeps the
 # cleanup traps local to this fetch, including when called without $(...).
+# Usage: _pr_fetch_commit <fetch_source> <pr_number>
+# Returns 0 and prints the commit ID on success, or nonzero with a diagnostic.
+# Releases its temporary ref and reservation on exit without changing caller traps.
 _pr_fetch_commit() (
   local fetch_source="$1" pr_number="$2"
   local common_dir temp_dir candidate fetch_ref="" fetch_oid
@@ -277,6 +280,10 @@ _pr_fetch_commit() (
   printf '%s\n' "$fetch_oid"
 )
 
+# Create a PR worktree via native gh checkout or the isolated-ref fallback,
+# then configure branch metadata, copy files, and run the requested hooks/tools.
+# Usage: cmd_pr <number|url|branch> [options]; accepts the arguments to git gtr pr.
+# Reports failures with nonzero status; the fallback validates local branches before reuse.
 cmd_pr() {
   local _spec
   _spec="--branch|-b: value

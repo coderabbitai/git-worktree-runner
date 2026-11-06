@@ -31,6 +31,9 @@ teardown() {
 
 # Interleave real fetches in the invoking worktree, or fail after writing the
 # PR ref, before cmd_pr can inspect its result. No sleeps or GitHub access.
+# Installs a Git wrapper in TEST_MOCK_BIN and exports the real Git path and log.
+# TEST_PR_FETCH_ACTION selects a fetch, nested invocation, or injected failure;
+# the default fetch replaces FETCH_HEAD with origin/main. Returns setup status.
 interleave_pr_fetch() {
   export TEST_REAL_GIT TEST_PR_FETCH_LOG
   TEST_REAL_GIT=$(command -v git)
@@ -67,6 +70,9 @@ SCRIPT
   chmod +x "$TEST_MOCK_BIN/git"
 }
 
+# Assert that the current repository has no PR fetch refs or reservation dirs.
+# Call directly from a BATS test so any failed assertion stops that test.
+# Takes no arguments and succeeds only when all invocation state is gone.
 assert_pr_fetch_cleaned_up() {
   [ -z "$(git for-each-ref --format='%(refname)' refs/gtr/pr)" ]
   local reservation common_dir
@@ -195,7 +201,8 @@ SCRIPT
 
     [ "$status" -eq 1 ]
     [ ! -e "$TEST_WORKTREES_DIR/feature-from-pr" ]
-    ! git show-ref --verify --quiet refs/heads/feature/from-pr
+    run git show-ref --verify --quiet refs/heads/feature/from-pr
+    [ "$status" -eq 1 ]
     [ "$(git rev-parse refs/gtr/pr/other-invocation)" = "$TEST_PR_SHA" ]
     git update-ref -d refs/gtr/pr/other-invocation
     assert_pr_fetch_cleaned_up
@@ -344,7 +351,8 @@ SCRIPT
     [ ! -e "$TEST_GH_LOG" ]
     [ ! -e "$TEST_REPO/prefix-fixture" ]
     [ ! -e "$TEST_REPO/.git/FETCH_HEAD" ]
-    ! git show-ref --verify --quiet refs/heads/feature/from-pr
+    run git show-ref --verify --quiet refs/heads/feature/from-pr
+    [ "$status" -eq 1 ]
   done
 }
 
