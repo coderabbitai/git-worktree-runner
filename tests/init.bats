@@ -71,6 +71,8 @@ printf 'REPLY=%s\n' "${COMPREPLY[*]-}"
 BASH
 }
 
+# Complete a prefix against real registered worktrees in a disposable repository,
+# checking that candidate generation never executes the marker payloads.
 run_generated_bash_cd_completion() (
   set -e
   local wrapper_name="$1" prefix="$2" fixture branch index=0 comp_line
@@ -1162,14 +1164,14 @@ run_generated_v2_trust_upgrade() (
   mkdir -p "$XDG_CACHE_HOME/gtr"
   for shell_name in bash zsh fish; do
     for func_name in gtr gwtr; do
-      for schema in 13 12 11 10 9 8 7 6; do
+      for schema in 14 13 12 11 10 9 8 7 6; do
         cache_file="$XDG_CACHE_HOME/gtr/init-$func_name.$shell_name"
         printf '# gtr-cache: version=test init=%s func=%s shell=%s\nold-cache\n' \
           "$schema" "$func_name" "$shell_name" > "$cache_file"
         run cmd_init "$shell_name" --as "$func_name"
         [ "$status" -eq 0 ]
         [[ "$output" != *old-cache* ]]
-        [[ "$(head -1 "$cache_file")" == *"init=14"* ]]
+        [[ "$(head -1 "$cache_file")" == *"init=15"* ]]
       done
     done
   done
@@ -1198,15 +1200,15 @@ run_documented_init_upgrade() (
     if [ "$shell_name" = zsh ]; then
       snippet='compdef() { :; }'$'\n'"$snippet"
     fi
-    for schema in 6 7 8 9 10 11 12 13 14; do
+    for schema in 6 7 8 9 10 11 12 13 14 15; do
       version="$cli_version"
-      [ "$schema" != 14 ] || version=old-version
+      [ "$schema" != 15 ] || version=old-version
       printf '# gtr-cache: version=%s init=%s func=gtr shell=%s\n' \
         "$version" "$schema" "$shell_name" > "$cache_file"
       printf '%s\n' 'echo stale > "$STALE_CACHE_MARKER"' >> "$cache_file"
       "$shell_name" -c "$snippet"
       [ ! -f "$STALE_CACHE_MARKER" ]
-      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=14 "* ]]
+      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=15 "* ]]
     done
   done
 )

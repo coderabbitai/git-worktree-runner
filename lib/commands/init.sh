@@ -145,8 +145,8 @@ cmd_init() {
   case "$cache_dir" in /*) ;; *) cache_dir="$(pwd -P)/$cache_dir" ;; esac
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 14 quotes Bash cd completion targets before Readline inserts them.
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-14}"
+  # Schema 15 preserves literal backslashes in quoted Bash completion targets.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-15}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # A matching public stamp alone does not make executable cache data trusted.
@@ -529,6 +529,7 @@ end
 FISH
 }
 
+# Emit self-contained Bash navigation, hook helpers, and wrapper completion.
 _init_bash() {
   cat <<'BASH'
 # git-gtr shell integration (cached to ~/.cache/gtr/)

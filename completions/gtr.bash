@@ -21,6 +21,7 @@
 # Fill COMPREPLY with safely quoted candidates matching the typed prefix.
 # Decode only quoting syntax in the prefix; never evaluate shell expansions.
 # Escape each candidate for the active single/double/unquoted context.
+# Candidates are newline-separated literal strings, including path-derived text.
 _git_gtr_quote_targets() {
   local raw_prefix="$1" prefix="" quote="" before_quote="" escaped=0 char i
   local branch candidates="$2" quoted fragment ansi=0 dollar=0 was_dollar
@@ -80,14 +81,18 @@ _git_gtr_quote_targets() {
       case "$quote" in
         "'")
           if [ "$ansi" -eq 1 ]; then
-            quoted="${fragment//\'/$ansi_escape}"
+            # Literal replacement works on Bash 3.2 and with patsub_replacement.
+            quoted="${fragment//\\/\\\\}"
+            quoted="${quoted//\'/$ansi_escape}"
           else
             quoted="${fragment//\'/$single_escape}"
           fi
           quoted+="'"
           ;;
         '"')
-          quoted="${fragment//\$/$dollar_escape}"
+          # Escape existing backslashes before adding escapes for shell syntax.
+          quoted="${fragment//\\/\\\\}"
+          quoted="${quoted//\$/$dollar_escape}"
           quoted="${quoted//\`/$tick_escape}"
           quoted="${quoted//\"/$double_escape}"
           # Leave double quotes to escape history expansion without adding a backslash.

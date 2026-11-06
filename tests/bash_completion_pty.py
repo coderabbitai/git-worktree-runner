@@ -17,7 +17,9 @@ def main():
     """Check literal argv, cd destinations, and marker absence after Tab+Enter."""
     project = Path(sys.argv[1])
     shell = shutil.which(sys.argv[2])
-    wrapper_only = len(sys.argv) > 3 and sys.argv[3] == "wrapper-only"
+    mode = sys.argv[3] if len(sys.argv) > 3 else "all"
+    path_candidates = mode == "path-candidates"
+    wrapper_only = mode != "all"
     repo = Path.cwd()
     state = repo.parent / "interactive"
     state.mkdir()
@@ -33,9 +35,24 @@ def main():
         "directory": "directory-target",
     }
     destinations = {"1": repo}
-    for index, branch in enumerate(list(branches.values()) +
-                                   ["sharedé$(>marker-shared)a", "sharedé$(>marker-shared)b"]):
+    if path_candidates:
+        # The legacy porcelain output leaves tabs in paths unescaped. Its second
+        # field can therefore contain arbitrary path text, not just a valid ref.
+        branches = {
+            "pathdollar": r"pathdollar\$(>marker-path-dollar)",
+            "pathtick": r"pathtick\`>marker-path-tick`",
+            "pathansi": r"pathansi\n\x27\047\141",
+            "pathquote": "pathquote\\\"and\\'apostrophe",
+            "pathslash": "pathslash\\",
+        }
+    registered = list(branches.values())
+    if not path_candidates:
+        registered += ["sharedé$(>marker-shared)a", "sharedé$(>marker-shared)b"]
+    for index, branch in enumerate(registered):
         destination = state / f"worktree {index}"
+        if path_candidates:
+            destination = state / f"worktree {index}\t{branch}\tend"
+            branch = f"path-target-{index}"
         subprocess.run(["git", "worktree", "add", "-b", branch, str(destination)],
                        env=env, check=True, capture_output=True)
         destinations[branch] = destination
@@ -64,7 +81,9 @@ def main():
                     'printf "%s\\0" "$@" > "$CAPTURE_PATH"\n'
                     'if [ "$1" = go ] && [ "$GTR_TEST_RESOLVE_CD" = 1 ]; then\n'
                     '  exec "$GTR_DIR/bin/git-gtr" "$@"\n'
-                    'fi\n')
+                    'fi\n'
+                    '# Path fragments are not valid targets; capture them then reject.\n'
+                    'if [ "$GTR_TEST_RESOLVE_CD" = reject ]; then exit 1; fi\n')
     stub.chmod(0o755)
     env.update(PATH=str(bindir) + os.pathsep + env["PATH"], CAPTURE_PATH=str(capture),
                GTR_TEST_TARGETS=str(targets))
@@ -106,15 +125,23 @@ def main():
         os.write(fd, ("source " + shlex.quote(str(setup)) + "\n").encode())
         read_prompt()
         invocations = ("gtr", "worktrees") if wrapper_only else ("git gtr", "gtr", "worktrees")
-        for invocation in invocations:
+        option_modes = ("-s", "-u") if path_candidates else (None,)
+        for option, invocation in ((option, name) for option in option_modes for name in invocations):
+            if option:
+                # Bash 3.2 has no patsub_replacement; exercise both settings on 5.x.
+                os.write(fd, ("shopt " + option + " patsub_replacement 2>/dev/null || true\n").encode())
+                read_prompt()
             commands = () if wrapper_only else ("go", "run", "rm", "mv", "rename", "editor", "ai", "copy")
             if invocation != "git gtr":
                 commands = ("cd",) + commands
             for command in commands:
                 os.write(fd, ("export GTR_TEST_RESOLVE_CD=" +
-                              ("1" if command == "cd" else "0") + "\n").encode())
+                              ("reject" if path_candidates else "1" if command == "cd" else "0") + "\n").encode())
                 read_prompt()
-                for prefix, branch in list(branches.items()) + [("shared", "sharedé$(>marker-shared)b"), ("1", "1")]:
+                candidates = list(branches.items())
+                if not path_candidates:
+                    candidates += [("shared", "sharedé$(>marker-shared)b"), ("1", "1")]
+                for prefix, branch in candidates:
                     prefixes = (prefix, "'" + prefix, '"' + prefix, "$'" + prefix)
                     if len(prefix) > 2:
                         prefixes += (prefix[:2] + "'" + prefix[2:], prefix[:2] + '"' + prefix[2:],
@@ -131,7 +158,7 @@ def main():
                         expected = (("go" if command == "cd" else command) + "\0" + branch + "\0").encode()
                         actual = capture.read_bytes()
                         assert actual == expected, (keys, expected, actual, transcript)
-                        if command == "cd":
+                        if command == "cd" and not path_candidates:
                             os.write(fd, ("pwd -P > " + shlex.quote(str(capture_cwd)) +
                                           "; builtin cd " + shlex.quote(str(repo)) + "\n").encode())
                             read_prompt()
