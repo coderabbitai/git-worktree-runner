@@ -86,7 +86,7 @@ assert_gitlab_state() {
   git -C "$test_repo" init --quiet
   git -C "$test_repo" config user.name "Test User"
   git -C "$test_repo" config user.email "test@example.com"
-  git -C "$test_repo" commit --allow-empty -m init --quiet
+  git -C "$test_repo" -c commit.gpgsign=false commit --allow-empty -m init --quiet
   git -C "$test_repo" remote add upstream https://example.com/repo.git
   git -C "$test_repo" update-ref refs/remotes/upstream/main HEAD
 

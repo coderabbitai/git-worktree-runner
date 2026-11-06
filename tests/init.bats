@@ -125,7 +125,7 @@ trap cleanup EXIT
 git -C "$repo" init --quiet
 git -C "$repo" config user.name "Test User"
 git -C "$repo" config user.email "test@example.com"
-git -C "$repo" commit --allow-empty -m "init" --quiet
+git -C "$repo" -c commit.gpgsign=false commit --allow-empty -m "init" --quiet
 
 git -C "$repo" config --add gtr.hook.postCd 'echo first >> "$REPO_ROOT/order"'
 git -C "$repo" config --add gtr.hook.postCd 'cat'
@@ -153,7 +153,7 @@ run_generated_fish_gtrconfig_post_cd_hooks() {
   git init --quiet "$repo"
   git -C "$repo" config user.name "Test User"
   git -C "$repo" config user.email "test@example.com"
-  git -C "$repo" commit --allow-empty -m "init" --quiet
+  git -C "$repo" -c commit.gpgsign=false commit --allow-empty -m "init" --quiet
   git -C "$repo" worktree add --quiet "$wt" -b feature
 
   cat > "$repo/.gtrconfig" <<'CFG'
@@ -292,7 +292,7 @@ run_generated_v2_trust_upgrade() (
   export XDG_CONFIG_HOME="$fixture/config" XDG_DATA_HOME="$fixture/data"
   git init --quiet "$REPO_FIXTURE"
   git -C "$REPO_FIXTURE" -c user.name=Fixture -c user.email=fixture@example.test \
-    commit --allow-empty --quiet -m init
+    -c commit.gpgsign=false commit --allow-empty --quiet -m init
   git config -f "$REPO_FIXTURE/.gtrconfig" hooks.postCd 'sh "$REPO_ROOT/bootstrap.sh"'
   printf 'echo original > "$REPO_ROOT/hook-result"\n' > "$REPO_FIXTURE/bootstrap.sh"
   mark_pr207_commands_trusted "$REPO_FIXTURE/.gtrconfig"
