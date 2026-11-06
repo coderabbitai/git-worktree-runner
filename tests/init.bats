@@ -100,6 +100,7 @@ run_generated_bash_cd_completion() (
   [ ! -e completion-backtick-marker ]
 )
 
+# Run generated Bash/Zsh postCd hooks and report their execution order.
 run_generated_post_cd_hooks() {
   local shell_name="$1"
 
@@ -140,6 +141,7 @@ printf '\n'
 SCRIPT
 }
 
+# Exercise generated Fish hooks against a trusted or untrusted shared config.
 run_generated_fish_gtrconfig_post_cd_hooks() {
   local trust_state="$1"
   local root repo wt xdg init_file
@@ -283,6 +285,7 @@ mark_pr207_commands_trusted() {
   printf '%s/.gtrconfig\n' "$repo_root" > "$XDG_CONFIG_HOME/gtr/trusted/$key"
 }
 
+# Verify that generated shell helpers reject v2 trust and honor fresh approval.
 run_generated_v2_trust_upgrade() (
   set -e
   local shell_name="$1" fixture

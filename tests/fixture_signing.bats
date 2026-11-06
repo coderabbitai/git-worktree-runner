@@ -3,9 +3,14 @@
 
 load test_helper
 
+# Isolate the test process's home and signer, including Git before 2.32.
 setup() {
+  local fixture_home="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$fixture_home"
   export GIT_CONFIG_NOSYSTEM=1
-  export GIT_CONFIG_GLOBAL="$BATS_TEST_TMPDIR/global.gitconfig"
+  export HOME="$fixture_home"
+  export XDG_CONFIG_HOME="$BATS_TEST_TMPDIR/xdg-config"
+  export GIT_CONFIG_GLOBAL="$fixture_home/.gitconfig"
   export FIXTURE_SIGNER_LOG="$BATS_TEST_TMPDIR/signer.log"
   local signer="$BATS_TEST_TMPDIR/failing-signer"
   cat > "$signer" <<'SCRIPT'
@@ -23,6 +28,7 @@ SCRIPT
   cp "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/global.before"
 }
 
+# Remove disposable worktrees and verify that the signing config was preserved.
 teardown() {
   if [ -n "${TEST_REPO:-}" ]; then
     teardown_integration_repo
