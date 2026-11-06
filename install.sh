@@ -51,7 +51,9 @@ install_windows() {
   echo "  ─────────────────────────────────────────────────────"
   echo "  Add this line to your ~/.bashrc or ~/.bash_profile:"
   echo
-  echo "    export PATH=\"$bin_dir:\$PATH\""
+  # Quote the checkout now, but expand PATH when the user runs the printed command.
+  # shellcheck disable=SC2016
+  printf '    export PATH=%q:"$PATH"\n' "$bin_dir"
   echo
   echo "  Then restart your terminal or run: source ~/.bashrc"
   echo
@@ -59,13 +61,11 @@ install_windows() {
   echo "  ─────────────────────────────────────────────────────"
   echo "  Open an Administrator Command Prompt and run:"
   echo
-  echo "    mklink \"C:\\Program Files\\Git\\usr\\bin\\git-gtr\" \"$(cygpath -w "$GIT_GTR_PATH" 2>/dev/null || echo "$GIT_GTR_PATH")\""
+  printf '    mklink "C:\\Program Files\\Git\\usr\\bin\\git-gtr" "%s"\n' \
+    "$(cygpath -w "$GIT_GTR_PATH" 2>/dev/null || printf '%s\n' "$GIT_GTR_PATH")"
   echo
-  echo "  Option 3: Copy the script directly"
-  echo "  ─────────────────────────────────────────────────────"
-  echo "  Copy git-gtr to your local bin directory:"
-  echo
-  echo "    mkdir -p ~/bin && cp \"$GIT_GTR_PATH\" ~/bin/git-gtr"
+  echo "  Keep the full git-worktree-runner checkout at its current location."
+  echo "  The entrypoint needs the checkout's libraries; copying only git-gtr will not work."
   echo
 
   # Check if bin_dir is already in PATH

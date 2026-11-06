@@ -376,7 +376,7 @@ _gitlab_mr_matches_tip() {
       whitespace()
       if (pos <= length(json) || !matched) fail()
     }
-  '
+  ' 2>/dev/null || return 1
 }
 
 # Check if a branch has a PR/MR with the requested state on the detected provider.

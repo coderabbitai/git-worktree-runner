@@ -39,8 +39,10 @@ _hooks_storage_stat() {
 # Prints the physical directory; new components are private even with umask 000.
 _hooks_trust_directory() {
   local remaining="$1" action="${2:-}" current="/" component candidate metadata owner mode
-  local link_target links=0 current_uid
+  local link_target links=0 current_uid current_os
   current_uid=$(id -u) || return 1
+  current_os=$(uname -s) || return 1
+  _config_safety_acl_check / "$current_os" >/dev/null || return 1
   case "$remaining" in
     /*) ;;
     *) remaining="$(pwd -P)/$remaining" ;;
@@ -77,6 +79,7 @@ _hooks_trust_directory() {
     if [ "$((8#$mode & 8#22))" -ne 0 ]; then
       [ "$((8#$mode & 8#1000))" -ne 0 ] || return 1
     fi
+    _config_safety_acl_check "$candidate" "$current_os" >/dev/null || return 1
     current="$candidate"
   done
   # Even a sticky or root-owned trust store cannot hold this user's approvals.
@@ -84,6 +87,7 @@ _hooks_trust_directory() {
   [ "${metadata%%:*}" = "$current_uid" ] || return 1
   mode="${metadata#*:}"
   [ "$((8#$mode & 8#22))" -eq 0 ] || return 1
+  _config_safety_acl_check "$current" "$current_os" >/dev/null || return 1
   printf '%s\n' "$current"
 }
 
@@ -91,7 +95,7 @@ _hooks_trust_directory() {
 # the validated directory once so subsequent operations use its physical path.
 # In create mode a missing marker is allowed, but an unsafe existing one is not.
 _hooks_safe_trust_path() {
-  local trust_path="$1" action="${2:-}" directory name metadata mode current_uid
+  local trust_path="$1" action="${2:-}" directory name metadata mode current_uid current_os
   name="${trust_path##*/}"
   case "$name" in ''|*[!0-9a-f]*) return 1 ;; esac
   [ "${#name}" -eq 64 ] || return 1
@@ -105,6 +109,8 @@ _hooks_safe_trust_path() {
     [ "${metadata%%:*}" = "$current_uid" ] || return 1
     mode="${metadata#*:}"
     [ "$((8#$mode & 8#22))" -eq 0 ] || return 1
+    current_os=$(uname -s) || return 1
+    _config_safety_acl_check "$trust_path" "$current_os" >/dev/null || return 1
   else
     [ "$action" = create ] || return 1
   fi
