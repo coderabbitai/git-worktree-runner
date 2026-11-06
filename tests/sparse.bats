@@ -171,6 +171,55 @@ make_sparse_worktree() {
   [ -z "$result" ]
 }
 
+@test "sparse source lookup preserves trailing newlines instead of a colliding sibling" {
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  local suffix path branch result
+  for suffix in $'\n' $'\n\n'; do
+    branch="sparse-newline-${#suffix}"
+    path="$TEST_WORKTREES_DIR/$branch$suffix"
+    make_sparse_worktree "$path" "$branch" docs
+    make_sparse_worktree "$TEST_WORKTREES_DIR/$branch" "short-${#suffix}" apps/api
+
+    result=$(_worktree_path_for_ref "$branch" && printf '.')
+    [ "${result%.}" = "$path" ]
+    result=$(_resolve_sparse_source "$branch" && printf '.')
+    [ "${result%.}" = "$path" ]
+  done
+}
+
+@test "sparse lookup prefers the current duplicate with trailing newlines" {
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  local path="$TEST_WORKTREES_DIR/current"$'\n\n' result
+  make_sparse_worktree "$TEST_WORKTREES_DIR/other" shared apps/api
+  git worktree add --force "$path" shared >/dev/null
+  init_sparse_checkout "$path" --cone
+  git -C "$path" sparse-checkout set docs >/dev/null
+  mkdir "$TEST_WORKTREES_DIR/current"
+  cd "$path"
+
+  result=$(_worktree_path_for_ref shared && printf '.')
+  [ "${result%.}" = "$path" ]
+  result=$(_resolve_sparse_source shared && printf '.')
+  [ "${result%.}" = "$path" ]
+  result=$(_resolve_sparse_source unknown-ref && printf '.')
+  [ "${result%.}" = "$path" ]
+}
+
+@test "cmd_create inherits patterns from a source with trailing newlines" {
+  require_sparse_inheritance
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  source_gtr_commands
+  local path="$TEST_WORKTREES_DIR/base"$'\n\n'
+  make_sparse_worktree "$path" base docs
+  make_sparse_worktree "$TEST_WORKTREES_DIR/base" shortened apps/api
+
+  run cmd_create feat --from base --yes --no-fetch --no-hooks --no-copy
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feat" sparse-checkout list)" = docs ]
+  [ -f "$TEST_WORKTREES_DIR/feat/docs/file.txt" ]
+  [ ! -d "$TEST_WORKTREES_DIR/feat/apps" ]
+}
+
 @test "_worktree_path_for_ref returns empty for unknown refs" {
   result=$(_worktree_path_for_ref does-not-exist)
   [ -z "$result" ]

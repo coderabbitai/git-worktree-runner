@@ -108,6 +108,61 @@ teardown() {
   [ "$status" -eq 0 ]  # 0 = skip (protection maintained)
 }
 
+@test "cmd_clean preserves the active worktree with trailing newlines" {
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  local path="$TEST_WORKTREES_DIR/active"$'\n\n'
+  git worktree add -b active "$path" HEAD >/dev/null
+  git worktree add -b shortened "$TEST_WORKTREES_DIR/active" HEAD >/dev/null
+  cd "$path"
+
+  _clean_detect_provider() { printf github; }
+  ensure_provider_cli() { return 0; }
+  check_branch_merged() { return 0; }
+  run_hooks_in() { return 0; }
+  run_hooks() { return 0; }
+
+  run cmd_clean --merged --force --yes
+  [ "$status" -eq 0 ]
+  [ -d "$path" ]
+  [ ! -d "$TEST_WORKTREES_DIR/active" ]
+}
+
+@test "cmd_clean removes registered trailing newlines paths and keeps unregistered siblings" {
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  local path="$TEST_WORKTREES_DIR/merged"$'\n'
+  git worktree add -b merged "$path" HEAD >/dev/null
+  mkdir "$TEST_WORKTREES_DIR/merged"
+  echo keep > "$TEST_WORKTREES_DIR/merged/marker"
+
+  _clean_detect_provider() { printf github; }
+  ensure_provider_cli() { return 0; }
+  check_branch_merged() { return 0; }
+  run_hooks_in() { return 0; }
+  run_hooks() { return 0; }
+
+  run cmd_clean --merged --force --yes
+  [ "$status" -eq 0 ]
+  [ ! -d "$path" ]
+  [ -f "$TEST_WORKTREES_DIR/merged/marker" ]
+}
+
+@test "locked phantom cleanup preserves trailing newlines in registry paths" {
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  local suffix path branch records
+  for suffix in $'\n' $'\n\n'; do
+    branch="phantom-${#suffix}"
+    path="$TEST_WORKTREES_DIR/$branch$suffix"
+    git worktree add -b "$branch" "$path" HEAD >/dev/null
+    git worktree lock "$path"
+    rm -rf "$path"
+    mkdir "$TEST_WORKTREES_DIR/$branch"
+    _clean_locked_phantoms "$TEST_REPO" 1 0
+    records=$(list_worktree_records "$TEST_REPO")
+    [[ "$records" != *"branch $branch"* ]]
+    [ -d "$TEST_WORKTREES_DIR/$branch" ]
+  done
+}
+
 @test "_clean_should_skip with force=1 skips current active worktree via symlink path" {
   create_test_worktree "active-force-symlink"
   ln -s "$TEST_WORKTREES_DIR/active-force-symlink" "$TEST_REPO/active-force-link"

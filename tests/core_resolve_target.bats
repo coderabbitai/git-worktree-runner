@@ -240,6 +240,100 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+@test "resolve_worktree preserves trailing newlines and rejects shortened siblings" {
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  local suffix path branch escaped
+  for suffix in $'\n' $'\n\n'; do
+    branch="newline-${#suffix}"
+    path="$TEST_WORKTREES_DIR/$branch$suffix"
+    git worktree add -b "$branch" "$path" HEAD >/dev/null
+    mkdir "$TEST_WORKTREES_DIR/$branch"
+    escaped=$(_tsv_escape_field "$path")
+
+    resolve_worktree "$branch" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+    [ "$_ctx_worktree_path" = "$path" ]
+    [ "$_ctx_is_main" = 0 ]
+    resolve_worktree "path:$escaped" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+    [ "$_ctx_worktree_path" = "$path" ]
+
+    run resolve_worktree "path:$TEST_WORKTREES_DIR/$branch" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+    [ "$status" -eq 1 ]
+
+    # A stale registry entry must not resolve to the still-existing sibling.
+    rm -rf "$path"
+    run resolve_worktree "$branch" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+    [ "$status" -eq 1 ]
+    run resolve_worktree "path:$escaped" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+    [ "$status" -eq 1 ]
+  done
+}
+
+@test "resolve_target preserves trailing newlines in a canonical base directory" {
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  local base="$TEST_WORKTREES_DIR/base"$'\n\n'
+  mkdir -p "$base" "$TEST_WORKTREES_DIR/base"
+  git worktree add -b shared "$TEST_WORKTREES_DIR/a-first" HEAD >/dev/null
+  git worktree add --force "$base/shared" shared >/dev/null
+  git worktree add -b other "$base/alias" HEAD >/dev/null
+
+  resolve_worktree shared "$TEST_REPO" "$base" ""
+  [ "$_ctx_worktree_path" = "$base/shared" ]
+  resolve_worktree alias "$TEST_REPO" "$base" ""
+  [ "$_ctx_worktree_path" = "$base/alias" ]
+}
+
+@test "worktree_status distinguishes trailing newlines through canonicalization and fallback" {
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  local suffix path branch link
+  for suffix in $'\n' $'\n\n'; do
+    branch="status-${#suffix}"
+    path="$TEST_WORKTREES_DIR/$branch$suffix"
+    link="$TEST_WORKTREES_DIR/link-${#suffix}"
+    git worktree add -b "$branch" "$path" HEAD >/dev/null
+    git worktree lock "$path"
+    mkdir "$TEST_WORKTREES_DIR/$branch"
+    ln -s "$path" "$link"
+
+    [ "$(worktree_status "$path")" = locked ]
+    [ "$(worktree_status "$link")" = locked ]
+    [ "$(worktree_status "$TEST_WORKTREES_DIR/$branch")" = missing ]
+
+    # Missing paths take the canonicalization fallback, still byte-for-byte.
+    rm -rf "$path"
+    [ "$(worktree_status "$path")" = locked ]
+    [ "$(worktree_status "$TEST_WORKTREES_DIR/$branch")" = missing ]
+  done
+}
+
+@test "list_worktree_records distinguishes main root from a trailing newlines sibling" {
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  local main="$TEST_WORKTREES_DIR/main" path records escaped
+  git clone --quiet "$TEST_REPO" "$main"
+  path="$main"$'\n\n'
+  git -C "$main" worktree add -b sibling "$path" HEAD >/dev/null
+  escaped=$(_tsv_escape_field "$path")
+
+  records=$(list_worktree_records "$main")
+  [[ "$records" == *"is_main 0"$'\n'"path $escaped"$'\n'"branch sibling"* ]]
+  # Canonicalizing an actual main root must preserve its trailing bytes too.
+  local newline_root="$TEST_WORKTREES_DIR/root"$'\n\n'
+  git clone --quiet "$TEST_REPO" "$newline_root"
+  mkdir "$TEST_WORKTREES_DIR/root"
+  escaped=$(_tsv_escape_field "$newline_root")
+  records=$(list_worktree_records "$newline_root")
+  [[ "$records" == *"is_main 1"$'\n'"path $escaped"$'\n'* ]]
+}
+
+@test "canonical path capture preserves trailing newlines and failure status" {
+  local path="$TEST_WORKTREES_DIR/canonical"$'\n\n' result="unchanged"
+  mkdir -p "$path"
+  _canonicalize_path_into result "$path"
+  [ "$result" = "$path" ]
+
+  run _canonicalize_path_into result "$TEST_WORKTREES_DIR/missing"
+  [ "$status" -ne 0 ]
+}
+
 # ── porcelain fallback ─────────────────────────────────────────────────────────
 
 @test "resolve_target finds externally-created worktree via porcelain fallback" {

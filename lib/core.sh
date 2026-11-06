@@ -58,6 +58,15 @@ canonicalize_path() {
   ( unset CDPATH && cd -P -- "$path" 2>/dev/null && pwd -P )
 }
 
+# Assign a canonical path without stripping trailing newline bytes. Remove only
+# pwd's final delimiter and the sentinel, and propagate canonicalization errors.
+# Usage: _canonicalize_path_into variable path
+_canonicalize_path_into() {
+  local _canonical_path
+  _canonical_path=$(canonicalize_path "$2" && printf '.') || return $?
+  printf -v "$1" '%s' "${_canonical_path%$'\n.'}"
+}
+
 # Resolve the base directory for worktrees
 # Usage: resolve_base_dir repo_root
 resolve_base_dir() {
@@ -93,7 +102,7 @@ resolve_base_dir() {
   # Canonicalize base_dir if it exists
   if [ -d "$base_dir" ]; then
     local canonical_base
-    canonical_base=$(canonicalize_path "$base_dir")
+    _canonicalize_path_into canonical_base "$base_dir"
     if [ -n "$canonical_base" ]; then
       base_dir="$canonical_base"
     fi
@@ -102,7 +111,7 @@ resolve_base_dir() {
 
   # Canonicalize repo_root before comparison
   local canonical_repo_root
-  canonical_repo_root=$(canonicalize_path "$repo_root")
+  _canonicalize_path_into canonical_repo_root "$repo_root"
   # Warn if canonicalization fails (indicates repository issue)
   if [ -z "$canonical_repo_root" ]; then
     log_warn "Unable to canonicalize repository path: $repo_root"
@@ -227,7 +236,7 @@ _emit_worktree_record() {
   [ -z "$wt_path" ] && return 0
 
   local is_main=0 branch="$wt_branch" status wt_path_canonical
-  wt_path_canonical=$(canonicalize_path "$wt_path" || printf "%s" "$wt_path")
+  _canonicalize_path_into wt_path_canonical "$wt_path" || wt_path_canonical="$wt_path"
   if [ "$wt_path" = "$repo_root" ] || [ "$wt_path_canonical" = "$repo_root" ]; then
     is_main=1
   fi
@@ -293,7 +302,7 @@ _parse_worktree_records() {
 list_worktree_records() {
   local repo_root="$1"
   local repo_root_canonical
-  repo_root_canonical=$(canonicalize_path "$repo_root" || printf "%s" "$repo_root")
+  _canonicalize_path_into repo_root_canonical "$repo_root" || repo_root_canonical="$repo_root"
 
   if git -C "$repo_root" worktree list --porcelain -z >/dev/null 2>&1; then
     _parse_worktree_records "$repo_root_canonical" "" < <(git -C "$repo_root" worktree list --porcelain -z 2>/dev/null)
@@ -332,7 +341,7 @@ list_worktree_records() {
 worktree_status() {
   local target_path="$1"
   local target_path_canonical
-  target_path_canonical=$(canonicalize_path "$target_path" || printf "%s" "$target_path")
+  _canonicalize_path_into target_path_canonical "$target_path" || target_path_canonical="$target_path"
 
   local status="ok"
   local found=0
@@ -344,7 +353,7 @@ worktree_status() {
     case "$line" in
       "")
         [ -z "$path" ] && continue
-        path_canonical=$(canonicalize_path "$path" || printf "%s" "$path")
+        _canonicalize_path_into path_canonical "$path" || path_canonical="$path"
         if [ "$path" = "$target_path" ] || [ "$path_canonical" = "$target_path_canonical" ]; then
           found=1
           status="$record_status"
@@ -359,7 +368,8 @@ worktree_status() {
         is_main="${line#is_main }"
         ;;
       "path "*)
-        path=$(_tsv_unescape_field "${line#path }")
+        path=$(_tsv_unescape_field "${line#path }" && printf '.') || return 1
+        path="${path%.}"
         ;;
       "branch "*)
         branch=$(_tsv_unescape_field "${line#branch }")
@@ -373,7 +383,7 @@ $(list_worktree_records "$repo_root")
 EOF
 
   if [ "$found" -eq 0 ] && [ -n "$path" ]; then
-    path_canonical=$(canonicalize_path "$path" || printf "%s" "$path")
+    _canonicalize_path_into path_canonical "$path" || path_canonical="$path"
     if [ "$path" = "$target_path" ] || [ "$path_canonical" = "$target_path_canonical" ]; then
       found=1
       status="$record_status"
@@ -447,7 +457,7 @@ _resolve_path_target() {
     case "$line" in
       "")
         if [ -n "$path" ] && [ "path:$path" = "$identifier" ]; then
-          decoded_path=$(_tsv_unescape_field "$path"; printf '.')
+          decoded_path=$(_tsv_unescape_field "$path" && printf '.') || return 1
           decoded_path="${decoded_path%.}"
           [ -d "$decoded_path" ] || break
           printf '%s\t%s\t%s\n' "$is_main" "$path" "$branch"
@@ -505,7 +515,7 @@ resolve_target() {
 
   # A sanitized name is only a preference among exact branch matches, never
   # evidence of branch identity or worktree membership.
-  base_dir=$(canonicalize_path "$base_dir" || printf "%s" "$base_dir")
+  _canonicalize_path_into base_dir "$base_dir" || true
   sanitized_name=$(sanitize_branch_name "$identifier")
   preferred_path="$base_dir/${prefix}${sanitized_name}"
 
@@ -546,7 +556,8 @@ resolve_target() {
         is_main="${line#is_main }"
         ;;
       "path "*)
-        wt_path=$(_tsv_unescape_field "${line#path }")
+        wt_path=$(_tsv_unescape_field "${line#path }" && printf '.') || return 1
+        wt_path="${wt_path%.}"
         ;;
       "branch "*)
         wt_branch=$(_tsv_unescape_field "${line#branch }")
@@ -578,7 +589,7 @@ unpack_target() {
   local IFS=$'\t'
   read -r _ctx_is_main escaped_path escaped_branch <<< "$1"
   # Preserve trailing newlines in a registered path through command substitution.
-  _ctx_worktree_path=$(_tsv_unescape_field "$escaped_path"; printf '.')
+  _ctx_worktree_path=$(_tsv_unescape_field "$escaped_path" && printf '.') || return 1
   _ctx_worktree_path="${_ctx_worktree_path%.}"
   _ctx_branch=$(_tsv_unescape_field "$escaped_branch")
 }
@@ -717,8 +728,11 @@ _worktree_path_for_ref() {
   local ref="$1" repo_root current_path records resolved_ref branch_candidate
   [ -n "$ref" ] || return 0
   repo_root=$(_resolve_main_repo_root) || return 0
-  current_path=$(git rev-parse --show-toplevel 2>/dev/null || true)
-  [ -n "$current_path" ] && current_path=$(canonicalize_path "$current_path" || printf "%s" "$current_path")
+  current_path=$(git rev-parse --show-toplevel 2>/dev/null && printf '.') || current_path=""
+  current_path="${current_path%$'\n.'}"
+  if [ -n "$current_path" ]; then
+    _canonicalize_path_into current_path "$current_path" || true
+  fi
 
   # Let Git apply its own revision precedence and namespace shorthand rules.
   # Tags and other non-branch refs deliberately have no owning worktree.
@@ -760,7 +774,10 @@ _worktree_path_for_ref() {
         path=""
         branch=""
         ;;
-      "path "*) path=$(_tsv_unescape_field "${line#path }") ;;
+      "path "*)
+        path=$(_tsv_unescape_field "${line#path }" && printf '.') || return 1
+        path="${path%.}"
+        ;;
       "branch "*) branch=$(_tsv_unescape_field "${line#branch }") ;;
     esac
   done <<EOF
@@ -815,8 +832,8 @@ _resolve_sparse_source() {
   local src status current
 
   # Prefer the worktree holding from_ref, but only if it is sparse-enabled.
-  if src=$(_worktree_path_for_ref "$from_ref"); then
-    :
+  if src=$(_worktree_path_for_ref "$from_ref" && printf '.'); then
+    src="${src%.}"
   else
     status=$?
     [ "$status" -eq 2 ] && return 0
@@ -831,7 +848,8 @@ _resolve_sparse_source() {
   fi
 
   # Otherwise fall back to the current/top-level worktree if it is sparse.
-  current=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  current=$(git rev-parse --show-toplevel 2>/dev/null && printf '.') || current=""
+  current="${current%$'\n.'}"
   if [ -n "$current" ] && _worktree_is_sparse "$current"; then
     printf "%s" "$current"
     return 0
@@ -1075,7 +1093,8 @@ list_worktree_branches() {
         is_main="${line#is_main }"
         ;;
       "path "*)
-        path=$(_tsv_unescape_field "${line#path }")
+        path=$(_tsv_unescape_field "${line#path }" && printf '.') || return 1
+        path="${path%.}"
         ;;
       "branch "*)
         branch=$(_tsv_unescape_field "${line#branch }")

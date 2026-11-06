@@ -37,8 +37,8 @@ _clean_should_skip() {
   local active_worktree_canonical="$active_worktree_path"
 
   if [ -n "$active_worktree_path" ]; then
-    dir_canonical=$(canonicalize_path "$dir" || printf "%s" "$dir")
-    active_worktree_canonical=$(canonicalize_path "$active_worktree_path" || printf "%s" "$active_worktree_path")
+    _canonicalize_path_into dir_canonical "$dir" || true
+    _canonicalize_path_into active_worktree_canonical "$active_worktree_path" || true
   fi
 
   if [ -n "$active_worktree_path" ] && [ "$dir_canonical" = "$active_worktree_canonical" ]; then
@@ -105,7 +105,8 @@ _clean_locked_phantoms() {
         is_main="${line#is_main }"
         ;;
       "path "*)
-        dir=$(_tsv_unescape_field "${line#path }")
+        dir=$(_tsv_unescape_field "${line#path }" && printf '.') || return 1
+        dir="${dir%.}"
         ;;
       "status "*)
         wt_status="${line#status }"
@@ -303,7 +304,8 @@ _clean_prs() {
         is_main="${line#is_main }"
         ;;
       "path "*)
-        dir=$(_tsv_unescape_field "${line#path }")
+        dir=$(_tsv_unescape_field "${line#path }" && printf '.') || return 1
+        dir="${dir%.}"
         ;;
       "branch "*)
         branch=$(_tsv_unescape_field "${line#branch }")
@@ -357,9 +359,10 @@ cmd_clean() {
 
   local repo_root="$_ctx_repo_root" base_dir="$_ctx_base_dir" prefix="$_ctx_prefix"
 
-  active_worktree_path=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  active_worktree_path=$(git rev-parse --show-toplevel 2>/dev/null && printf '.') || active_worktree_path=""
+  active_worktree_path="${active_worktree_path%$'\n.'}"
   if [ -n "$active_worktree_path" ]; then
-    active_worktree_path=$(canonicalize_path "$active_worktree_path" || printf "%s" "$active_worktree_path")
+    _canonicalize_path_into active_worktree_path "$active_worktree_path" || true
   fi
 
   # Locked entries with missing directories survive `git worktree prune`;

@@ -24,7 +24,12 @@ cmd_list() {
         "")
           [ -z "$path" ] && continue
           if [ "$is_main" = "1" ]; then
-            printf "%s\t%s\t%s\n" "$path" "$branch" "$status"
+            if [ "$ids" -eq 1 ]; then
+              printf "path:%s" "$path"
+            else
+              _tsv_unescape_field "$path"
+            fi
+            printf "\t%s\t%s\n" "$branch" "$status"
           else
             linked_rows="${linked_rows}${path}"$'\t'"${branch}"$'\t'"${status}"$'\n'
           fi
@@ -37,11 +42,8 @@ cmd_list() {
           is_main="${line#is_main }"
           ;;
         "path "*)
-          if [ "$ids" -eq 1 ]; then
-            path="path:${line#path }"
-          else
-            path=$(_tsv_unescape_field "${line#path }")
-          fi
+          # Keep paths escaped through line-based buffering and sorting.
+          path="${line#path }"
           ;;
         "branch "*)
           branch=$(_tsv_unescape_field "${line#branch }")
@@ -56,14 +58,26 @@ EOF
 
     if [ -n "$path" ]; then
       if [ "$is_main" = "1" ]; then
-        printf "%s\t%s\t%s\n" "$path" "$branch" "$status"
+        if [ "$ids" -eq 1 ]; then
+          printf "path:%s" "$path"
+        else
+          _tsv_unescape_field "$path"
+        fi
+        printf "\t%s\t%s\n" "$branch" "$status"
       else
         linked_rows="${linked_rows}${path}"$'\t'"${branch}"$'\t'"${status}"$'\n'
       fi
     fi
 
     if [ -n "$linked_rows" ]; then
-      printf "%s" "$linked_rows" | LC_ALL=C sort -t "$(printf '\t')" -k2,2 -k1,1
+      printf "%s" "$linked_rows" | LC_ALL=C sort -t "$(printf '\t')" -k2,2 -k1,1 | while IFS=$'\t' read -r path branch status; do
+        if [ "$ids" -eq 1 ]; then
+          printf "path:%s" "$path"
+        else
+          _tsv_unescape_field "$path"
+        fi
+        printf "\t%s\t%s\n" "$branch" "$status"
+      done
     fi
     return 0
   fi
@@ -80,7 +94,9 @@ EOF
       "")
         [ -z "$path" ] && continue
         if [ "$is_main" = "1" ]; then
-          printf "%-30s %s\n" "$branch [main repo]" "$path"
+          printf "%-30s " "$branch [main repo]"
+          _tsv_unescape_field "$path"
+          printf '\n'
         else
           linked_rows="${linked_rows}${branch}"$'\t'"${path}"$'\n'
         fi
@@ -93,7 +109,7 @@ EOF
         is_main="${line#is_main }"
         ;;
       "path "*)
-        path=$(_tsv_unescape_field "${line#path }")
+        path="${line#path }"
         ;;
       "branch "*)
         branch=$(_tsv_unescape_field "${line#branch }")
@@ -108,7 +124,9 @@ EOF
 
   if [ -n "$path" ]; then
     if [ "$is_main" = "1" ]; then
-      printf "%-30s %s\n" "$branch [main repo]" "$path"
+      printf "%-30s " "$branch [main repo]"
+      _tsv_unescape_field "$path"
+      printf '\n'
     else
       linked_rows="${linked_rows}${branch}"$'\t'"${path}"$'\n'
     fi
@@ -117,7 +135,9 @@ EOF
   if [ -n "$linked_rows" ]; then
     printf "%s" "$linked_rows" | LC_ALL=C sort -t "$(printf '\t')" -k1,1 -k2,2 | while IFS=$'\t' read -r branch path; do
       [ -z "$path" ] && continue
-      printf "%-30s %s\n" "$branch" "$path"
+      printf "%-30s " "$branch"
+      _tsv_unescape_field "$path"
+      printf '\n'
     done
   fi
 
