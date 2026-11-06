@@ -209,6 +209,12 @@ git gtr new agent-task --porcelain                                              
 - `--yes`: Non-interactive mode
 - `--porcelain`: Emit stable `key<TAB>value` records (implies `--yes`; incompatible with `--editor` and `--ai`)
 
+`--track remote` checks out the selected remote branch and sets it as the upstream.
+An existing local branch must have the same tip; its upstream is set to the selected
+remote even if it was missing or different. Ahead, behind, or diverged local branches
+are rejected without moving them, including with `--force`. Use `--track local` to
+check out the existing local tip instead.
+
 On success, `--porcelain` writes exactly three records to stdout: `path`,
 `branch`, and `hook_status`. Progress messages and hook output are written to
 stderr. If a post-create hook fails, the command exits non-zero and emits no

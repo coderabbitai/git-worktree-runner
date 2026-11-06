@@ -24,6 +24,8 @@ Options:
   --remote <name>     Remote used for default base refs (default: gtr.defaultRemote)
   --track <mode>      Branch tracking mode: auto|remote|local|none (default: auto)
                       auto: tries remote first, then local, then creates new
+                      remote: requires the remote tip and sets its upstream;
+                              existing local branches must have the same tip
   --no-copy           Skip file copying (gtr.copy.include patterns)
   --no-fetch          Skip git fetch before creating
   --no-hooks          Skip post-create hooks

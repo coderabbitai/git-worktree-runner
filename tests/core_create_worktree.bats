@@ -121,8 +121,310 @@ teardown() {
 }
 
 @test "create_worktree fails for missing remote branch with track=remote" {
+  git branch nope HEAD
   run create_worktree "$TEST_WORKTREES_DIR" "" "nope" "HEAD" "remote" "1"
   [ "$status" -eq 1 ]
+  [[ "$output" == *"Remote branch origin/nope does not exist"* ]]
+  [ ! -e "$TEST_WORKTREES_DIR/nope" ]
+}
+
+# A real local remote whose feature tip differs from the caller's HEAD.
+_setup_track_remote() {
+  local remote="${1:-origin}" base
+  base=$(git rev-parse HEAD)
+  git init --bare --quiet "$TEST_REPO/remote.git"
+  git remote add "$remote" "$TEST_REPO/remote.git"
+  echo remote > remote.txt
+  git add remote.txt
+  git commit -m "remote feature" --quiet
+  TEST_REMOTE_TIP=$(git rev-parse HEAD)
+  git push --quiet "$remote" HEAD:refs/heads/feature/auth HEAD:refs/heads/other
+  git reset --hard "$base" --quiet
+  git fetch --quiet "$remote"
+}
+
+# Verify the checkout commit, branch identity, and complete upstream metadata.
+# Usage: _assert_remote_checkout <worktree_path> [remote]
+_assert_remote_checkout() {
+  local wt_path="$1" remote="${2:-origin}"
+  [ "$(git -C "$wt_path" symbolic-ref HEAD)" = refs/heads/feature/auth ]
+  [ "$(git -C "$wt_path" rev-parse HEAD)" = "$TEST_REMOTE_TIP" ]
+  [ "$(git -C "$wt_path" config --get-all branch.feature/auth.remote)" = "$remote" ]
+  [ "$(git -C "$wt_path" config --get-all branch.feature/auth.merge)" = refs/heads/feature/auth ]
+  [ "$(git -C "$wt_path" rev-parse --symbolic-full-name '@{u}')" = "refs/remotes/$remote/feature/auth" ]
+}
+
+@test "create_worktree remote mode explicitly tracks new branches with autoSetupMerge disabled" {
+  _setup_track_remote
+  git config branch.autoSetupMerge false
+  # A short remote ref must not accidentally resolve to a same-named tag.
+  git tag origin/feature/auth HEAD
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD remote 1)
+
+  [ "$wt_path" = "$TEST_WORKTREES_DIR/feature-auth" ]
+  _assert_remote_checkout "$wt_path"
+  [ "$(cat "$wt_path/remote.txt")" = remote ]
+}
+
+@test "create_worktree remote mode reuses matching branches and ensures the selected upstream" {
+  _setup_track_remote
+  local upstream wt_path
+  for upstream in missing correct different; do
+    git branch --no-track feature/auth "$TEST_REMOTE_TIP"
+    case "$upstream" in
+      correct) git branch --set-upstream-to=origin/feature/auth feature/auth ;;
+      different) git branch --set-upstream-to=origin/other feature/auth ;;
+    esac
+
+    wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD remote 1)
+
+    _assert_remote_checkout "$wt_path"
+    [ "$(cat "$wt_path/remote.txt")" = remote ]
+    git worktree remove "$wt_path"
+    git branch -D feature/auth
+  done
+}
+
+# Exercise a differing local tip and verify rejection preserves refs and config,
+# both with and without force. Usage: _assert_remote_tip_conflict ahead|behind|diverged
+_assert_remote_tip_conflict() {
+  local relation="$1" local_tip before_config before_worktrees force
+  _setup_track_remote
+  case "$relation" in
+    ahead) local_tip=$(git commit-tree "$TEST_REMOTE_TIP^{tree}" -p "$TEST_REMOTE_TIP" -m ahead) ;;
+    behind) local_tip=$(git rev-parse HEAD) ;;
+    diverged) local_tip=$(git commit-tree 'HEAD^{tree}' -p HEAD -m diverged) ;;
+  esac
+  git branch --no-track feature/auth "$local_tip"
+  if [ "$relation" = behind ]; then
+    git branch --set-upstream-to=origin/feature/auth feature/auth
+  elif [ "$relation" = diverged ]; then
+    git branch --set-upstream-to=origin/other feature/auth
+  fi
+  before_config=$(git config --local --list)
+  before_worktrees=$(git worktree list --porcelain)
+
+  # --force permits duplicate checkouts, never a different remote-mode tip.
+  for force in 0 1; do
+    run create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD remote 1 "$force" review
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Local branch feature/auth differs from origin/feature/auth"* ]]
+    [[ "$output" == *"--track local"* ]]
+    [[ "$output" != *"Worktree created"* ]]
+    [ ! -e "$TEST_WORKTREES_DIR/feature-auth-review" ]
+    [ "$(git rev-parse refs/heads/feature/auth)" = "$local_tip" ]
+    [ "$(git rev-parse refs/remotes/origin/feature/auth)" = "$TEST_REMOTE_TIP" ]
+    [ "$(git config --local --list)" = "$before_config" ]
+    [ "$(git worktree list --porcelain)" = "$before_worktrees" ]
+  done
+}
+
+@test "create_worktree remote mode rejects an ahead local branch without changing it" {
+  _assert_remote_tip_conflict ahead
+}
+
+@test "create_worktree remote mode rejects a behind local branch without fast-forwarding it" {
+  _assert_remote_tip_conflict behind
+}
+
+@test "create_worktree remote mode rejects a diverged local branch without changing it" {
+  _assert_remote_tip_conflict diverged
+}
+
+@test "create_worktree remote mode uses the selected remote for new and existing branches" {
+  _setup_track_remote upstream
+  git remote add origin "$TEST_REPO/remote.git"
+  git fetch --quiet origin
+  # origin has a different tip, but only the selected remote should matter.
+  git update-ref refs/remotes/origin/feature/auth HEAD
+  git config gtr.defaultRemote upstream
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD remote 1)
+  _assert_remote_checkout "$wt_path" upstream
+  git worktree remove "$wt_path"
+  git branch --set-upstream-to=origin/feature/auth feature/auth
+
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD remote 1 0 "" "" upstream)
+  _assert_remote_checkout "$wt_path" upstream
+}
+
+@test "create_worktree remote mode reports upstream setup failure without claiming success" {
+  _setup_track_remote
+  local branch_state
+  for branch_state in new existing; do
+    if [ "$branch_state" = existing ]; then
+      git branch --no-track feature/auth "$TEST_REMOTE_TIP"
+    fi
+    touch "$TEST_REPO/.git/config.lock"
+
+    run create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD remote 1
+
+    [ "$status" -eq 1 ]
+    if [ "$branch_state" = existing ]; then
+      [[ "$output" == *"Could not set upstream"* ]]
+      [ "$(git rev-parse refs/heads/feature/auth)" = "$TEST_REMOTE_TIP" ]
+    fi
+    [[ "$output" != *"Worktree created"* ]]
+    [[ "$output" != *"does not exist"* ]]
+    [ ! -e "$TEST_WORKTREES_DIR/feature-auth" ]
+    run git config --get branch.feature/auth.remote
+    [ "$status" -eq 1 ]
+    rm "$TEST_REPO/.git/config.lock"
+    if git show-ref --verify --quiet refs/heads/feature/auth; then
+      git branch -D feature/auth
+    fi
+  done
+}
+
+@test "create_worktree remote mode preserves force and deferred checkout behavior" {
+  _setup_track_remote
+  git branch --track feature/auth origin/feature/auth
+  git worktree add "$TEST_WORKTREES_DIR/first" feature/auth
+  echo dirty > "$TEST_WORKTREES_DIR/first/remote.txt"
+
+  run create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD remote 1 0 second
+  [ "$status" -eq 1 ]
+  [[ "$output" != *"does not exist"* ]]
+  [[ "$output" != *"Worktree created"* ]]
+
+  local wt_path
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD remote 1 1 second "" origin 1 "$TEST_REPO")
+  _assert_remote_checkout "$wt_path"
+  [ ! -e "$wt_path/remote.txt" ]
+  [ "$(cat "$TEST_WORKTREES_DIR/first/remote.txt")" = dirty ]
+}
+
+@test "create_worktree remote mode preserves new files when upstream failure cleanup is unsafe" {
+  _setup_track_remote
+  git branch --no-track feature/auth "$TEST_REMOTE_TIP"
+  printf '#!/bin/sh\necho keep > user-work\n' > "$TEST_REPO/.git/hooks/post-checkout"
+  chmod +x "$TEST_REPO/.git/hooks/post-checkout"
+  touch "$TEST_REPO/.git/config.lock"
+
+  run create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD remote 1
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not set upstream"* ]]
+  [[ "$output" == *"Could not remove worktree"* ]]
+  [[ "$output" != *"Worktree created"* ]]
+  [ "$(cat "$TEST_WORKTREES_DIR/feature-auth/user-work")" = keep ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-auth" rev-parse HEAD)" = "$TEST_REMOTE_TIP" ]
+  run git config --get branch.feature/auth.remote
+  [ "$status" -eq 1 ]
+}
+
+@test "create_worktree remote mode keeps prior upstreams when worktree addition fails" {
+  _setup_track_remote
+  git branch --no-track feature/auth "$TEST_REMOTE_TIP"
+  git worktree add "$TEST_WORKTREES_DIR/first" feature/auth
+  echo dirty > "$TEST_WORKTREES_DIR/first/remote.txt"
+
+  local upstream before_config before_worktrees
+  for upstream in missing different; do
+    if [ "$upstream" = different ]; then
+      git branch --set-upstream-to=origin/other feature/auth
+    fi
+    before_config=$(git config --local --list)
+    before_worktrees=$(git worktree list --porcelain)
+
+    run create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD remote 1 0 second
+
+    [ "$status" -eq 1 ]
+    [[ "$output" != *"Worktree created"* ]]
+    [ "$(git config --local --list)" = "$before_config" ]
+    [ "$(git worktree list --porcelain)" = "$before_worktrees" ]
+    [ ! -e "$TEST_WORKTREES_DIR/feature-auth-second" ]
+    [ "$(git rev-parse refs/heads/feature/auth)" = "$TEST_REMOTE_TIP" ]
+    [ "$(cat "$TEST_WORKTREES_DIR/first/remote.txt")" = dirty ]
+  done
+}
+
+@test "create_worktree remote mode leaves upstream unchanged when the destination is blocked" {
+  _setup_track_remote
+  git branch --track feature/auth origin/other
+  mkdir -p "$TEST_WORKTREES_DIR"
+  echo keep > "$TEST_WORKTREES_DIR/feature-auth"
+  local before_config
+  before_config=$(git config --local --list)
+
+  run create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD remote 1
+
+  [ "$status" -eq 1 ]
+  [[ "$output" != *"Worktree created"* ]]
+  [ "$(git config --local --list)" = "$before_config" ]
+  [ "$(cat "$TEST_WORKTREES_DIR/feature-auth")" = keep ]
+}
+
+@test "create_worktree auto and local modes keep a differing local tip and upstream" {
+  _setup_track_remote
+  git branch --no-track feature/auth HEAD
+  git branch --set-upstream-to=origin/other feature/auth
+  local mode wt_path before_config local_tip
+  before_config=$(git config --local --list)
+  local_tip=$(git rev-parse refs/heads/feature/auth)
+  for mode in auto local; do
+    wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD "$mode" 1)
+    [ "$(git -C "$wt_path" rev-parse HEAD)" = "$local_tip" ]
+    [ "$(git -C "$wt_path" rev-parse --symbolic-full-name '@{u}')" = refs/remotes/origin/other ]
+    [ "$(git config --local --list)" = "$before_config" ]
+    git worktree remove "$wt_path"
+  done
+}
+
+@test "create_worktree none mode uses from_ref even with a remote branch and rejects local reuse" {
+  _setup_track_remote
+  local wt_path local_tip
+  local_tip=$(git rev-parse HEAD)
+  wt_path=$(create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD none 1)
+  [ "$(git -C "$wt_path" rev-parse HEAD)" = "$local_tip" ]
+  run git config --get branch.feature/auth.remote
+  [ "$status" -eq 1 ]
+  git worktree remove "$wt_path"
+
+  run create_worktree "$TEST_WORKTREES_DIR" "" feature/auth HEAD none 1
+  [ "$status" -eq 1 ]
+  [ "$(git rev-parse refs/heads/feature/auth)" = "$local_tip" ]
+  [ ! -e "$wt_path" ]
+}
+
+@test "new CLI remote conflict emits no porcelain records or hooks after fetching" {
+  _setup_track_remote upstream
+  # A stale matching remote ref must be refreshed before the comparison.
+  git branch --no-track feature/auth HEAD
+  git update-ref refs/remotes/upstream/feature/auth HEAD
+  git config gtr.hook.postCreate 'touch hook-marker'
+  local stdout_file="$BATS_TEST_TMPDIR/stdout" stderr_file="$BATS_TEST_TMPDIR/stderr"
+
+  run bash -c '"$1" new feature/auth --from HEAD --remote upstream --track remote --porcelain >"$2" 2>"$3"' \
+    _ "$PROJECT_ROOT/bin/gtr" "$stdout_file" "$stderr_file"
+
+  [ "$status" -eq 1 ]
+  [ ! -s "$stdout_file" ]
+  grep -q 'Local branch feature/auth differs from upstream/feature/auth' "$stderr_file"
+  run grep -q 'Worktree created' "$stderr_file"
+  [ "$status" -eq 1 ]
+  [ "$(git rev-parse refs/remotes/upstream/feature/auth)" = "$TEST_REMOTE_TIP" ]
+  [ "$(git rev-parse refs/heads/feature/auth)" = "$(git rev-parse HEAD)" ]
+  [ ! -e "$TEST_WORKTREES_DIR/feature-auth" ]
+  run git config --get branch.feature/auth.remote
+  [ "$status" -eq 1 ]
+}
+
+@test "new CLI remote mode emits porcelain success with the requested upstream" {
+  _setup_track_remote upstream
+  git branch --no-track feature/auth "$TEST_REMOTE_TIP"
+  local stdout_file="$BATS_TEST_TMPDIR/stdout" stderr_file="$BATS_TEST_TMPDIR/stderr"
+
+  run bash -c '"$1" new feature/auth --from HEAD --remote upstream --track remote --no-copy --no-hooks --porcelain >"$2" 2>"$3"' \
+    _ "$PROJECT_ROOT/bin/gtr" "$stdout_file" "$stderr_file"
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$stdout_file")" = $'path\t'"$TEST_WORKTREES_DIR/feature-auth"$'\nbranch\tfeature/auth\nhook_status\tdisabled' ]
+  _assert_remote_checkout "$TEST_WORKTREES_DIR/feature-auth" upstream
 }
 
 @test "create_worktree auto mode creates new branch when neither exists" {
@@ -187,7 +489,8 @@ teardown() {
     [[ "$output" == *"Invalid gtr.worktrees.prefix"* ]]
     [ ! -e "$base_dir" ]
     [ ! -e "$TEST_REPO/prefix-fixture/planted-rejected-prefix" ]
-    ! git show-ref --verify --quiet refs/heads/rejected-prefix
+    run git show-ref --verify --quiet refs/heads/rejected-prefix
+    [ "$status" -eq 1 ]
   done
 }
 
