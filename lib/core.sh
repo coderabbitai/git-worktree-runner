@@ -596,7 +596,7 @@ resolve_worktree() {
 # Try to create a worktree, handling the common log/add/report pattern.
 # Usage: _try_worktree_add <path> <step_msg> <ok_msg> <add_source> [git_worktree_add_args...]
 # Prints worktree path on success; returns 1 on failure (caller handles error).
-# Note: step_msg may be empty to skip the log_step call.
+# Either message may be empty to defer progress or success reporting to the caller.
 _try_worktree_add() {
   local wt_path="$1" step_msg="$2" ok_msg="$3" add_source="$4"
   shift 4
@@ -608,7 +608,7 @@ _try_worktree_add() {
   else
     git worktree add "$wt_path" "$@" >&2 || return 1
   fi
-  log_info "$ok_msg"
+  [ -n "$ok_msg" ] && log_info "$ok_msg"
   printf "%s" "$wt_path"
   return 0
 }
@@ -956,14 +956,23 @@ create_worktree() {
           log_error "Local branch $branch_name differs from $remote/$branch_name; use --track local to keep its tip or reconcile the branches first"
           return 1
         fi
-        if ! git branch --set-upstream-to="$remote_ref" -- "$branch_name" >&2; then
-          log_error "Could not set upstream for $branch_name to $remote/$branch_name"
-          return 1
+        # Do not change shared branch configuration if Git refuses the checkout.
+        # Defer success output until both checkout and tracking setup succeed.
+        if _try_worktree_add "$worktree_path" "" "" "$add_source" \
+            "${force_args[@]}" "$branch_name" >/dev/null; then
+          if ! git branch --set-upstream-to="$remote_ref" -- "$branch_name" >&2; then
+            log_error "Could not set upstream for $branch_name to $remote/$branch_name"
+            # Never force removal: a checkout hook or another process may have
+            # added work that must survive this cleanup attempt.
+            if ! git worktree remove "$worktree_path" >&2; then
+              log_error "Could not remove worktree at $worktree_path after upstream setup failed"
+            fi
+            return 1
+          fi
+          log_info "Worktree created tracking $remote/$branch_name"
+          printf "%s" "$worktree_path"
+          return 0
         fi
-        _try_worktree_add "$worktree_path" "" \
-          "Worktree created tracking $remote/$branch_name" \
-          "$add_source" \
-          "${force_args[@]}" "$branch_name" && return 0
       else
         # Explicit tracking must also work when branch.autoSetupMerge is false.
         _try_worktree_add "$worktree_path" \
