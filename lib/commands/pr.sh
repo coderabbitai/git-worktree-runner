@@ -235,6 +235,55 @@ EOF
   return 1
 }
 
+# Print the fetched commit, never FETCH_HEAD: another fetch in this worktree
+# can replace FETCH_HEAD before validation or creation. The subshell keeps the
+# cleanup traps local to this fetch, including when called without $(...).
+# Usage: _pr_fetch_commit <fetch_source> <pr_number>
+# Returns 0 and prints the commit ID on success, or nonzero with a diagnostic.
+# Releases its temporary ref and reservation on exit without changing caller traps.
+_pr_fetch_commit() (
+  local fetch_source="$1" pr_number="$2"
+  local common_dir temp_dir candidate fetch_ref="" fetch_oid
+  common_dir=$(git rev-parse --git-common-dir) || return 1
+  # Reserve a unique name in the shared Git directory, even across worktrees
+  # and invocations with different TMPDIR values.
+  temp_dir=$(mktemp -d "$common_dir/gtr-pr.XXXXXX") || {
+    log_error "Could not reserve a temporary pull request ref"
+    return 1
+  }
+  trap '
+    if [ -z "$fetch_ref" ] || git update-ref -d "$fetch_ref"; then
+      rmdir "$temp_dir" || true
+    else
+      log_warn "Could not remove temporary pull request ref $fetch_ref"
+    fi
+  ' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  candidate="refs/gtr/pr/${temp_dir##*/}"
+  # A stale ref may outlive its reservation directory; do not claim or delete it.
+  if git show-ref --verify --quiet "$candidate"; then
+    log_error "Temporary pull request ref already exists: $candidate"
+    return 1
+  fi
+  fetch_ref="$candidate"
+  if ! git fetch -- "$fetch_source" "refs/pull/$pr_number/head:$fetch_ref" >&2; then
+    log_error "Could not fetch pull request #$pr_number from $fetch_source"
+    return 1
+  fi
+  fetch_oid=$(git rev-parse --verify "$fetch_ref^{commit}") || {
+    log_error "Could not resolve fetched pull request #$pr_number to a commit"
+    return 1
+  }
+  printf '%s\n' "$fetch_oid"
+)
+
+# Create a PR worktree via native gh checkout or the isolated-ref fallback,
+# then configure branch metadata, copy files, and run the requested hooks/tools.
+# Usage: cmd_pr <number|url|branch> [options]; accepts the arguments to git gtr pr.
+# Reports failures with nonzero status; the fallback validates local branches before reuse.
 cmd_pr() {
   local _spec
   _spec="--branch|-b: value
@@ -348,17 +397,14 @@ cmd_pr() {
 
   if [ "$native_checkout" -eq 0 ]; then
     log_step "Fetching pull request #$pr_number..."
-    if ! git fetch -- "$fetch_source" "refs/pull/$pr_number/head"; then
-      log_error "Could not fetch pull request #$pr_number from $fetch_source"
-      exit 1
-    fi
+    local fetch_oid
+    fetch_oid=$(_pr_fetch_commit "$fetch_source" "$pr_number") || exit 1
 
     local track_mode="none" branch_preexisted=0
     if git show-ref --verify --quiet "refs/heads/$branch_name"; then
       branch_preexisted=1
-      local branch_oid fetch_oid
+      local branch_oid
       branch_oid=$(git rev-parse --verify "refs/heads/$branch_name^{commit}" 2>/dev/null) || branch_oid=""
-      fetch_oid=$(git rev-parse --verify "FETCH_HEAD^{commit}" 2>/dev/null) || fetch_oid=""
       if [ -z "$branch_oid" ] || [ "$branch_oid" != "$fetch_oid" ]; then
         log_error "Local branch $branch_name already exists and differs from pull request #$pr_number"
         log_info "Use --branch <name> to choose a different local branch name"
@@ -370,7 +416,7 @@ cmd_pr() {
       fi
     fi
 
-    if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "FETCH_HEAD" "$track_mode" "1" "$force" "$custom_name" "$folder_override" "$remote"); then
+    if ! worktree_path=$(create_worktree "$base_dir" "$prefix" "$branch_name" "$fetch_oid" "$track_mode" "1" "$force" "$custom_name" "$folder_override" "$remote"); then
       exit 1
     fi
   fi
