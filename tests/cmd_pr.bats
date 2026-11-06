@@ -456,11 +456,20 @@ SCRIPT
   [ "$(git config branch.feature/from-pr.merge)" = "refs/heads/feature/from-pr" ]
 }
 
-@test "cmd_pr delegates worktree creation to gh when supported" {
-  git config gtr.worktrees.prefix dev-
+# Model gh v2.100.0's cmdsForExistingRemote and syncBranchCmds with real Git:
+# fetch the head remote, add the worktree, then merge --ff-only for an existing
+# branch. In particular, do not fake successful checkout at TEST_PR_SHA.
+# Source: cli/cli, pkg/cmd/pr/checkout/checkout.go (tag v2.100.0).
+# Installs a gh fixture and local base/fork remotes; logs native checkout calls.
+mock_native_checkout() {
+  git config url."$TEST_REMOTE_REPO".insteadOf https://github.com/base/example.git
+  git config --add url."$TEST_REMOTE_REPO".insteadOf https://github.com/octo/example.git
+  git remote add contributor https://github.com/octo/example.git
+  git push origin "$TEST_PR_SHA:refs/heads/feature/from-pr" --quiet
   export TEST_GH_LOG="$TEST_MOCK_BIN/gh.log"
   cat > "$TEST_MOCK_BIN/gh" <<'SCRIPT'
 #!/usr/bin/env bash
+set -e
 if [ "$1" = "config" ]; then
   printf 'https\n'
 elif [ "$1" = "pr" ] && [ "$2" = "view" ]; then
@@ -468,6 +477,7 @@ elif [ "$1" = "pr" ] && [ "$2" = "view" ]; then
 elif [ "$1" = "pr" ] && [ "$2" = "checkout" ] && [ "$3" = "--help" ]; then
   printf '      --worktree path\n'
 elif [ "$1" = "pr" ] && [ "$2" = "checkout" ]; then
+  printf '%s\n' "$*" >> "$TEST_GH_LOG"
   shift 3
   worktree_path=""
   branch_name=""
@@ -479,20 +489,176 @@ elif [ "$1" = "pr" ] && [ "$2" = "checkout" ]; then
       *) shift ;;
     esac
   done
-  printf '%s\t%s\n' "$worktree_path" "$branch_name" > "$TEST_GH_LOG"
-  git worktree add --quiet -b "$branch_name" "$worktree_path" "$TEST_PR_SHA"
+  git fetch contributor +refs/heads/feature/from-pr:refs/remotes/contributor/feature/from-pr --no-tags
+  if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+    git worktree add --quiet -- "$worktree_path" "$branch_name"
+    git -C "$worktree_path" merge --ff-only refs/remotes/contributor/feature/from-pr
+  else
+    git worktree add --quiet -b "$branch_name" --track -- "$worktree_path" contributor/feature/from-pr
+  fi
 fi
 SCRIPT
   chmod +x "$TEST_MOCK_BIN/gh"
+}
+
+@test "native Git checkout fixture retains an ahead tip but rejects two-sided divergence" {
+  mock_native_checkout
+  local ahead_tip diverged_tip
+  ahead_tip=$(git commit-tree "$TEST_PR_SHA^{tree}" -p "$TEST_PR_SHA" -m "local ahead")
+  diverged_tip=$(git commit-tree "$TEST_PR_SHA^{tree}" -p "$TEST_PR_SHA~1" -m "local diverged")
+  git branch ahead "$ahead_tip"
+  git branch diverged "$diverged_tip"
+
+  run gh pr checkout 123 --worktree "$TEST_WORKTREES_DIR/ahead" --branch ahead
+
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/ahead" rev-parse HEAD)" = "$ahead_tip" ]
+  [ "$ahead_tip" != "$TEST_PR_SHA" ]
+
+  run gh pr checkout 123 --worktree "$TEST_WORKTREES_DIR/diverged" --branch diverged
+
+  [ "$status" -ne 0 ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/diverged" rev-parse HEAD)" = "$diverged_tip" ]
+  [[ "$output" == *"Not possible to fast-forward"* ]]
+}
+
+@test "pr CLI rejects an ahead branch before native checkout without resetting commits" {
+  mock_native_checkout
+  local original_tip
+  original_tip=$(git commit-tree "$TEST_PR_SHA^{tree}" -p "$TEST_PR_SHA" -m "local ahead")
+  git branch feature/from-pr "$original_tip"
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --no-copy --no-hooks --yes
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"differs from pull request"* ]]
+  [ "$(git rev-parse feature/from-pr)" = "$original_tip" ]
+  [ ! -e "$TEST_WORKTREES_DIR/feature-from-pr" ]
+  [ ! -e "$TEST_GH_LOG" ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI rejects a diverged custom branch before native checkout leaves a worktree" {
+  mock_native_checkout
+  local original_tip
+  original_tip=$(git commit-tree "$TEST_PR_SHA^{tree}" -p "$TEST_PR_SHA~1" -m "local diverged")
+  git branch review/pr-123 "$original_tip"
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --branch review/pr-123 --folder review --no-copy --no-hooks --yes
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"differs from pull request"* ]]
+  [ "$(git rev-parse review/pr-123)" = "$original_tip" ]
+  [ ! -e "$TEST_WORKTREES_DIR/review" ]
+  [ ! -e "$TEST_GH_LOG" ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI rejects a behind branch instead of advancing it through native checkout" {
+  mock_native_checkout
+  local original_tip
+  original_tip=$(git rev-parse "$TEST_PR_SHA~1")
+  git branch feature/from-pr "$original_tip"
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --no-copy --no-hooks --yes
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"differs from pull request"* ]]
+  [ "$(git rev-parse feature/from-pr)" = "$original_tip" ]
+  [ ! -e "$TEST_WORKTREES_DIR/feature-from-pr" ]
+  [ ! -e "$TEST_GH_LOG" ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI validates a matching branch with isolated fetch and sets fork metadata" {
+  mock_native_checkout
+  git branch feature/from-pr "$TEST_PR_SHA"
+  interleave_pr_fetch
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git rev-parse FETCH_HEAD)" = "$(git rev-parse "$TEST_PR_SHA~1")" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  [ "$(git rev-parse feature/from-pr)" = "$TEST_PR_SHA" ]
+  [ ! -e "$TEST_GH_LOG" ]
+  [ "$(git config remote.gtr-pr-123-base.gh-resolved)" = base ]
+  [ "$(git config branch.feature/from-pr.remote)" = contributor ]
+  [ "$(git config branch.feature/from-pr.pushRemote)" = contributor ]
+  [ "$(git config branch.feature/from-pr.merge)" = refs/heads/feature/from-pr ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI force permits duplicate matching worktrees but never resets an ahead branch" {
+  mock_native_checkout
+  git worktree add --quiet -b feature/from-pr "$TEST_WORKTREES_DIR/existing" "$TEST_PR_SHA"
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --folder blocked --no-copy --no-hooks --yes
+
+  [ "$status" -eq 1 ]
+  [ ! -e "$TEST_WORKTREES_DIR/blocked" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/existing" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --force --name review --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr-review" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/existing" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  git -C "$TEST_WORKTREES_DIR/existing" commit --allow-empty -m "local ahead" --quiet
+  local original_tip
+  original_tip=$(git rev-parse feature/from-pr)
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --force --folder another --no-copy --no-hooks --yes
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"differs from pull request"* ]]
+  [ "$(git rev-parse feature/from-pr)" = "$original_tip" ]
+  [ ! -e "$TEST_WORKTREES_DIR/another" ]
+  [ ! -e "$TEST_GH_LOG" ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI honors explicit remote even when native checkout supports a new branch" {
+  mock_native_checkout
+  # Make the selected remote's PR tip differ from native gh's head-branch tip.
+  git commit --allow-empty -m "selected remote PR head" --quiet
+  local selected_tip
+  selected_tip=$(git rev-parse HEAD)
+  git push origin "$selected_tip:refs/pull/123/head" --quiet
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --remote origin --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$selected_tip" ]
+  [ "$(git rev-parse feature/from-pr)" = "$selected_tip" ]
+  [ ! -e "$TEST_GH_LOG" ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "cmd_pr delegates new branch creation to gh when supported" {
+  mock_native_checkout
+  git config gtr.worktrees.prefix dev-
 
   cmd_pr 123 --no-copy --no-hooks --yes
 
   [ -d "$TEST_WORKTREES_DIR/dev-feature-from-pr" ]
-  local logged_path logged_branch
-  IFS=$'\t' read -r logged_path logged_branch < "$TEST_GH_LOG"
-  [ "${logged_path##*/}" = "dev-feature-from-pr" ]
-  [ "$logged_branch" = "feature/from-pr" ]
+  [[ "$(cat "$TEST_GH_LOG")" == *"--worktree $TEST_WORKTREES_DIR/dev-feature-from-pr --branch feature/from-pr"* ]]
   [ "$(git -C "$TEST_WORKTREES_DIR/dev-feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  [ "$(git rev-parse feature/from-pr)" = "$TEST_PR_SHA" ]
+}
+
+@test "pr CLI delegates a new custom branch and repository to native checkout" {
+  mock_native_checkout
+  # An unrelated local branch with the PR head name must not disable native gh.
+  git branch feature/from-pr "$TEST_PR_SHA~1"
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --repo base/example --branch review/pr-123 --folder review --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [[ "$(cat "$TEST_GH_LOG")" == *"--branch review/pr-123 --repo base/example"* ]]
+  [ "$(git -C "$TEST_WORKTREES_DIR/review" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  [ "$(git rev-parse review/pr-123)" = "$TEST_PR_SHA" ]
+  [ "$(git rev-parse feature/from-pr)" = "$(git rev-parse "$TEST_PR_SHA~1")" ]
 }
 
 @test "cmd_pr fetches the resolved PR base repository by default" {
@@ -533,6 +699,7 @@ elif [ "$1" = "pr" ] && [ "$2" = "checkout" ]; then
     directory) mkdir "$destination"; printf 'preserve me\n' > "$destination/partial" ;;
     file) printf 'preserve me\n' > "$destination" ;;
     symlink) ln -s "$destination-missing" "$destination" ;;
+    branch) git branch feature/from-pr "$TEST_NATIVE_BRANCH_TIP" || exit $? ;;
   esac
   printf "fatal: couldn't find remote ref refs/heads/feature/from-pr\n" >&2
   exit 1
@@ -553,11 +720,11 @@ SCRIPT
   assert_pr_fetch_cleaned_up
 }
 
-@test "pr CLI fallback preserves an existing branch at a different commit" {
+@test "pr CLI fallback preserves a mismatching branch left by failed native checkout" {
   mock_failed_native_checkout
   local original_tip
   original_tip=$(git rev-parse HEAD~1)
-  git branch feature/from-pr "$original_tip"
+  export NATIVE_CHECKOUT_FAILURE=branch TEST_NATIVE_BRANCH_TIP="$original_tip"
 
   run "$PROJECT_ROOT/bin/gtr" pr 123 --no-copy --no-hooks --yes
 
@@ -565,6 +732,21 @@ SCRIPT
   [ ! -e "$TEST_WORKTREES_DIR/feature-from-pr" ]
   [ "$(git rev-parse feature/from-pr)" = "$original_tip" ]
   [[ "$output" == *"differs from pull request"* ]]
+  [[ "$output" == *"retrying with the pull request ref"* ]]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI fallback accepts a matching branch left by failed native checkout" {
+  mock_failed_native_checkout
+  export NATIVE_CHECKOUT_FAILURE=branch TEST_NATIVE_BRANCH_TIP="$TEST_PR_SHA"
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  [ "$(git rev-parse feature/from-pr)" = "$TEST_PR_SHA" ]
+  [[ "$output" == *"retrying with the pull request ref"* ]]
+  assert_pr_fetch_cleaned_up
 }
 
 @test "pr CLI preserves partial native checkout destinations without falling back" {
@@ -586,13 +768,16 @@ SCRIPT
 }
 
 @test "cmd_pr preserves existing branch metadata" {
+  mock_native_checkout
   git branch feature/from-pr "$TEST_PR_SHA"
   git config branch.feature/from-pr.remote keep-remote
   git config branch.feature/from-pr.pushRemote keep-push
   git config branch.feature/from-pr.merge refs/heads/keep
 
-  cmd_pr 123 --remote origin --folder reused-pr --no-copy --no-hooks --yes
+  cmd_pr 123 --folder reused-pr --no-copy --no-hooks --yes
 
+  [ "$(git -C "$TEST_WORKTREES_DIR/reused-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  [ ! -e "$TEST_GH_LOG" ]
   [ "$(git config branch.feature/from-pr.remote)" = "keep-remote" ]
   [ "$(git config branch.feature/from-pr.pushRemote)" = "keep-push" ]
   [ "$(git config branch.feature/from-pr.merge)" = "refs/heads/keep" ]
