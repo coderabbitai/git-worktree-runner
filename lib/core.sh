@@ -941,18 +941,38 @@ create_worktree() {
 
   case "$track_mode" in
     remote)
-      if [ "$_wt_remote_exists" -eq 1 ]; then
-        _try_worktree_add "$worktree_path" \
-          "Creating worktree from remote branch $remote/$branch_name" \
-          "Worktree created tracking $remote/$branch_name" \
-          "$add_source" \
-          "${force_args[@]}" -b "$branch_name" "$remote/$branch_name" && return 0
+      if [ "$_wt_remote_exists" -eq 0 ]; then
+        log_error "Remote branch $remote/$branch_name does not exist"
+        return 1
+      fi
+
+      local remote_ref="refs/remotes/$remote/$branch_name" local_tip remote_tip
+      if [ "$_wt_local_exists" -eq 1 ]; then
+        # Explicit remote mode must not silently reuse ahead, behind, or diverged
+        # local work. Only identical tips can be reused without moving the branch.
+        local_tip=$(git rev-parse --verify "refs/heads/$branch_name^{commit}") || return 1
+        remote_tip=$(git rev-parse --verify "$remote_ref^{commit}") || return 1
+        if [ "$local_tip" != "$remote_tip" ]; then
+          log_error "Local branch $branch_name differs from $remote/$branch_name; use --track local to keep its tip or reconcile the branches first"
+          return 1
+        fi
+        if ! git branch --set-upstream-to="$remote_ref" -- "$branch_name" >&2; then
+          log_error "Could not set upstream for $branch_name to $remote/$branch_name"
+          return 1
+        fi
         _try_worktree_add "$worktree_path" "" \
           "Worktree created tracking $remote/$branch_name" \
           "$add_source" \
           "${force_args[@]}" "$branch_name" && return 0
+      else
+        # Explicit tracking must also work when branch.autoSetupMerge is false.
+        _try_worktree_add "$worktree_path" \
+          "Creating worktree from remote branch $remote/$branch_name" \
+          "Worktree created tracking $remote/$branch_name" \
+          "$add_source" \
+          "${force_args[@]}" --track -b "$branch_name" "$remote_ref" && return 0
       fi
-      log_error "Remote branch $remote/$branch_name does not exist"
+      log_error "Failed to create worktree tracking $remote/$branch_name"
       return 1
       ;;
 
