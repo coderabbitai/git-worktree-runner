@@ -29,6 +29,220 @@ teardown() {
   rm -rf "$TEST_REMOTE_REPO" "$TEST_OTHER_REMOTE_ROOT" "$TEST_MOCK_BIN"
 }
 
+# Interleave real fetches in the invoking worktree, or fail after writing the
+# PR ref, before cmd_pr can inspect its result. No sleeps or GitHub access.
+interleave_pr_fetch() {
+  export TEST_REAL_GIT TEST_PR_FETCH_LOG
+  TEST_REAL_GIT=$(command -v git)
+  TEST_PR_FETCH_LOG="$TEST_MOCK_BIN/pr-fetch.log"
+  cat > "$TEST_MOCK_BIN/git" <<'SCRIPT'
+#!/usr/bin/env bash
+if [ "${TEST_PR_FETCH_ACTION:-}" = resolve-failure ] && [ "$1" = rev-parse ]; then
+  case "${3:-}" in refs/gtr/pr/*) exit 1 ;; esac
+fi
+if [ "$1" = fetch ]; then
+  for arg in "$@"; do
+    case "$arg" in
+      refs/pull/*/head|refs/pull/*/head:*)
+        "$TEST_REAL_GIT" "$@" || exit $?
+        printf '%s\n' "$arg" >> "$TEST_PR_FETCH_LOG"
+        case "${TEST_PR_FETCH_ACTION:-fetch}" in
+          fetch) "$TEST_REAL_GIT" fetch -- origin main || exit $? ;;
+          fetch-failure) exit 1 ;;
+          nested)
+            TEST_PR_FETCH_ACTION=none TEST_GH_PR_NUMBER=456 \
+              "$GTR_DIR/bin/gtr" pr 456 --remote origin --branch nested-pr \
+              --no-copy --no-hooks --yes >&2 || exit $?
+            # The inner invocation must not remove the outer one's live ref.
+            "$TEST_REAL_GIT" rev-parse --verify "${arg#*:}" > "$TEST_PR_FETCH_LOG.outer" || exit $?
+            ;;
+        esac
+        exit 0
+        ;;
+    esac
+  done
+fi
+exec "$TEST_REAL_GIT" "$@"
+SCRIPT
+  chmod +x "$TEST_MOCK_BIN/git"
+}
+
+assert_pr_fetch_cleaned_up() {
+  [ -z "$(git for-each-ref --format='%(refname)' refs/gtr/pr)" ]
+  local reservation common_dir
+  common_dir=$(git rev-parse --git-common-dir)
+  for reservation in "$common_dir"/gtr-pr.*; do
+    [ ! -e "$reservation" ]
+  done
+}
+
+@test "pr CLI creates the PR branch despite an intervening fetch in the same worktree" {
+  interleave_pr_fetch
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --remote origin --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git rev-parse FETCH_HEAD)" = "$(git rev-parse HEAD~1)" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI accepts a matching branch despite an intervening fetch in the same worktree" {
+  git branch feature/from-pr "$TEST_PR_SHA"
+  interleave_pr_fetch
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --remote origin --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git rev-parse FETCH_HEAD)" = "$(git rev-parse HEAD~1)" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI rejects a mismatching branch even when an intervening fetch matches it" {
+  local original_tip
+  original_tip=$(git rev-parse HEAD~1)
+  git branch feature/from-pr "$original_tip"
+  interleave_pr_fetch
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --remote origin --force --folder review --no-copy --no-hooks --yes
+
+  [ "$status" -eq 1 ]
+  [ "$(git rev-parse FETCH_HEAD)" = "$original_tip" ]
+  [ "$(git rev-parse feature/from-pr)" = "$original_tip" ]
+  [ ! -e "$TEST_WORKTREES_DIR/review" ]
+  [[ "$output" == *"differs from pull request"* ]]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI force reuses a checked out matching branch despite an intervening fetch" {
+  git worktree add --quiet -b feature/from-pr "$TEST_WORKTREES_DIR/existing" "$TEST_PR_SHA"
+  interleave_pr_fetch
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --remote origin --force --folder review --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/review" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/existing" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI isolates the fetch identity when invoked from a linked worktree" {
+  git fetch -- origin refs/pull/123/head
+  git worktree add --quiet --detach "$TEST_WORKTREES_DIR/invoking" HEAD
+  cd "$TEST_WORKTREES_DIR/invoking"
+  interleave_pr_fetch
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --remote origin --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git rev-parse FETCH_HEAD)" = "$(git rev-parse HEAD~1)" ]
+  [ "$(git -C "$TEST_REPO" rev-parse FETCH_HEAD)" = "$TEST_PR_SHA" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "cmd_pr uses the captured commit when another fetch runs just before creation" {
+  eval "$(declare -f create_worktree | sed '1s/create_worktree/original_create_worktree/')"
+  create_worktree() {
+    git fetch -- origin main >&2 || return 1
+    original_create_worktree "$@"
+  }
+
+  run cmd_pr 123 --remote origin --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git rev-parse FETCH_HEAD)" = "$(git rev-parse HEAD~1)" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI isolates temporary refs across overlapping PR invocations" {
+  local nested_sha outer_ref inner_ref
+  nested_sha=$(git rev-parse HEAD~1)
+  git push origin "$nested_sha:refs/pull/456/head" --quiet
+  cat > "$TEST_MOCK_BIN/gh" <<'SCRIPT'
+#!/usr/bin/env bash
+printf '%s\tfeature/from-pr\tocto\texample\thttps://github.com/base/example/pull/%s\ttrue\ttrue\n' \
+  "${TEST_GH_PR_NUMBER:-123}" "${TEST_GH_PR_NUMBER:-123}"
+SCRIPT
+  interleave_pr_fetch
+  export TEST_PR_FETCH_ACTION=nested
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --remote origin --no-copy --no-hooks --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
+  [ "$(git -C "$TEST_WORKTREES_DIR/nested-pr" rev-parse HEAD)" = "$nested_sha" ]
+  [ "$(cat "$TEST_PR_FETCH_LOG.outer")" = "$TEST_PR_SHA" ]
+  outer_ref=$(sed -n '1s/.*://p' "$TEST_PR_FETCH_LOG")
+  inner_ref=$(sed -n '2s/.*://p' "$TEST_PR_FETCH_LOG")
+  [ -n "$outer_ref" ]
+  [ -n "$inner_ref" ]
+  [ "$outer_ref" != "$inner_ref" ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI cleans temporary refs after fetch and commit resolution failures" {
+  interleave_pr_fetch
+  local mode
+  for mode in fetch-failure resolve-failure; do
+    export TEST_PR_FETCH_ACTION="$mode"
+    # A different invocation's ref must survive our failure cleanup.
+    git update-ref refs/gtr/pr/other-invocation "$TEST_PR_SHA"
+
+    run "$PROJECT_ROOT/bin/gtr" pr 123 --remote origin --no-copy --no-hooks --yes
+
+    [ "$status" -eq 1 ]
+    [ ! -e "$TEST_WORKTREES_DIR/feature-from-pr" ]
+    ! git show-ref --verify --quiet refs/heads/feature/from-pr
+    [ "$(git rev-parse refs/gtr/pr/other-invocation)" = "$TEST_PR_SHA" ]
+    git update-ref -d refs/gtr/pr/other-invocation
+    assert_pr_fetch_cleaned_up
+  done
+}
+
+@test "pr CLI cleans temporary refs when the remote PR ref is missing" {
+  git --git-dir="$TEST_REMOTE_REPO" update-ref -d refs/pull/123/head
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --remote origin --no-copy --no-hooks --yes
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not fetch pull request"* ]]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "pr CLI cleans temporary refs when worktree creation fails" {
+  mkdir -p "$TEST_WORKTREES_DIR"
+  printf 'keep me\n' > "$TEST_WORKTREES_DIR/feature-from-pr"
+
+  run "$PROJECT_ROOT/bin/gtr" pr 123 --remote origin --no-copy --no-hooks --yes
+
+  [ "$status" -eq 1 ]
+  [ "$(cat "$TEST_WORKTREES_DIR/feature-from-pr")" = 'keep me' ]
+  assert_pr_fetch_cleaned_up
+}
+
+@test "PR fetch cleanup preserves caller traps on success and failure" {
+  run bash -c '
+    set -e
+    source "$1/tests/test_helper.bash"
+    source_gtr_commands
+    trap '\''printf "caller exit\n" >> "$2"'\'' EXIT
+    trap : HUP INT TERM
+    saved_traps=$(trap -p EXIT HUP INT TERM)
+    _pr_fetch_commit origin 123 > "$2.oid"
+    [ "$(cat "$2.oid")" = "$TEST_PR_SHA" ]
+    [ "$(trap -p EXIT HUP INT TERM)" = "$saved_traps" ]
+    if _pr_fetch_commit origin 999; then exit 1; fi
+    [ "$(trap -p EXIT HUP INT TERM)" = "$saved_traps" ]
+  ' _ "$PROJECT_ROOT" "$TEST_MOCK_BIN/exit-marker"
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_MOCK_BIN/exit-marker")" = 'caller exit' ]
+  assert_pr_fetch_cleaned_up
+}
+
 @test "cmd_pr creates worktree from GitHub pull request ref" {
   cmd_pr 123 --remote origin --no-copy --no-hooks --yes
 
@@ -274,6 +488,7 @@ SCRIPT
 
 @test "pr CLI falls back to the pull request ref when native checkout fails" {
   mock_failed_native_checkout
+  interleave_pr_fetch
 
   run "$PROJECT_ROOT/bin/gtr" pr 123 --no-copy --no-hooks --yes
 
@@ -281,6 +496,7 @@ SCRIPT
   [ "$(git -C "$TEST_WORKTREES_DIR/feature-from-pr" rev-parse HEAD)" = "$TEST_PR_SHA" ]
   [ "$(git config remote.gtr-pr-123-base.gh-resolved)" = base ]
   [[ "$output" == *"retrying with the pull request ref"* ]]
+  assert_pr_fetch_cleaned_up
 }
 
 @test "pr CLI fallback preserves an existing branch at a different commit" {
