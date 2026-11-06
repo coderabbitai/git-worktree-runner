@@ -140,21 +140,21 @@ _clean_branch_matches_pr_state() {
   return 1
 }
 
-# Delete only the exact tip authorized by the provider. A separate tip read
-# followed by `git branch -D` would still race a concurrent branch update.
-# Usage: _clean_delete_validated_branch repo_root branch branch_tip
-_clean_delete_validated_branch() {
+# Explain why PR cleanup retains the branch after removing its worktree.
+# These reads are diagnostics, not authorization to delete: reservations can
+# change after any snapshot without changing the provider-validated tip.
+# Usage: _clean_report_retained_branch repo_root branch branch_tip
+_clean_report_retained_branch() {
   local repo_root="$1" branch="$2" branch_tip="$3"
-  local branch_ref="refs/heads/$branch" worktrees delete_output
+  local branch_ref="refs/heads/$branch" worktrees current_tip
 
-  # update-ref does not provide git branch's checked-out branch protection.
   if ! worktrees=$(git -C "$repo_root" worktree list --porcelain 2>/dev/null); then
     log_warn "Kept branch $branch (could not verify remaining worktrees)"
-    return 1
+    return 0
   fi
   if printf '%s\n' "$worktrees" | grep -Fxq "branch $branch_ref"; then
     log_warn "Kept branch $branch (still checked out in another worktree)"
-    return 1
+    return 0
   fi
 
   # Rebase/bisect can detach HEAD while still reserving the original branch.
@@ -163,7 +163,7 @@ _clean_delete_validated_branch() {
   if ! common_dir=$(git -C "$repo_root" rev-parse --git-common-dir 2>/dev/null) || \
      [ -z "$common_dir" ]; then
     log_warn "Kept branch $branch (could not verify rebase/bisect state)"
-    return 1
+    return 0
   fi
   case "$common_dir" in /*) ;; *) common_dir="$repo_root/$common_dir" ;; esac
   for state_file in "$common_dir"/rebase-merge/head-name \
@@ -173,26 +173,30 @@ _clean_delete_validated_branch() {
     [ -e "$state_file" ] || continue
     if ! state_branch=$(cat "$state_file" 2>/dev/null) || [ -z "$state_branch" ]; then
       log_warn "Kept branch $branch (could not verify rebase/bisect state)"
-      return 1
+      return 0
     fi
     if [ "$state_branch" = "$branch_ref" ] || [ "$state_branch" = "$branch" ]; then
       log_warn "Kept branch $branch (rebase or bisect in progress)"
-      return 1
+      return 0
     fi
   done
 
-  # --no-deref also prevents deleting a different branch if this ref becomes
-  # symbolic between validation and deletion. Never retry without the old tip.
-  if ! delete_output=$(git -C "$repo_root" update-ref --no-deref -d \
-    "$branch_ref" "$branch_tip" 2>&1); then
-    log_warn "Kept branch $branch (tip changed or deletion failed): $delete_output"
-    return 1
+  if git -C "$repo_root" symbolic-ref --quiet "$branch_ref" >/dev/null 2>&1; then
+    log_warn "Kept branch $branch (branch ref is symbolic)"
+    return 0
+  fi
+  if ! current_tip=$(git -C "$repo_root" rev-parse --verify "$branch_ref^{commit}" 2>/dev/null) || \
+     [ "$current_tip" != "$branch_tip" ]; then
+    log_warn "Kept branch $branch (tip changed or could not be verified)"
+    return 0
   fi
 
-  # Match git branch's metadata cleanup only after successful ref deletion.
-  # A missing section is normal; metadata cleanup must not abort postRemove.
-  git -C "$repo_root" config --local --remove-section "branch.$branch" 2>/dev/null || true
-  log_info "Branch deleted: $branch"
+  # update-ref's expected old OID protects the tip, but not a concurrent raw
+  # git checkout/worktree add. git branch -D cannot take an expected old OID,
+  # and a gtr-only mutex would not coordinate those raw Git commands. Keep the
+  # ref, reflog and config even with --force until Git offers both protections
+  # in one operation. Never clean branch metadata without deleting its ref.
+  log_warn "Kept branch $branch (automatic deletion cannot safely exclude concurrent checkouts)"
 }
 
 # Remove worktrees whose PRs/MRs match requested cleanup states (handles squash merges)
@@ -253,9 +257,9 @@ _clean_prs() {
           # Check if branch has a PR/MR matching any requested state
           if _clean_branch_matches_pr_state "$provider" "$branch" "$target_ref" "$branch_tip" "$merged_mode" "$closed_mode"; then
             if [ "$dry_run" -eq 1 ]; then
-              log_info "[dry-run] Would remove: $branch ($dir)"
+              log_info "[dry-run] Would remove: $branch ($dir); branch retained"
               removed=$((removed + 1))
-            elif [ "$yes_mode" -eq 1 ] || prompt_yes_no "Remove worktree and delete branch '$branch'?"; then
+            elif [ "$yes_mode" -eq 1 ] || prompt_yes_no "Remove worktree for '$branch' (keep branch)?"; then
               log_step "Removing worktree: $branch"
 
               if ! run_hooks_in preRemove "$dir" \
@@ -280,7 +284,7 @@ _clean_prs() {
               fi
 
               if remove_worktree "$dir" "$force"; then
-                _clean_delete_validated_branch "$repo_root" "$branch" "$branch_tip" || true
+                _clean_report_retained_branch "$repo_root" "$branch" "$branch_tip"
                 removed=$((removed + 1))
 
                 if ! run_hooks postRemove \
