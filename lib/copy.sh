@@ -49,6 +49,14 @@ _copy_discovery_records() {
   done
 }
 
+# Preserve find's status while converting its NUL records to the pattern format.
+# Keep pipefail local even when a caller invokes copying in an if/|| context.
+# Usage: _copy_find_records <find arguments, including -print0>
+_copy_find_records() (
+  set -o pipefail
+  find "$@" 2>/dev/null | _copy_discovery_records
+)
+
 _copy_move_os=""
 
 # Plain mv treats a destination symlink to a directory as a container. The
@@ -76,11 +84,17 @@ _copy_tree_entry() {
       # Without -p, a raced existing directory cannot be treated as ours to chmod.
       mkdir -m 700 "$dest" || return 1
     fi
-    while IFS= read -r -d '' child; do
-      name="${child##*/}"
-      case "$name" in .[gG][iI][tT]) continue ;; esac
-      _copy_tree_entry "$child" "$dest/$name" || return 1
-    done < <(find "$src" -mindepth 1 -maxdepth 1 -print0)
+    # A process substitution loses find's status. Keep raw NUL records for tree
+    # entries (which may contain newlines) and check both producer and consumer.
+    (
+      set -o pipefail
+      find "$src" -mindepth 1 -maxdepth 1 -print0 |
+        while IFS= read -r -d '' child; do
+          name="${child##*/}"
+          case "$name" in .[gG][iI][tT]) continue ;; esac
+          _copy_tree_entry "$child" "$dest/$name" || return 1
+        done
+    ) || return 1
     if [ -n "$final_mode" ]; then
       # Recheck before chmod so a replacement symlink is not followed.
       [ -L "$dest" ] && return 1
@@ -219,7 +233,10 @@ _fast_copy_dir() {
       ;;
   esac
   # Never introduce Git control files, including nested repositories.
-  find "$staging" -iname .git -prune -exec rm -rf -- {} + 2>/dev/null || true
+  if ! find "$staging" -iname .git -prune -exec rm -rf -- {} + 2>/dev/null; then
+    rm -rf -- "$staging"
+    return 1
+  fi
   local remaining_git
   if ! remaining_git=$(find "$staging" -iname .git -print -quit 2>/dev/null) ||
     [ -n "$remaining_git" ]; then
@@ -292,7 +309,7 @@ _copy_pattern_file() {
 # Process a single glob pattern: expand via globstar or find fallback, copy matching files.
 # Must be called from within the source directory with shell options already configured.
 # Prints the number of files copied to stdout.
-# Returns nonzero if any file copy fails; intentional skips do not count as failures.
+# Returns nonzero if discovery or copying fails; intentional skips are successful.
 # Usage: _expand_and_copy_pattern <pattern> <dst_root> <excludes> <preserve_paths> <dry_run> <have_globstar>
 _expand_and_copy_pattern() {
   local pattern="$1" dst_root="$2" excludes="$3"
@@ -305,12 +322,20 @@ _expand_and_copy_pattern() {
     # won't match across the required '/' separator. For **/-prefixed patterns,
     # also search with the suffix alone so root-level files are found.
     local _find_results
-    _find_results=$(find . -path "./$pattern" -type f -print0 2>/dev/null | _copy_discovery_records)
+    if ! _find_results=$(_copy_find_records . -path "./$pattern" -type f -print0); then
+      log_warn "Failed to discover files for pattern: $pattern"
+      printf '0'
+      return 1
+    fi
     case "$pattern" in
       \*\*/*)
         local _suffix="${pattern#\*\*/}"
         local _root_results
-        _root_results=$(find . -maxdepth 1 -path "./$_suffix" -type f -print0 2>/dev/null | _copy_discovery_records)
+        if ! _root_results=$(_copy_find_records . -maxdepth 1 -path "./$_suffix" -type f -print0); then
+          log_warn "Failed to discover files for pattern: $pattern"
+          printf '0'
+          return 1
+        fi
         if [ -n "$_root_results" ]; then
           if [ -n "$_find_results" ]; then
             _find_results="$_find_results"$'\n'"$_root_results"
@@ -629,8 +654,7 @@ _selective_copy_dir() {
   fi
 
   local find_results
-  find_results=$(set -o pipefail; find "$dir_path" -mindepth 1 -maxdepth 1 -print0 2>/dev/null |
-    _copy_discovery_records) || return 1
+  find_results=$(_copy_find_records "$dir_path" -mindepth 1 -maxdepth 1 -print0) || return 1
 
   local child_path child_name child_rel
   while IFS= read -r child_path; do
@@ -693,6 +717,7 @@ _directory_pattern_depth() {
 # Literal paths use a direct filesystem check. Missing bare basenames retain
 # the legacy recursive fallback, batched into one scan. Single-star path globs
 # are bounded to their explicit component depth; only ** patterns recurse.
+# Returns nonzero on discovery failure after restoring cwd; discard partial output.
 # Usage: _resolve_directory_patterns <src_root> <dir_patterns>
 _resolve_directory_patterns() {
   local src_root="$1"
@@ -701,7 +726,7 @@ _resolve_directory_patterns() {
   old_pwd=$(pwd)
   cd "$src_root" || return 1
 
-  local pattern
+  local pattern failed=0
   local bounded_max_depth=0
   local -a bounded_expr=()
   local -a recursive_expr=()
@@ -733,7 +758,10 @@ _resolve_directory_patterns() {
             bounded_expr+=("-path" "./$pattern")
             ;;
           *)
-            find_results=$(find . -maxdepth 1 -type d -name "$pattern" -print0 2>/dev/null | _copy_discovery_records)
+            if ! find_results=$(_copy_find_records . -maxdepth 1 -type d -name "$pattern" -print0); then
+              failed=1
+              continue
+            fi
             if [ -z "$find_results" ]; then
               [ "${#recursive_expr[@]}" -gt 0 ] && recursive_expr+=("-o")
               recursive_expr+=("-name" "$pattern")
@@ -762,14 +790,18 @@ $dir_patterns
 EOF
 
   if [ "${#bounded_expr[@]}" -gt 0 ]; then
-    find . -maxdepth "$bounded_max_depth" -type d \( "${bounded_expr[@]}" \) -print0 2>/dev/null | _copy_discovery_records
+    _copy_find_records . -maxdepth "$bounded_max_depth" -type d \( "${bounded_expr[@]}" \) -print0 || failed=1
   fi
 
   if [ "${#recursive_expr[@]}" -gt 0 ]; then
-    find . -type d \( "${recursive_expr[@]}" \) -print0 2>/dev/null | _copy_discovery_records
+    _copy_find_records . -type d \( "${recursive_expr[@]}" \) -print0 || failed=1
   fi
 
   cd "$old_pwd" || return 1
+  if [ "$failed" -ne 0 ]; then
+    log_warn "Failed to discover directories to copy"
+  fi
+  return "$failed"
 }
 
 # Copy already-resolved directories from a source root.
