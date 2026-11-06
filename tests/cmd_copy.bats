@@ -354,6 +354,66 @@ teardown() {
   [ ! -e "$TEST_WORKTREES_DIR/stray/.env" ]
 }
 
+@test "copy --all fails when its only registered detached worktree is missing" {
+  git worktree remove "$TEST_WT_PATH"
+  local detached="$TEST_WORKTREES_DIR/detached"
+  git worktree add --detach "$detached" HEAD
+  rm -rf "$detached"
+
+  run cmd_copy --all -- .env
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"No worktrees found"* ]]
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all --dry-run -- .env
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"No worktrees found"* ]]
+  [ ! -e "$detached" ]
+}
+
+@test "copy --all fails when a missing attached worktree and explicit main source are its only targets" {
+  rm -rf "$TEST_WT_PATH"
+
+  run "$PROJECT_ROOT/bin/gtr" copy 1 --all -- .env
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"No worktrees found"* ]]
+  [ "$(cat "$TEST_REPO/.env")" = 'secret=value' ]
+  [ ! -e "$TEST_WT_PATH" ]
+}
+
+@test "copy --all succeeds for a live destination alongside a missing worktree" {
+  local detached="$TEST_WORKTREES_DIR/detached"
+  git worktree add --detach "$detached" HEAD
+  rm -rf "$detached"
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all --dry-run -- .env
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Would copy 1 file(s)')" -eq 1 ]
+  [ ! -e "$TEST_WT_PATH/.env" ]
+  [ ! -e "$detached" ]
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Copied 1 file(s)')" -eq 1 ]
+  [ "$(cat "$TEST_WT_PATH/.env")" = 'secret=value' ]
+  [ ! -e "$detached" ]
+}
+
+@test "copy --all remains a successful no-op when only its source worktree resolves" {
+  local detached="$TEST_WORKTREES_DIR/detached"
+  git worktree add --detach "$detached" HEAD
+  rm -rf "$detached"
+  echo 'source=value' > "$TEST_WT_PATH/.env"
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all --from copy-target -- .env
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No files copied"* ]]
+  [ "$(cat "$TEST_WT_PATH/.env")" = 'source=value' ]
+  [ "$(cat "$TEST_REPO/.env")" = 'secret=value' ]
+  [ ! -e "$detached" ]
+}
+
 @test "cmd_copy --all copies to nested registered worktree only" {
   mkdir -p "$TEST_WORKTREES_DIR/jsmith"
   git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature

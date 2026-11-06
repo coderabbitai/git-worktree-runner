@@ -90,7 +90,7 @@ cmd_copy() {
   fi
 
   # Process each target
-  local copied_any=0
+  local copied_any=0 resolved_worktree=0
   local target_id processed_path
   local -a processed_paths=()
   for target_id in "${targets[@]}"; do
@@ -98,6 +98,10 @@ cmd_copy() {
     resolve_worktree "$target_id" "$repo_root" "$base_dir" "$prefix" || continue
   
     dst_path="$_ctx_worktree_path" dst_branch="$_ctx_branch"
+
+    # Count resolved non-main targets before excluding the source so a
+    # source-only --all remains a valid no-op.
+    [ "$_ctx_is_main" = "0" ] && resolved_worktree=1
 
     # Skip if source == destination
     [ "$src_path" = "$dst_path" ] && continue
@@ -129,6 +133,11 @@ cmd_copy() {
     fi
     copied_any=1
   done
+
+  if [ "$all_mode" -eq 1 ] && [ "$resolved_worktree" -eq 0 ]; then
+    log_error "No worktrees found"
+    return 1
+  fi
 
   if [ "$copied_any" -eq 0 ]; then
     log_warn "No files copied (source and target may be the same)"
