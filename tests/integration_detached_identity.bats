@@ -174,7 +174,7 @@ assert_loose_detached() {
 }
 
 # Stub only the external provider boundary. Cleanup, tip checks, hooks, Git
-# removal and ref deletion all run through the real CLI in a disposable repo.
+# removal and branch retention all run through the real CLI in a disposable repo.
 setup_cleanup_provider() {
   git config gtr.provider github
   export DETACHED_TEST_CALLS="$TEST_REPO/provider-calls"
@@ -214,6 +214,7 @@ SH
   run "$PROJECT_ROOT/bin/gtr" clean "$mode" --force --yes --dry-run
   [ "$status" -eq 0 ]
   [[ "$output" == *"Would remove: (detached)"* ]]
+  [[ "$output" == *"branch retained"* ]]
   [ -f "$TEST_WORKTREES_DIR/real-branch/.git" ]
   [ "$(git show-ref --heads)" = "$ORIGINAL_REFS" ]
   assert_loose_detached
@@ -223,7 +224,8 @@ SH
   [ "$status" -eq 0 ]
   [ ! -e "$TEST_WORKTREES_DIR/real-branch" ]
   ! git worktree list --porcelain | grep -Fx "worktree $TEST_WORKTREES_DIR/real-branch"
-  ! git show-ref --verify --quiet 'refs/heads/(detached)'
+  [[ "$output" == *"Kept branch (detached)"* ]]
+  [ "$(git show-ref --heads)" = "$ORIGINAL_REFS" ]
   assert_loose_detached
   [ "$(wc -l < "$DETACHED_TEST_CALLS" | tr -d ' ')" -eq 2 ]
   ! grep -vF -- '--head (detached)' "$DETACHED_TEST_CALLS"
@@ -254,7 +256,7 @@ assert_unborn_main_cleanup() {
   [ -d "$TEST_REPO/.git" ]
   [ "$(git symbolic-ref HEAD)" = refs/heads/unborn-main ]
   ! git show-ref --verify --quiet refs/heads/unborn-main
-  [ "$(git show-ref --heads)" = "$(printf '%s\n' "$ORIGINAL_REFS" | grep -vF 'refs/heads/(detached)')" ]
+  [ "$(git show-ref --heads)" = "$ORIGINAL_REFS" ]
 }
 
 @test "merged cleanup processes linked worktrees when main has an unborn branch" {
