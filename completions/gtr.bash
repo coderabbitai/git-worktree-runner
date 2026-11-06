@@ -16,12 +16,15 @@
 #   Add to your ~/.bashrc:
 #     source /path/to/git-worktree-runner/completions/gtr.bash
 
-# Fill COMPREPLY with safely quoted local branches and target 1 matching the typed prefix.
+# Embedded by the completion and init generators; keep cached output self-contained.
+
+# Fill COMPREPLY with safely quoted candidates matching the typed prefix.
 # Decode only quoting syntax in the prefix; never evaluate shell expansions.
 # Escape each candidate for the active single/double/unquoted context.
-_git_gtr_complete_targets() {
+# Candidates are newline-separated literal strings, including path-derived text.
+_git_gtr_quote_targets() {
   local raw_prefix="$1" prefix="" quote="" before_quote="" escaped=0 char i
-  local branch branches quoted fragment ansi=0 dollar=0 was_dollar
+  local branch candidates="$2" quoted fragment ansi=0 dollar=0 was_dollar
   local single_escape="'\\''" ansi_escape="\\'"
   local dollar_escape='\$' tick_escape='\`' double_escape='\"' history_escape='"\!"'
   for ((i=0; i<${#raw_prefix}; i++)); do
@@ -32,8 +35,8 @@ _git_gtr_complete_targets() {
       # Double quotes only consume backslashes before these shell characters.
       if [ "$quote" = '"' ]; then
         case "$char" in
-          '"'|'$'|'`'|'\') ;;
-          *) prefix+='\' ;;
+          '"'|'$'|'`'|"\\") ;;
+          *) prefix+="\\" ;;
         esac
       fi
       prefix+="$char"
@@ -43,14 +46,14 @@ _git_gtr_complete_targets() {
       before_quote=""
       ansi=0
     elif [ "$quote" = "'" ]; then
-      if [ "$ansi" -eq 1 ] && [ "$char" = '\' ]; then
+      if [ "$ansi" -eq 1 ] && [ "$char" = "\\" ]; then
         escaped=1
       else
         prefix+="$char"
       fi
     else
       case "$char" in
-        '\') escaped=1 ;;
+        "\\") escaped=1 ;;
         "'"|'"')
           if [ -z "$quote" ]; then
             if [ "$char" = "'" ] && [ "$was_dollar" -eq 1 ]; then
@@ -68,7 +71,6 @@ _git_gtr_complete_targets() {
       esac
     fi
   done
-  branches=$(git branch --no-column --format='%(refname:short)' 2>/dev/null || true)
   COMPREPLY=()
   # compgen -W evaluates its word list; treat branch names as literal data instead.
   while IFS= read -r branch; do
@@ -79,14 +81,18 @@ _git_gtr_complete_targets() {
       case "$quote" in
         "'")
           if [ "$ansi" -eq 1 ]; then
-            quoted="${fragment//\'/$ansi_escape}"
+            # Literal replacement works on Bash 3.2 and with patsub_replacement.
+            quoted="${fragment//\\/\\\\}"
+            quoted="${quoted//\'/$ansi_escape}"
           else
             quoted="${fragment//\'/$single_escape}"
           fi
           quoted+="'"
           ;;
         '"')
-          quoted="${fragment//\$/$dollar_escape}"
+          # Escape existing backslashes before adding escapes for shell syntax.
+          quoted="${fragment//\\/\\\\}"
+          quoted="${quoted//\$/$dollar_escape}"
           quoted="${quoted//\`/$tick_escape}"
           quoted="${quoted//\"/$double_escape}"
           # Leave double quotes to escape history expansion without adding a backslash.
@@ -97,12 +103,18 @@ _git_gtr_complete_targets() {
       COMPREPLY+=("$quoted")
     fi
   done <<EOF
-1
-$branches
+$candidates
 EOF
   # Candidates are already escaped; avoid a second quoting pass on newer Bash.
   builtin compopt +o fullquote 2>/dev/null || true
   builtin compopt -o noquote +o filenames 2>/dev/null || true
+}
+
+# Complete local branches and target 1 using the shared context-aware quoting helper.
+_git_gtr_complete_targets() {
+  local branches
+  branches=$(git branch --no-column --format='%(refname:short)' 2>/dev/null || true)
+  _git_gtr_quote_targets "$1" "1"$'\n'"$branches"
 }
 
 # Dispatch git gtr completion using the current word and arguments from bash-completion.
