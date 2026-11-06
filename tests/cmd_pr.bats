@@ -2,6 +2,7 @@
 # Integration tests for cmd_pr in lib/commands/pr.sh
 
 load test_helper
+load next_steps_helper
 
 setup() {
   setup_integration_repo
@@ -94,6 +95,51 @@ teardown() {
   [ "$(git -C "$TEST_WORKTREES_DIR/review-123" rev-parse HEAD)" = "$TEST_PR_SHA" ]
   [ "$(git -C "$TEST_WORKTREES_DIR/review-123" rev-parse --abbrev-ref HEAD)" = "review/pr-123" ]
   [ "$(git config branch.review/pr-123.merge)" = "refs/heads/feature/from-pr" ]
+}
+
+@test "pr CLI next steps quote the PR head branch for native and fallback checkout" {
+  export TEST_PR_HEAD_REF='pr$(>next-steps-marker)'
+  git check-ref-format --branch "$TEST_PR_HEAD_REF" >/dev/null
+  cat > "$TEST_MOCK_BIN/gh" <<'SCRIPT'
+#!/usr/bin/env bash
+if [ "$1" = pr ] && [ "$2" = view ]; then
+  printf '123\t%s\tocto\texample\thttps://github.com/base/example/pull/123\ttrue\ttrue\n' "$TEST_PR_HEAD_REF"
+elif [ "$1" = pr ] && [ "$2" = checkout ]; then
+  if [ "$3" = --help ]; then
+    printf '      --worktree path\n'
+  else
+    # cmd_pr supplies: pr checkout SELECTOR --worktree PATH --branch BRANCH
+    git worktree add --quiet -b "$7" "$5" "$TEST_PR_SHA"
+  fi
+fi
+SCRIPT
+  local mode path
+  for mode in native fallback; do
+    local args=()
+    [ "$mode" = fallback ] && args=(--remote origin)
+    run "$PROJECT_ROOT/bin/gtr" pr 123 "${args[@]}" --no-copy --no-hooks --yes
+    [ "$status" -eq 0 ]
+    path="$TEST_WORKTREES_DIR/$(sanitize_branch_name "$TEST_PR_HEAD_REF")"
+    assert_next_steps_suggestions "$TEST_PR_HEAD_REF" "$path"
+    git worktree remove "$path"
+    git branch -D "$TEST_PR_HEAD_REF"
+  done
+}
+
+@test "pr CLI next steps select folder aliases and quote colliding branch names" {
+  git branch -m collision-folder
+  local folder branch
+  for folder in review-folder collision-folder; do
+    branch="$folder"'`>next-steps-marker`'
+    git check-ref-format --branch "$branch" >/dev/null
+    run "$PROJECT_ROOT/bin/gtr" pr 123 --branch "$branch" --folder "$folder" --remote origin --no-copy --no-hooks --yes
+    [ "$status" -eq 0 ]
+    if [ "$folder" = collision-folder ]; then
+      assert_next_steps_suggestions "$branch" "$TEST_WORKTREES_DIR/$folder"
+    else
+      assert_next_steps_suggestions "$folder" "$TEST_WORKTREES_DIR/$folder"
+    fi
+  done
 }
 
 @test "cmd_pr fallback applies an ordinary folder prefix" {

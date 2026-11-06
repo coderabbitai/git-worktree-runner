@@ -57,9 +57,11 @@ _post_create_next_steps() {
 
   echo ""
   echo "Next steps:"
-  echo "  git gtr editor $next_steps_id  # Open in editor"
-  echo "  git gtr ai $next_steps_id      # Start AI tool"
-  echo "  cd \"\$(git gtr go $next_steps_id)\"  # Navigate to worktree"
+  # Quote the resolved identifier wherever the user will paste it as shell input.
+  printf '  git gtr editor %q  # Open in editor\n' "$next_steps_id"
+  printf '  git gtr ai %q      # Start AI tool\n' "$next_steps_id"
+  # shellcheck disable=SC2016  # Print command substitution for the user's shell.
+  printf '  cd "$(git gtr go %q)"  # Navigate to worktree\n' "$next_steps_id"
 }
 
 # Determine the base ref for worktree creation
