@@ -185,9 +185,238 @@ teardown() {
   [ -f "$TEST_WORKTREES_DIR/copy-target-2/.env" ]
 }
 
+@test "copy --all copies each registered checkout once including duplicate branches and detached HEAD" {
+  local duplicate="$TEST_WORKTREES_DIR/nested/duplicate"
+  local detached="$TEST_WORKTREES_DIR/detached"
+  local external="$(cd "$BATS_TEST_TMPDIR" && pwd -P)/external checkout"
+  git worktree add --force "$duplicate" copy-target
+  git worktree add --detach "$detached" HEAD
+  # A linked checkout of the main branch must not resolve back to the source.
+  git worktree add --force "$external" "$(get_current_branch "$TEST_REPO")"
+  mkdir -p "$TEST_WORKTREES_DIR/stray"
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
+
+  [ "$status" -eq 0 ]
+  local path
+  for path in "$TEST_WT_PATH" "$duplicate" "$detached" "$external"; do
+    [ "$(cat "$path/.env")" = "secret=value" ]
+  done
+  [ "$(printf '%s\n' "$output" | grep -cF 'Copied 1 file(s)')" -eq 4 ]
+  [ ! -e "$TEST_WORKTREES_DIR/nested/.env" ]
+  [ ! -e "$TEST_WORKTREES_DIR/stray/.env" ]
+}
+
+@test "copy --all succeeds when the only linked worktree is detached" {
+  git worktree remove "$TEST_WT_PATH"
+  local detached="$TEST_WORKTREES_DIR/detached"
+  git worktree add --detach "$detached" HEAD
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$detached/.env")" = "secret=value" ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Copied 1 file(s)')" -eq 1 ]
+}
+
+@test "copy --all --from skips only the source checkout of a shared branch" {
+  local duplicate="$TEST_WORKTREES_DIR/duplicate"
+  local detached="$TEST_WORKTREES_DIR/detached"
+  git worktree add --force "$duplicate" copy-target
+  git worktree add --detach "$detached" HEAD
+  echo 'source=value' > "$TEST_WT_PATH/.env"
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all --from copy-target -- .env
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$duplicate/.env")" = 'source=value' ]
+  [ "$(cat "$detached/.env")" = 'source=value' ]
+  [ "$(cat "$TEST_WT_PATH/.env")" = 'source=value' ]
+  [ "$(cat "$TEST_REPO/.env")" = 'secret=value' ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Copied 1 file(s)')" -eq 2 ]
+}
+
+@test "copy --all accepts a detached source and deduplicates overlapping explicit targets" {
+  local detached="$TEST_WORKTREES_DIR/detached"
+  git worktree add --detach "$detached" HEAD
+  echo 'source=value' > "$detached/.env"
+
+  run "$PROJECT_ROOT/bin/gtr" copy 1 copy-target "path:$TEST_WT_PATH" \
+    --all --from "path:$detached" -- .env
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_WT_PATH/.env")" = 'source=value' ]
+  [ "$(cat "$TEST_REPO/.env")" = 'source=value' ]
+  [ "$(cat "$detached/.env")" = 'source=value' ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Copied 1 file(s)')" -eq 2 ]
+}
+
+@test "copy --all preserves escaped path characters with old Git listing fallback" {
+  local path="$TEST_WORKTREES_DIR/\"quotes\" café \\n \\t \$(touch should-not-exist)"$'\t'
+  git worktree add --detach "$path" HEAD
+  git() {
+    case "$*" in *"worktree list --porcelain -z") return 1 ;; esac
+    command git "$@"
+  }
+
+  run cmd_copy --all -- .env
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$path/.env")" = 'secret=value' ]
+  [ "$(cat "$TEST_WT_PATH/.env")" = 'secret=value' ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Copied 1 file(s)')" -eq 2 ]
+  [ ! -e "$TEST_REPO/should-not-exist" ]
+}
+
+@test "copy --all keeps literal escapes and trailing newlines in distinct registered paths" {
+  if ! git worktree list --porcelain -z >/dev/null 2>&1; then
+    skip "git worktree list --porcelain -z is not available"
+  fi
+  local newline_path="$TEST_WORKTREES_DIR/line"$'\n'
+  local literal_path="$TEST_WORKTREES_DIR/line\\n"
+  git worktree add --detach "$newline_path" HEAD
+  git worktree add --detach "$literal_path" HEAD
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$newline_path/.env")" = 'secret=value' ]
+  [ "$(cat "$literal_path/.env")" = 'secret=value' ]
+  [ "$(cat "$TEST_WT_PATH/.env")" = 'secret=value' ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Copied 1 file(s)')" -eq 3 ]
+  [ ! -e "$TEST_WORKTREES_DIR/line/.env" ]
+}
+
+@test "copy --all dry-run and configured patterns cover each duplicate and detached checkout once" {
+  local duplicate="$TEST_WORKTREES_DIR/duplicate"
+  local detached="$TEST_WORKTREES_DIR/detached"
+  git worktree add --force "$duplicate" copy-target
+  git worktree add --detach "$detached" HEAD
+  mkdir -p "$TEST_REPO/vendor/cache"
+  echo settings > "$TEST_REPO/vendor/settings.json"
+  echo excluded > "$TEST_REPO/vendor/token.pem"
+  echo excluded > "$TEST_REPO/vendor/cache/data"
+  echo excluded > "$TEST_REPO/.env.private"
+  git config gtr.copy.include '.env*'
+  git config --add gtr.copy.exclude '.env.private'
+  git config --add gtr.copy.exclude '*.pem'
+  git config gtr.copy.includeDirs vendor/
+  git config gtr.copy.excludeDirs vendor/cache
+
+  run "$PROJECT_ROOT/bin/gtr" copy copy-target --all --dry-run
+
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Would copy 1 file(s)')" -eq 3 ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Would copy 1 directories')" -eq 3 ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Would copy to: copy-target')" -eq 2 ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Would copy to: (detached)')" -eq 1 ]
+  local path
+  for path in "$TEST_WT_PATH" "$duplicate" "$detached"; do
+    [ ! -e "$path/.env" ]
+    [ ! -e "$path/vendor" ]
+  done
+
+  run "$PROJECT_ROOT/bin/gtr" copy copy-target --all
+
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Copied 1 file(s)')" -eq 3 ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Copied 1 directories')" -eq 3 ]
+  for path in "$TEST_WT_PATH" "$duplicate" "$detached"; do
+    [ "$(cat "$path/.env")" = 'secret=value' ]
+    [ "$(cat "$path/vendor/settings.json")" = settings ]
+    [ ! -e "$path/.env.private" ]
+    [ ! -e "$path/vendor/token.pem" ]
+    [ ! -e "$path/vendor/cache" ]
+  done
+}
+
+@test "copy --all propagates copy failures in detached worktrees" {
+  local detached="$TEST_WORKTREES_DIR/detached"
+  git worktree add --detach "$detached" HEAD
+  mkdir "$detached/.env"
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Failed to copy .env"* ]]
+  [ -d "$detached/.env" ]
+  [ ! -e "$detached/.env/.env" ]
+}
+
+@test "copy --all fails when only unregistered directories remain" {
+  git worktree remove "$TEST_WT_PATH"
+  mkdir "$TEST_WORKTREES_DIR/stray"
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"No worktrees found"* ]]
+  [ ! -e "$TEST_WORKTREES_DIR/stray/.env" ]
+}
+
+@test "copy --all fails when its only registered detached worktree is missing" {
+  git worktree remove "$TEST_WT_PATH"
+  local detached="$TEST_WORKTREES_DIR/detached"
+  git worktree add --detach "$detached" HEAD
+  rm -rf "$detached"
+
+  run cmd_copy --all -- .env
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"No worktrees found"* ]]
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all --dry-run -- .env
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"No worktrees found"* ]]
+  [ ! -e "$detached" ]
+}
+
+@test "copy --all fails when a missing attached worktree and explicit main source are its only targets" {
+  rm -rf "$TEST_WT_PATH"
+
+  run "$PROJECT_ROOT/bin/gtr" copy 1 --all -- .env
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"No worktrees found"* ]]
+  [ "$(cat "$TEST_REPO/.env")" = 'secret=value' ]
+  [ ! -e "$TEST_WT_PATH" ]
+}
+
+@test "copy --all succeeds for a live destination alongside a missing worktree" {
+  local detached="$TEST_WORKTREES_DIR/detached"
+  git worktree add --detach "$detached" HEAD
+  rm -rf "$detached"
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all --dry-run -- .env
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Would copy 1 file(s)')" -eq 1 ]
+  [ ! -e "$TEST_WT_PATH/.env" ]
+  [ ! -e "$detached" ]
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all -- .env
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -cF 'Copied 1 file(s)')" -eq 1 ]
+  [ "$(cat "$TEST_WT_PATH/.env")" = 'secret=value' ]
+  [ ! -e "$detached" ]
+}
+
+@test "copy --all remains a successful no-op when only its source worktree resolves" {
+  local detached="$TEST_WORKTREES_DIR/detached"
+  git worktree add --detach "$detached" HEAD
+  rm -rf "$detached"
+  echo 'source=value' > "$TEST_WT_PATH/.env"
+
+  run "$PROJECT_ROOT/bin/gtr" copy --all --from copy-target -- .env
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No files copied"* ]]
+  [ "$(cat "$TEST_WT_PATH/.env")" = 'source=value' ]
+  [ "$(cat "$TEST_REPO/.env")" = 'secret=value' ]
+  [ ! -e "$detached" ]
+}
+
 @test "cmd_copy --all copies to nested registered worktree only" {
   mkdir -p "$TEST_WORKTREES_DIR/jsmith"
-  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature --quiet
+  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature
 
   run cmd_copy --all -- ".env"
   [ "$status" -eq 0 ]

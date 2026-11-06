@@ -68,29 +68,51 @@ cmd_copy() {
 
   # Build target list for --all mode
   if [ "$all_mode" -eq 1 ]; then
-    local all_branches
-    all_branches=$(list_worktree_branches "$base_dir" "$prefix" "$repo_root")
-    if [ -z "$all_branches" ]; then
+    local records line is_main="" found_worktree=0
+    records=$(list_worktree_records "$repo_root") || exit 1
+    # Branch names cannot distinguish duplicate checkouts or detached HEADs.
+    # Keep paths escaped until resolve_worktree validates each exact identity.
+    while IFS= read -r line; do
+      case "$line" in
+        "is_main "*) is_main="${line#is_main }" ;;
+        "path "*)
+          if [ "$is_main" = "0" ]; then
+            targets+=("path:${line#path }")
+            found_worktree=1
+          fi
+          ;;
+      esac
+    done <<< "$records"
+    if [ "$found_worktree" -eq 0 ]; then
       log_error "No worktrees found"
       exit 1
     fi
-    local _branch
-    while IFS= read -r _branch; do
-      [ -n "$_branch" ] && targets+=("$_branch")
-    done <<< "$all_branches"
   fi
 
   # Process each target
-  local copied_any=0
-  local target_id
+  local copied_any=0 resolved_worktree=0
+  local target_id processed_path
+  local -a processed_paths=()
   for target_id in "${targets[@]}"; do
     local dst_path dst_branch
     resolve_worktree "$target_id" "$repo_root" "$base_dir" "$prefix" || continue
   
     dst_path="$_ctx_worktree_path" dst_branch="$_ctx_branch"
 
+    # Count resolved non-main targets before excluding the source so a
+    # source-only --all remains a valid no-op.
+    [ "$_ctx_is_main" = "0" ] && resolved_worktree=1
+
     # Skip if source == destination
     [ "$src_path" = "$dst_path" ] && continue
+
+    # Explicit targets can overlap --all, including via branch/folder aliases.
+    if [ "$all_mode" -eq 1 ]; then
+      for processed_path in "${processed_paths[@]}"; do
+        [ "$dst_path" = "$processed_path" ] && continue 2
+      done
+      processed_paths+=("$dst_path")
+    fi
 
     if [ "$dry_run" -eq 1 ]; then
       log_step "[dry-run] Would copy to: $dst_branch"
@@ -111,6 +133,11 @@ cmd_copy() {
     fi
     copied_any=1
   done
+
+  if [ "$all_mode" -eq 1 ] && [ "$resolved_worktree" -eq 0 ]; then
+    log_error "No worktrees found"
+    return 1
+  fi
 
   if [ "$copied_any" -eq 0 ]; then
     log_warn "No files copied (source and target may be the same)"
