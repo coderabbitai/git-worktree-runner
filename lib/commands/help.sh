@@ -367,6 +367,10 @@ Removes empty worktree directories and optionally removes worktrees whose
 PRs/MRs have been merged or closed. Auto-detects GitHub (gh) or GitLab
 (glab) from the remote URL.
 
+PR/MR cleanup keeps local branches and their metadata, even with --force,
+to protect concurrent checkouts. Review and delete retained branches
+separately after coordinating other Git operations.
+
 Also detects registry entries that are locked but whose directories no
 longer exist (git worktree prune skips locked entries) and offers to
 unlock and prune them. Confirmed automatically with --force or --yes.
@@ -687,6 +691,7 @@ SETUP & MAINTENANCE:
 
   clean [options]
          Remove stale/prunable worktrees and empty directories
+         PR/MR cleanup retains branches and metadata, even with --force
          --merged: also remove worktrees with merged PRs/MRs
          --closed: also remove worktrees with closed PRs/MRs
          --to <ref>: limit PR cleanup to PRs/MRs targeting <ref>

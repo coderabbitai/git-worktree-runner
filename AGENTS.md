@@ -116,7 +116,7 @@ cmd_editor() → resolve_target() → load_editor_adapter() → editor_open()
 
 **`init` command**: Outputs shell functions for `gtr cd <branch>` navigation. Output is cached to `~/.cache/gtr/` and auto-invalidates on version change. Users source the cache file directly in their shell rc for fast startup (see `git gtr help init`).
 
-**`clean --merged` / `clean --closed`**: Removes worktrees whose PRs/MRs are merged or closed and deletes their branches. Auto-detects GitHub (`gh`) or GitLab (`glab`) from the `origin` remote URL. Override with `gtr.provider` config for self-hosted instances. `clean` also unlocks and prunes locked registry entries whose directories no longer exist.
+**`clean --merged` / `clean --closed`**: Removes worktrees whose PRs/MRs are merged or closed, retaining local branches, reflogs, and branch config even with `--force`. Git has no combined expected-tip deletion and worktree-reservation guard; snapshot checks or a gtr-only mutex cannot protect against concurrent raw Git checkouts. Auto-detects GitHub (`gh`) or GitLab (`glab`) from the `origin` remote URL. Override with `gtr.provider` config for self-hosted instances. `clean` also unlocks and prunes locked registry entries whose directories no longer exist.
 
 **`pr <number|url|branch>`** (lib/commands/pr.sh): Creates a worktree from a GitHub pull request via `gh`. Uses `gh pr checkout --worktree` when the installed `gh` supports it, otherwise fetches `refs/pull/<n>/head` through a compatibility path.
 
