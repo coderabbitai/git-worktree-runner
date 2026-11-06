@@ -404,14 +404,16 @@ git gtr clean --merged --force --yes           # Force-clean and auto-confirm
 
 **Options:**
 
-- `--merged`: Remove worktrees whose branches have merged PRs/MRs (also deletes the branch)
-- `--closed`: Remove worktrees whose branches have closed PRs/MRs (also deletes the branch)
+- `--merged`: Remove worktrees whose branches have merged PRs/MRs (keeps the branch)
+- `--closed`: Remove worktrees whose branches have closed PRs/MRs (keeps the branch)
 - `--to <ref>`: Limit PR/MR cleanup to PRs/MRs targeting the given base ref
 - `--dry-run`, `-n`: Preview changes without removing
 - `--yes`, `-y`: Non-interactive mode (skip confirmation prompts)
 - `--force`, `-f`: Force removal even if worktree has uncommitted changes or untracked files
 
 **Note:** The `--merged`/`--closed` mode auto-detects your hosting provider (GitHub or GitLab) from the `origin` remote URL and requires the corresponding CLI tool (`gh` or `glab`) to be installed and authenticated. For self-hosted instances, set the provider explicitly: `git gtr config set gtr.provider gitlab`.
+
+**Branch retention:** PR/MR cleanup keeps local branches, reflogs, and branch configuration, including with `--force`. Git's [expected-tip ref deletion](https://git-scm.com/docs/git-update-ref) cannot also guard against a concurrent checkout or new worktree reserving the same branch. Checking worktrees first leaves a race; using [`git branch -D`](https://git-scm.com/docs/git-branch) instead loses the expected-tip check. Cleanup therefore removes eligible worktrees and reports each retained branch. Delete retained branches separately after reviewing their tips and coordinating other Git operations. `--force` still only bypasses dirty-worktree checks; provider-tip and active-worktree protections remain in place.
 
 **Note:** `clean` also detects registry entries that are locked but whose directories no longer exist (for example, a crashed agent session that deleted its worktree directory). `git worktree prune` skips locked entries by design, so these linger and keep their branches checked out. `clean` offers to unlock and prune them; `--force` or `--yes` confirms automatically.
 

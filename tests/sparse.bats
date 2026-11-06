@@ -13,6 +13,7 @@ setup() {
   git -C "$TEST_REPO" init --quiet
   git -C "$TEST_REPO" config user.name "Test User"
   git -C "$TEST_REPO" config user.email "test@example.com"
+  git -C "$TEST_REPO" config --local commit.gpgsign false
   mkdir -p "$TEST_REPO/apps/web" "$TEST_REPO/apps/api" "$TEST_REPO/packages" "$TEST_REPO/docs"
   # Git 2.25 sparse init needs a root file to avoid an empty initial checkout.
   echo root > "$TEST_REPO/README.md"

@@ -132,7 +132,8 @@ teardown() {
   local foreign="$TEST_WORKTREES_DIR/impostor"
   mkdir -p "$foreign"
   git -C "$foreign" init --quiet
-  git -C "$foreign" -c user.name=Test -c user.email=test@example.com commit --allow-empty -m init --quiet
+  git -C "$foreign" -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false \
+    commit --allow-empty -m init --quiet
   git -C "$foreign" branch -m foreign-branch
 
   run resolve_target "impostor" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
