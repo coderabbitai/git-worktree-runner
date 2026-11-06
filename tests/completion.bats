@@ -317,3 +317,23 @@ assert_literal_branch_completions() {
   ' _ "$PROJECT_ROOT"
   [ "$status" -eq 0 ]
 }
+
+@test "bash Readline accepts cd targets without standalone completion loaded" {
+  command -v python3 >/dev/null || skip "python3 is required for the Readline PTY test"
+  setup_bash_completion_repo
+
+  run python3 "$PROJECT_ROOT/tests/bash_completion_pty.py" "$PROJECT_ROOT" "$BASH" wrapper-only
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"interactive completion checks passed"* ]]
+}
+
+@test "bash Readline preserves backslashes in candidates from tab-containing worktree paths" {
+  command -v python3 >/dev/null || skip "python3 is required for the Readline PTY test"
+  setup_bash_completion_repo
+
+  run python3 "$PROJECT_ROOT/tests/bash_completion_pty.py" "$PROJECT_ROOT" "$BASH" path-candidates
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"140 interactive completion checks passed"* ]]
+}

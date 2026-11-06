@@ -149,6 +149,28 @@ preview() {
   [[ "$output" != *"refs/heads/main:"* ]]
 }
 
+@test "rm preview reports unknown when a shallow clone has both tips but hides commits" {
+  git branch topic main
+  git checkout -q topic
+  git commit --allow-empty -qm first
+  git commit --allow-empty -qm second
+  git checkout -q main
+  [ "$(git rev-list --count main..topic)" -eq 2 ]
+
+  local shallow_repo="$TEST_REPO/shallow"
+  git clone -q --depth 1 --no-single-branch "file://$TEST_REPO" "$shallow_repo"
+  cd "$shallow_repo"
+  git config gtr.worktrees.dir "$TEST_WORKTREES_DIR"
+  git branch --no-track topic origin/topic
+  git worktree add -q "$TEST_WORKTREES_DIR/topic" topic
+  [ "$(git rev-list --count origin/main..topic)" -eq 1 ]
+
+  run preview topic -n --delete-branch
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Commits not reachable from base: unknown (incomplete history)."* ]]
+  [[ "$output" != *"refs/remotes/origin/main: 1"* ]]
+}
+
 @test "rm preview warns on reachability after squash merge without merge verdict" {
   create_test_worktree topic
   echo change > "$TEST_WT_PATH/file"

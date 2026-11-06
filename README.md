@@ -51,13 +51,18 @@ brew tap coderabbitai/tap
 brew install git-gtr
 ```
 
-**Install from source (macOS / Linux):**
+**Install from source (macOS / Linux / Windows Git Bash):**
 
 ```bash
 git clone https://github.com/coderabbitai/git-worktree-runner.git
 cd git-worktree-runner
 ./install.sh
 ```
+
+On Windows Git Bash, the installer prints a command to add the checkout's `bin`
+directory to `PATH`. Add it to `~/.bashrc` or `~/.bash_profile`, reload that file,
+and verify with `git gtr version`. Keep the full checkout at the same location;
+copying only `bin/git-gtr` omits the libraries it needs to start.
 
 <details>
 <summary><b>Other installation options</b></summary>
@@ -348,7 +353,8 @@ existing single `--force`.
 
 With `--delete-branch`, the preview counts branch commits not reachable from a
 verified base: the default remote/branch selected by `new`, preferring its local
-remote-tracking ref, then the corresponding local branch, otherwise unknown.
+remote-tracking ref, then the corresponding local branch. It reports an unknown
+count if a tip is missing or shallow history affects either tip.
 It never fetches. Remote-tracking refs may be stale. Reachability is **not** a
 merged/unmerged judgment: squash merges and rebases can leave different commit
 identities even when the changes were integrated. Actual branch deletion still

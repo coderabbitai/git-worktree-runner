@@ -71,7 +71,7 @@ teardown() {
 
 @test "resolve_target prefers the exact registered branch over a colliding folder" {
   create_test_worktree "feat-login"
-  git worktree add "$TEST_WORKTREES_DIR/login-custom" -b feat/login --quiet
+  git worktree add "$TEST_WORKTREES_DIR/login-custom" -b feat/login
 
   resolve_worktree "feat/login" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
   [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/login-custom" ]
@@ -79,8 +79,8 @@ teardown() {
 }
 
 @test "resolve_target prefers an external exact branch over a literal folder alias" {
-  git worktree add "$TEST_WORKTREES_DIR/alias" -b other-branch --quiet
-  git worktree add "${TEST_REPO}-external" -b alias --quiet
+  git worktree add "$TEST_WORKTREES_DIR/alias" -b other-branch
+  git worktree add "${TEST_REPO}-external" -b alias
 
   resolve_worktree "alias" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
   [ "$_ctx_worktree_path" = "${TEST_REPO}-external" ]
@@ -97,8 +97,8 @@ teardown() {
 
 @test "resolve_target keeps prefixed custom folders and named duplicate worktrees" {
   create_worktree "$TEST_WORKTREES_DIR" "wt-" "feature/login" "HEAD" "none" "1" "0" >/dev/null
-  git worktree add --force "$TEST_WORKTREES_DIR/wt-feature-login-backend" feature/login --quiet
-  git worktree add "$TEST_WORKTREES_DIR/wt-custom folder" -b another-branch --quiet
+  git worktree add --force "$TEST_WORKTREES_DIR/wt-feature-login-backend" feature/login
+  git worktree add "$TEST_WORKTREES_DIR/wt-custom folder" -b another-branch
 
   resolve_worktree "feature/login" "$TEST_REPO" "$TEST_WORKTREES_DIR" "wt-"
   [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/wt-feature-login" ]
@@ -110,7 +110,7 @@ teardown() {
 }
 
 @test "resolve_target keeps detached registered folder aliases" {
-  git worktree add --detach "$TEST_WORKTREES_DIR/review" HEAD --quiet
+  git worktree add --detach "$TEST_WORKTREES_DIR/review" HEAD
 
   resolve_worktree "review" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
   [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/review" ]
@@ -157,7 +157,7 @@ teardown() {
 }
 
 @test "resolve_target ID 1 takes precedence over a registered branch named 1" {
-  git worktree add "$TEST_WORKTREES_DIR/numeric" -b 1 --quiet
+  git worktree add "$TEST_WORKTREES_DIR/numeric" -b 1
 
   resolve_worktree "1" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
   [ "$_ctx_is_main" = "1" ]
@@ -167,7 +167,7 @@ teardown() {
 @test "resolve_target main branch takes precedence over a duplicate worktree" {
   local main_branch
   main_branch=$(git rev-parse --abbrev-ref HEAD)
-  git worktree add --force "$TEST_WORKTREES_DIR/$main_branch" "$main_branch" --quiet
+  git worktree add --force "$TEST_WORKTREES_DIR/$main_branch" "$main_branch"
 
   resolve_worktree "$main_branch" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
   [ "$_ctx_is_main" = "1" ]
@@ -224,7 +224,7 @@ teardown() {
 
 @test "resolve_worktree preserves tab in externally registered worktree path" {
   local tab_path="${TEST_REPO}-external"$'\t'"tab"
-  git -C "$TEST_REPO" worktree add "$tab_path" -b resolve-tab-path --quiet
+  git -C "$TEST_REPO" worktree add "$tab_path" -b resolve-tab-path
   local expected_path
   expected_path=$(cd "$tab_path" && pwd -P)
 
@@ -245,7 +245,7 @@ teardown() {
 @test "resolve_target finds externally-created worktree via porcelain fallback" {
   # Create a worktree with raw git (outside gtr-managed directory)
   local ext_dir="${TEST_REPO}-external"
-  git -C "$TEST_REPO" worktree add "$ext_dir" -b external-branch --quiet
+  git -C "$TEST_REPO" worktree add "$ext_dir" -b external-branch
   local result
   result=$(resolve_target "external-branch" "$TEST_REPO" "$TEST_WORKTREES_DIR" "")
   # Assert: found with is_main=0, correct branch, path ends with expected suffix
@@ -254,7 +254,7 @@ teardown() {
 
 @test "resolve_target finds nested externally-created worktree under base dir" {
   mkdir -p "$TEST_WORKTREES_DIR/jsmith"
-  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature --quiet
+  git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature
 
   local result
   result=$(resolve_target "jsmith/my-feature" "$TEST_REPO" "$TEST_WORKTREES_DIR" "")
@@ -266,7 +266,7 @@ teardown() {
 
 @test "list_worktree_records reports normal detached and locked worktrees" {
   create_test_worktree "records-normal"
-  git -C "$TEST_REPO" worktree add --detach "$TEST_WORKTREES_DIR/records-detached" HEAD --quiet
+  git -C "$TEST_REPO" worktree add --detach "$TEST_WORKTREES_DIR/records-detached" HEAD
   create_test_worktree "records-locked"
   git -C "$TEST_REPO" worktree lock "$TEST_WORKTREES_DIR/records-locked" --reason "test lock"
 
@@ -289,7 +289,7 @@ teardown() {
 
 @test "worktree_status handles registered path containing tab" {
   local tab_path="$TEST_WORKTREES_DIR/with"$'\t'"tab"
-  git -C "$TEST_REPO" worktree add "$tab_path" -b tab-path --quiet
+  git -C "$TEST_REPO" worktree add "$tab_path" -b tab-path
 
   local status
   status=$(worktree_status "$tab_path")
@@ -303,7 +303,7 @@ teardown() {
   fi
 
   local newline_path="${TEST_REPO}-external"$'\n'"newline"
-  git -C "$TEST_REPO" worktree add "$newline_path" -b newline-path --quiet
+  git -C "$TEST_REPO" worktree add "$newline_path" -b newline-path
   local expected_path
   expected_path=$(cd "$newline_path" && pwd -P)
 
@@ -365,7 +365,7 @@ teardown() {
 @test "registered path identities select duplicates without changing normal target precedence" {
   create_test_worktree shared
   local selected="$TEST_WORKTREES_DIR/second"
-  git worktree add --quiet --force "$selected" shared
+  git worktree add --force "$selected" shared
 
   resolve_worktree "path:$selected" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
   [ "$_ctx_worktree_path" = "$selected" ]
@@ -408,7 +408,7 @@ teardown() {
 
 @test "path identities preserve quotes tabs and shell syntax with old Git fallback" {
   local path="$TEST_WORKTREES_DIR/\"quotes\" café \\ \$(touch should-not-exist)"$'\t'
-  git worktree add --quiet --detach "$path" HEAD
+  git worktree add --detach "$path" HEAD
   git() {
     case "$*" in *"worktree list --porcelain -z") return 1 ;; esac
     command git "$@"

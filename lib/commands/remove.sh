@@ -147,7 +147,7 @@ EOF
 # Report advisory reachability against a verified local default-base ref; never fetch.
 # Usage: _remove_preview_branch repo_root branch_name
 _remove_preview_branch() {
-  local repo_root="$1" branch_name="$2" remote default_branch candidate base_ref="" base_oid="" count
+  local repo_root="$1" branch_name="$2" remote default_branch candidate base_ref="" base_oid="" branch_oid count
   remote=$(resolve_default_remote)
   default_branch=$(resolve_default_branch "$repo_root" "$remote")
   # Follow new's default selection, but never treat its last-resort name as
@@ -159,11 +159,31 @@ _remove_preview_branch() {
     fi
   done
   printf '  Branch deletion requested: %s (git branch -D).\n' "$branch_name"
-  if [ -n "$base_ref" ] && count=$(git rev-list --count "$base_oid..refs/heads/$branch_name" -- 2>/dev/null); then
+  if [ -z "$base_ref" ] || ! branch_oid=$(git rev-parse --verify "refs/heads/$branch_name^{commit}" 2>/dev/null); then
+    printf '  Commits not reachable from base: unknown (no verified base or branch tip).\n'
+  elif ! _remove_preview_history_complete "$base_oid" "$branch_oid"; then
+    printf '  Commits not reachable from base: unknown (incomplete history).\n'
+  elif count=$(git rev-list --count "$base_oid..$branch_oid" -- 2>/dev/null); then
     printf '  Commits not reachable from %s: %s\n' "$base_ref" "$count"
   else
-    printf '  Commits not reachable from base: unknown (no verified base or branch tip).\n'
+    printf '  Commits not reachable from base: unknown (cannot inspect history).\n'
   fi
   printf '  Reachability is not a merged/unmerged judgment; squash/rebase can mislead.\n'
   printf '  Uses local refs only; remote-tracking refs may be stale.\n'
+}
+
+# A shallow boundary reachable from either tip may change the set difference.
+_remove_preview_history_complete() {
+  local base_oid="$1" branch_oid="$2" shallow_file boundary tip
+  shallow_file=$(git rev-parse --git-path shallow) || return 1
+  [ -e "$shallow_file" ] || return 0
+  while IFS= read -r boundary; do
+    for tip in "$base_oid" "$branch_oid"; do
+      if git merge-base --is-ancestor "$boundary" "$tip" 2>/dev/null; then
+        return 1
+      elif [ "$?" -ne 1 ]; then
+        return 1
+      fi
+    done
+  done < "$shallow_file"
 }

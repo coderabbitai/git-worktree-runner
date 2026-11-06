@@ -145,8 +145,8 @@ cmd_init() {
   case "$cache_dir" in /*) ;; *) cache_dir="$(pwd -P)/$cache_dir" ;; esac
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 13 preserves whole postCd records alongside picker path identities.
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-13}"
+  # Schema 15 preserves literal backslashes in quoted Bash completion targets.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-15}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # A matching public stamp alone does not make executable cache data trusted.
@@ -171,7 +171,7 @@ cmd_init() {
 # functions keeps cached integration independent of the installation pathname.
 _init_emit_config_safety_helper() {
   local shell_name="$1" validator
-  validator=$(typeset -f _config_safety_error _config_safety_node _config_safety_path _gtr_config_check)
+  validator=$(typeset -f _config_safety_error _config_safety_acl_check _config_safety_node _config_safety_path _gtr_config_check)
   validator="$validator"$'\n_gtr_config_check'
   if [ "$shell_name" = fish ]; then
     validator=$(printf '%s' "$validator" | sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g")
@@ -225,6 +225,7 @@ SNAPSHOT
 # Keep this template identical to the storage helpers in lib/hooks.sh; tests
 # compare them so the CLI and generated shells enforce the same trust boundary.
 _init_emit_trust_storage_helpers() {
+  typeset -f _config_safety_acl_check
   cat <<'STORAGE'
 # Read ownership and permission bits on both GNU and BSD systems.
 _hooks_storage_stat() {
@@ -246,8 +247,10 @@ _hooks_storage_stat() {
 # Prints the physical directory; new components are private even with umask 000.
 _hooks_trust_directory() {
   local remaining="$1" action="${2:-}" current="/" component candidate metadata owner mode
-  local link_target links=0 current_uid
+  local link_target links=0 current_uid current_os
   current_uid=$(id -u) || return 1
+  current_os=$(uname -s) || return 1
+  _config_safety_acl_check / "$current_os" >/dev/null || return 1
   case "$remaining" in
     /*) ;;
     *) remaining="$(pwd -P)/$remaining" ;;
@@ -284,6 +287,7 @@ _hooks_trust_directory() {
     if [ "$((8#$mode & 8#22))" -ne 0 ]; then
       [ "$((8#$mode & 8#1000))" -ne 0 ] || return 1
     fi
+    _config_safety_acl_check "$candidate" "$current_os" >/dev/null || return 1
     current="$candidate"
   done
   # Even a sticky or root-owned trust store cannot hold this user's approvals.
@@ -291,6 +295,7 @@ _hooks_trust_directory() {
   [ "${metadata%%:*}" = "$current_uid" ] || return 1
   mode="${metadata#*:}"
   [ "$((8#$mode & 8#22))" -eq 0 ] || return 1
+  _config_safety_acl_check "$current" "$current_os" >/dev/null || return 1
   printf '%s\n' "$current"
 }
 
@@ -298,7 +303,7 @@ _hooks_trust_directory() {
 # the validated directory once so subsequent operations use its physical path.
 # In create mode a missing marker is allowed, but an unsafe existing one is not.
 _hooks_safe_trust_path() {
-  local trust_path="$1" action="${2:-}" directory name metadata mode current_uid
+  local trust_path="$1" action="${2:-}" directory name metadata mode current_uid current_os
   name="${trust_path##*/}"
   case "$name" in ''|*[!0-9a-f]*) return 1 ;; esac
   [ "${#name}" -eq 64 ] || return 1
@@ -312,6 +317,8 @@ _hooks_safe_trust_path() {
     [ "${metadata%%:*}" = "$current_uid" ] || return 1
     mode="${metadata#*:}"
     [ "$((8#$mode & 8#22))" -eq 0 ] || return 1
+    current_os=$(uname -s) || return 1
+    _config_safety_acl_check "$trust_path" "$current_os" >/dev/null || return 1
   else
     [ "$action" = create ] || return 1
   fi
@@ -329,7 +336,8 @@ _init_emit_posix_trust_helpers() {
 
   # Keep the snapshot encoding and extraction identical to the CLI.
   _init_emit_snapshot_helpers
-  _init_emit_trust_storage_helpers | sed 's/_hooks_/__FUNC___hooks_/g'
+  _init_emit_trust_storage_helpers |
+    sed -e 's/_hooks_/__FUNC___hooks_/g' -e 's/_config_safety_acl_check/__FUNC___check_storage_acl/g'
 
   # Keep case patterns balanced inside this substitution for Bash 3.2's parser.
   template=$(cat <<'EOF'
@@ -529,6 +537,7 @@ end
 FISH
 }
 
+# Emit self-contained Bash navigation, hook helpers, and wrapper completion.
 _init_bash() {
   cat <<'BASH'
 # git-gtr shell integration (cached to ~/.cache/gtr/)
@@ -536,6 +545,16 @@ _init_bash() {
 BASH
   _init_emit_posix_trust_helpers ""
   _init_emit_config_safety_helper bash
+  # Embed the same quoting helper as the standalone completion, under the wrapper's
+  # name. cd completion must also work when the completion asset is not loaded.
+  local completion_helper
+  if [ -n "${ZSH_VERSION:-}" ]; then
+    # shellcheck disable=SC2296,SC2298
+    completion_helper="${${(%):-%x}:h}/../bash_completion.sh"
+  else
+    completion_helper="${BASH_SOURCE[0]%/*}/../bash_completion.sh"
+  fi
+  sed -e '1d' -e 's/_git_gtr_quote_targets/___FUNC___quote_targets/g' "$completion_helper"
   cat <<'BASH'
 __FUNC___run_post_cd_hooks() {
   local dir="$1"
@@ -708,16 +727,10 @@ ___FUNC___completion() {
     # First argument: cd + all git-gtr subcommands
     COMPREPLY=($(compgen -W "cd new pr go run copy editor ai rm mv rename ls list clean doctor adapter config completion init trust help version" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "cd" ] && [ "$COMP_CWORD" -eq 2 ]; then
-    # Keep branch names literal: compgen -W evaluates shell expansions in its word list.
-    local worktrees worktree
+    # Filter and quote registered targets for literal acceptance by Readline.
+    local worktrees
     worktrees="1"$'\n'"$(git gtr list --porcelain 2>/dev/null | cut -f2)" || true
-    COMPREPLY=()
-    while IFS= read -r worktree; do
-      [ -n "$worktree" ] || continue
-      case "$worktree" in
-        "$cur"*) COMPREPLY+=("$worktree") ;;
-      esac
-    done <<< "$worktrees"
+    ___FUNC___quote_targets "$cur" "$worktrees"
   elif { [ "${COMP_WORDS[1]}" = "new" ] || [ "${COMP_WORDS[1]}" = "pr" ]; } && [[ "$cur" == -* ]]; then
     if type _git_gtr &>/dev/null; then
       ___FUNC___delegate_completion

@@ -204,9 +204,9 @@ SH
 
 @test "generated storage helpers stay identical to CLI helpers" {
   local expected actual
-  expected=$(declare -f _hooks_storage_stat _hooks_trust_directory _hooks_safe_trust_path)
+  expected=$(declare -f _config_safety_acl_check _hooks_storage_stat _hooks_trust_directory _hooks_safe_trust_path)
   eval "$(_init_emit_trust_storage_helpers)"
-  actual=$(declare -f _hooks_storage_stat _hooks_trust_directory _hooks_safe_trust_path)
+  actual=$(declare -f _config_safety_acl_check _hooks_storage_stat _hooks_trust_directory _hooks_safe_trust_path)
   [ "$expected" = "$actual" ]
 }
 
@@ -284,4 +284,176 @@ exercise_generated_storage() (
 @test "generated Fish helpers reject unsafe approvals and support trust revocation" {
   command -v fish >/dev/null || skip 'fish is not installed'
   exercise_generated_storage fish
+}
+
+@test "macOS trust storage rejects write ACLs on directories and markers without changing them" {
+  [ "$(uname -s)" = Darwin ] || skip 'macOS ACL syntax'
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  local node permission before mode
+  for node in "$_GTR_TRUST_DIR" "$XDG_CONFIG_HOME/gtr" "$XDG_CONFIG_HOME" "$TRUST_MARKER"; do
+    mode=$(file_mode "$node")
+    for permission in write append delete writeattr writeextattr writesecurity chown; do
+      chmod +a "everyone allow $permission" "$node"
+      before=$(LC_ALL=C ls -lde "$node")
+      [ "$(file_mode "$node")" = "$mode" ]
+      assert_storage_rejected
+      [ "$(LC_ALL=C ls -lde "$node")" = "$before" ]
+      chmod -N "$node"
+    done
+  done
+  for permission in add_file add_subdirectory delete_child; do
+    chmod +a "everyone allow $permission" "$_GTR_TRUST_DIR"
+    assert_storage_rejected
+    chmod -N "$_GTR_TRUST_DIR"
+  done
+}
+
+@test "macOS trust storage refuses creation beneath an ACL-writable ancestor" {
+  [ "$(uname -s)" = Darwin ] || skip 'macOS ACL syntax'
+  mkdir "$XDG_CONFIG_HOME"
+  chmod +a 'everyone allow add_subdirectory' "$XDG_CONFIG_HOME"
+  assert_storage_rejected
+  [ ! -e "$XDG_CONFIG_HOME/gtr" ]
+}
+
+@test "macOS trust storage checks ACLs through symlink parents and targets" {
+  [ "$(uname -s)" = Darwin ] || skip 'macOS ACL syntax'
+  mkdir "$TEST_REPO/real-config" "$TEST_REPO/link-parent"
+  ln -s "$TEST_REPO/real-config" "$TEST_REPO/link-parent/link"
+  ln -s "$TEST_REPO/link-parent/link" "$XDG_CONFIG_HOME"
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  local node
+  for node in "$TEST_REPO/real-config" "$TEST_REPO/link-parent"; do
+    chmod +a 'everyone allow delete_child' "$node"
+    assert_storage_rejected
+    chmod -N "$node"
+  done
+  _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
+@test "macOS trust storage permits read-only and deny ACLs" {
+  [ "$(uname -s)" = Darwin ] || skip 'macOS ACL syntax'
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  local node
+  for node in "$XDG_CONFIG_HOME" "$XDG_CONFIG_HOME/gtr" "$_GTR_TRUST_DIR" "$TRUST_MARKER"; do
+    chmod +a 'everyone allow read,readattr,readextattr,readsecurity' "$node"
+  done
+  _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  chmod +a 'everyone deny write,append,delete' "$TRUST_MARKER"
+  _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+  chmod -N "$TRUST_MARKER"
+}
+
+# Exercise inspection failures without changing real permissions or requiring
+# another user. All paths except the selected fixture use the actual ls.
+mock_unreadable_acl() {
+  export ACL_UNREADABLE_PATH="$1" REAL_LS
+  REAL_LS=$(command -v ls)
+  mkdir -p "$TEST_REPO/mock-bin"
+  cat > "$TEST_REPO/mock-bin/ls" <<'SH'
+#!/usr/bin/env bash
+for arg in "$@"; do last="$arg"; done
+if [ "$last" = "$ACL_UNREADABLE_PATH" ]; then exit 1; fi
+exec "$REAL_LS" "$@"
+SH
+  chmod +x "$TEST_REPO/mock-bin/ls"
+  export PATH="$TEST_REPO/mock-bin:$PATH"
+}
+
+@test "macOS trust storage fails closed when ACL inspection fails" {
+  [ "$(uname -s)" = Darwin ] || skip 'macOS ACL syntax'
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  mock_unreadable_acl /
+  local node
+  for node in / "$XDG_CONFIG_HOME" "$_GTR_TRUST_DIR" "$TRUST_MARKER"; do
+    export ACL_UNREADABLE_PATH="$node"
+    assert_storage_rejected
+  done
+}
+
+# Reproduce the attack without another OS account: rename the existing,
+# user-owned approval to the key for unreviewed definitions. Its contents and
+# mode remain valid, so storage ACLs must block both reads and hook execution.
+replay_marker_for_changed_definitions() {
+  local original_marker="$TRUST_MARKER"
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'echo unreviewed > "$REPO_ROOT/result"'
+  TRUST_MARKER=$(_hooks_current_trust_path "$TEST_REPO/.gtrconfig")
+  [ "$TRUST_MARKER" != "$original_marker" ]
+  chmod +a 'everyone allow search,add_file,delete_child' "$_GTR_TRUST_DIR"
+  mv "$original_marker" "$TRUST_MARKER"
+  [ "$(cat "$TRUST_MARKER")" = "$TEST_REPO/.gtrconfig" ]
+}
+
+@test "macOS ACL-renamed approvals cannot execute unreviewed CLI hooks" {
+  [ "$(uname -s)" = Darwin ] || skip 'macOS ACL syntax'
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  replay_marker_for_changed_definitions
+  run run_hooks_export postCd "REPO_ROOT=$TEST_REPO"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Untrusted .gtrconfig hooks'* ]]
+  [ ! -e "$TEST_REPO/result" ]
+}
+
+# Generate while safe, then change ACLs so cached helpers must inspect live
+# storage. Exercise the validator directly as well as the public hook path.
+exercise_generated_storage_acls() {
+  local shell_name="$1" node
+  [ "$(uname -s)" = Darwin ] || skip 'macOS ACL syntax'
+  command -v "$shell_name" >/dev/null || skip "$shell_name is not installed"
+  export INIT_FIXTURE="$TEST_REPO/init.$shell_name" REPO_FIXTURE="$TEST_REPO" TRUST_MARKER
+  cmd_init "$shell_name" --as safe_gtr > "$INIT_FIXTURE"
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  for node in "$_GTR_TRUST_DIR" "$XDG_CONFIG_HOME/gtr" "$XDG_CONFIG_HOME" "$TRUST_MARKER"; do
+    chmod +a 'everyone allow write' "$node"
+    run "$shell_name" -c 'source "$INIT_FIXTURE"; safe_gtr_hooks_safe_trust_path "$TRUST_MARKER"'
+    [ "$status" -eq 1 ]
+    run "$shell_name" -c 'source "$INIT_FIXTURE"; safe_gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+    [ ! -e "$TEST_REPO/result" ]
+    chmod -N "$node"
+    chmod +a 'everyone allow read,readattr,readsecurity' "$node"
+  done
+  "$shell_name" -c 'source "$INIT_FIXTURE"; safe_gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+  [ "$(cat "$TEST_REPO/result")" = approved ]
+  rm "$TEST_REPO/result"
+  chmod +a 'everyone deny write,append,delete' "$TRUST_MARKER"
+  "$shell_name" -c 'source "$INIT_FIXTURE"; safe_gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+  [ "$(cat "$TEST_REPO/result")" = approved ]
+  rm "$TEST_REPO/result"
+  chmod -N "$TRUST_MARKER"
+  mock_unreadable_acl "$TRUST_MARKER"
+  run "$shell_name" -c 'source "$INIT_FIXTURE"; safe_gtr_hooks_safe_trust_path "$TRUST_MARKER"'
+  [ "$status" -eq 1 ]
+  export ACL_UNREADABLE_PATH=''
+  # Both the link's intermediate parent and its physical target need ACL checks.
+  mv "$XDG_CONFIG_HOME" "$TEST_REPO/real-config"
+  mkdir "$TEST_REPO/link-parent"
+  ln -s "$TEST_REPO/real-config" "$TEST_REPO/link-parent/link"
+  ln -s "$TEST_REPO/link-parent/link" "$XDG_CONFIG_HOME"
+  for node in "$TEST_REPO/real-config" "$TEST_REPO/link-parent"; do
+    chmod +a 'everyone allow delete_child' "$node"
+    run "$shell_name" -c 'source "$INIT_FIXTURE"; safe_gtr_hooks_safe_trust_path "$TRUST_MARKER"'
+    [ "$status" -eq 1 ]
+    chmod -N "$node"
+  done
+  "$shell_name" -c 'source "$INIT_FIXTURE"; safe_gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+  [ "$(cat "$TEST_REPO/result")" = approved ]
+  rm "$TEST_REPO/result"
+  replay_marker_for_changed_definitions
+  run "$shell_name" -c 'source "$INIT_FIXTURE"; safe_gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Untrusted .gtrconfig hooks'* ]]
+  [ ! -e "$TEST_REPO/result" ]
+}
+
+@test "generated Bash helpers reject macOS ACLs and renamed approvals while permitting safe ACLs" {
+  exercise_generated_storage_acls bash
+}
+
+@test "generated Zsh helpers reject macOS ACLs and renamed approvals while permitting safe ACLs" {
+  exercise_generated_storage_acls zsh
+}
+
+@test "generated Fish helpers reject macOS ACLs and renamed approvals while permitting safe ACLs" {
+  exercise_generated_storage_acls fish
 }
