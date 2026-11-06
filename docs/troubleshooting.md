@@ -46,6 +46,11 @@ export PATH="$HOME/bin:$PATH"
 
 Then restart your terminal.
 
+**Windows Git Bash:** Run `./install.sh` from the full checkout and use its printed
+`PATH` command to point to that checkout's `bin` directory. Keep the checkout in
+place. If startup fails with a missing `lib/ui.sh` after copying `git-gtr` alone,
+use this `PATH` method so the entrypoint can find its libraries.
+
 ---
 
 ## Worktree Creation Issues
