@@ -46,9 +46,10 @@ teardown() {
 
 # ── _clean_should_skip ──────────────────────────────────────────────────────
 
-@test "_clean_should_skip skips detached HEAD" {
-  run _clean_should_skip "/some/dir" "(detached)"
-  [ "$status" -eq 0 ]
+@test "_clean_should_skip accepts a real branch named detached" {
+  create_test_worktree '(detached)'
+  run _clean_should_skip "$TEST_WT_PATH" '(detached)'
+  [ "$status" -eq 1 ]
 }
 
 @test "_clean_should_skip skips empty branch" {
@@ -92,9 +93,10 @@ teardown() {
   [ "$status" -eq 1 ]  # 1 = don't skip
 }
 
-@test "_clean_should_skip with force=1 still skips detached HEAD" {
-  run _clean_should_skip "/some/dir" "(detached)" 1
-  [ "$status" -eq 0 ]  # 0 = skip (protection maintained)
+@test "_clean_should_skip with force=1 accepts a real branch named detached" {
+  create_test_worktree '(detached)'
+  run _clean_should_skip "$TEST_WT_PATH" '(detached)' 1
+  [ "$status" -eq 1 ]
 }
 
 @test "_clean_should_skip with force=1 still skips empty branch" {

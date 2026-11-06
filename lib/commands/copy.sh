@@ -97,7 +97,7 @@ cmd_copy() {
     local dst_path dst_branch
     resolve_worktree "$target_id" "$repo_root" "$base_dir" "$prefix" || continue
   
-    dst_path="$_ctx_worktree_path" dst_branch="$_ctx_branch"
+    dst_path="$_ctx_worktree_path" dst_branch="${_ctx_branch:-(detached)}"
 
     # Count resolved non-main targets before excluding the source so a
     # source-only --all remains a valid no-op.

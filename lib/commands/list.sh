@@ -47,6 +47,8 @@ cmd_list() {
           ;;
         "branch "*)
           branch=$(_tsv_unescape_field "${line#branch }")
+          # Preserve the public list format; this label is never an identity.
+          branch="${branch:-(detached)}"
           ;;
         "status "*)
           status="${line#status }"
@@ -113,6 +115,7 @@ EOF
         ;;
       "branch "*)
         branch=$(_tsv_unescape_field "${line#branch }")
+        branch="${branch:-(detached)}"
         ;;
       "status "*)
         status="${line#status }"

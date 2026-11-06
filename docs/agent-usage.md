@@ -64,6 +64,12 @@ applies without it: `.gtrconfig` hooks the user has not approved never run.
    report its branch, changes, and validation results.
 5. Remove the worktree only when the user explicitly asks for cleanup.
 
+List output uses `(detached)` as a display label for detached HEAD; it can also
+be a real branch name. Use `git gtr list --ids` and pass the first field's escaped
+`path:` identity to target an exact checkout, including detached or duplicate
+branch worktrees. Removing a detached checkout never deletes a branch; `mv`
+requires an attached branch.
+
 Agents should not run `git gtr trust`. Trusting committed `.gtrconfig` commands
 authorizes code execution and requires human review. Agents should also avoid
 `git gtr rm --force`, `--delete-branch`, and `git gtr clean` unless the user has
