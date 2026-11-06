@@ -2,6 +2,7 @@
 # Integration tests for cmd_create in lib/commands/create.sh
 
 load test_helper
+load next_steps_helper
 
 setup() {
   setup_integration_repo
@@ -26,6 +27,59 @@ _cmd_create_capture_stdout() {
 @test "cmd_create creates worktree with basic args" {
   cmd_create new-feature --from HEAD --no-fetch --yes
   [ -d "$TEST_WORKTREES_DIR/new-feature" ]
+}
+
+@test "new CLI keeps ordinary next steps readable" {
+  run "$PROJECT_ROOT/bin/gtr" new feature/ordinary --from HEAD --no-fetch --no-copy --no-hooks --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'  git gtr editor feature/ordinary  # Open in editor'* ]]
+  [[ "$output" == *'  git gtr ai feature/ordinary      # Start AI tool'* ]]
+  [[ "$output" == *'  cd "$(git gtr go feature/ordinary)"  # Navigate to worktree'* ]]
+  assert_next_steps_suggestions feature/ordinary "$TEST_WORKTREES_DIR/feature-ordinary"
+}
+
+@test "new CLI next steps preserve shell metacharacters as literal branch names" {
+  local branch
+  for branch in 'sub$(>next-steps-marker)' 'ticks`>next-steps-marker`' \
+    'semi;>next-steps-marker' "quotes'\""'${HOME}' 'expand${IFS}value'; do
+    git check-ref-format --branch "$branch" >/dev/null
+    run "$PROJECT_ROOT/bin/gtr" new "$branch" --from HEAD --no-fetch --no-copy --no-hooks --yes
+    [ "$status" -eq 0 ]
+    assert_next_steps_suggestions "$branch" "$TEST_WORKTREES_DIR/$(sanitize_branch_name "$branch")"
+  done
+}
+
+@test "new CLI next steps use the sanitized folder override with a prefix and spaced base path" {
+  TEST_WORKTREES_DIR="$TEST_WORKTREES_DIR with spaces"
+  git config gtr.worktrees.dir "$TEST_WORKTREES_DIR"
+  git config gtr.worktrees.prefix dev-
+  local branch='feature$(>next-steps-marker)' folder='review $(>next-steps-marker)'
+  local folder_name
+  folder_name=$(sanitize_branch_name "$folder")
+  git check-ref-format --branch "$branch" >/dev/null
+
+  run "$PROJECT_ROOT/bin/gtr" new "$branch" --folder "$folder" --from HEAD --no-fetch --no-copy --no-hooks --yes
+  [ "$status" -eq 0 ]
+  assert_next_steps_suggestions "$folder_name" "$TEST_WORKTREES_DIR/dev-$folder_name"
+}
+
+@test "new CLI next steps quote the branch when a folder override resolves to main" {
+  git branch -m collision-folder
+  local branch='collision$(>next-steps-marker)'
+  git check-ref-format --branch "$branch" >/dev/null
+
+  run "$PROJECT_ROOT/bin/gtr" new "$branch" --folder collision-folder --from HEAD --no-fetch --no-copy --no-hooks --yes
+  [ "$status" -eq 0 ]
+  assert_next_steps_suggestions "$branch" "$TEST_WORKTREES_DIR/collision-folder"
+}
+
+@test "post-create next steps quote a literal registered folder alias" {
+  local folder='review "quotes" and $(>next-steps-marker)'
+  git worktree add --quiet -b folder-alias "$TEST_WORKTREES_DIR/$folder" HEAD
+
+  run _post_create_next_steps folder-alias "$folder" "$folder" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
+  [ "$status" -eq 0 ]
+  assert_next_steps_suggestions "$folder" "$TEST_WORKTREES_DIR/$folder"
 }
 
 @test "cmd_create accepts an untrusted folder prefix with sanitized branch and custom names" {
