@@ -59,6 +59,23 @@ teardown() {
   [[ "$stderr" == *"Worktree"* ]] || [[ "$stderr" == *"Branch"* ]]
 }
 
+@test "git gtr go emits every trailing newline byte for branches and escaped identities" {
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  local suffix path branch identifier
+  for suffix in $'\n' $'\n\n'; do
+    branch="go-newline-${#suffix}"
+    path="$TEST_WORKTREES_DIR/$branch$suffix"
+    git worktree add -b "$branch" "$path" HEAD >/dev/null
+    mkdir "$TEST_WORKTREES_DIR/$branch"
+    printf '%s\n' "$path" > "$TEST_REPO/expected"
+    for identifier in "$branch" "path:$(_tsv_escape_field "$path")"; do
+      # Compare files: BATS run and ordinary command substitution trim newlines.
+      "$PROJECT_ROOT/bin/gtr" go "$identifier" > "$TEST_REPO/actual"
+      cmp "$TEST_REPO/expected" "$TEST_REPO/actual"
+    done
+  done
+}
+
 @test "cmd_go 1 from inside a worktree resolves to main repo" {
   cd "$TEST_WORKTREES_DIR/go-test"
   run cmd_go 1

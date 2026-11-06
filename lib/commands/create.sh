@@ -208,7 +208,8 @@ _cmd_create_impl() {
   local sparse_source="" no_checkout=0
   if [ "$sparse_inherit" -eq 1 ]; then
     if [ "$native_sparse_supported" -eq 1 ]; then
-      sparse_source=$(_resolve_sparse_source "$from_ref")
+      sparse_source=$(_resolve_sparse_source "$from_ref" && printf '.') || return 1
+      sparse_source="${sparse_source%.}"
     elif [ "$sparse_flag" -eq 1 ]; then
       log_warn "Sparse-checkout inheritance requires Git 2.36+ — creating a full checkout"
     fi

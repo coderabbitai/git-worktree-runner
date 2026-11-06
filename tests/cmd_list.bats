@@ -56,6 +56,26 @@ teardown() {
   [[ "$output" == *"tsv-test"*$'\t'*"ok"* ]]
 }
 
+@test "cmd_list preserves trailing newlines through sorting and rendering" {
+  git worktree list --porcelain -z >/dev/null 2>&1 || skip "NUL worktree listing is unavailable"
+  local suffix path branch result formatted
+  printf '%s\t%s\tok\n' "$TEST_REPO" "$(git symbolic-ref --short HEAD)" > "$TEST_REPO/expected"
+  for suffix in $'\n' $'\n\n'; do
+    branch="list-${#suffix}"
+    path="$TEST_WORKTREES_DIR/$branch$suffix"
+    git worktree add -b "$branch" "$path" HEAD >/dev/null
+    printf '%s\t%s\tok\n' "$path" "$branch" >> "$TEST_REPO/expected"
+
+    result=$(cmd_list)
+    printf -v formatted '%-30s %s\n' "$branch" "$path"
+    [[ "$result" == *"$formatted"* ]]
+    result=$(cmd_list --ids)
+    [[ "$result" == *"path:$(_tsv_escape_field "$path")"$'\t'"$branch"$'\tok'* ]]
+  done
+  cmd_list --porcelain > "$TEST_REPO/actual"
+  cmp "$TEST_REPO/expected" "$TEST_REPO/actual"
+}
+
 @test "cmd_list --porcelain includes nested externally-created worktree" {
   mkdir -p "$TEST_WORKTREES_DIR/jsmith"
   git -C "$TEST_REPO" worktree add "$TEST_WORKTREES_DIR/jsmith/my-feature" -b jsmith/my-feature --quiet
