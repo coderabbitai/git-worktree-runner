@@ -114,7 +114,8 @@ teardown() {
 
   resolve_worktree "review" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
   [ "$_ctx_worktree_path" = "$TEST_WORKTREES_DIR/review" ]
-  [ "$_ctx_branch" = "(detached)" ]
+  [ -z "$_ctx_branch" ]
+  [ "$_ctx_detached" -eq 1 ]
 }
 
 @test "resolve_target rejects stray directories and dot targets" {
@@ -376,7 +377,7 @@ teardown() {
 
   [[ "$records" == *"is_main 1"$'\n'"path $repo_root"$'\n'*"status ok"* ]]
   [[ "$records" == *"is_main 0"$'\n'"path $normal_path"$'\n'"branch records-normal"$'\n'"status ok"* ]]
-  [[ "$records" == *"is_main 0"$'\n'"path $detached_path"$'\n'"branch (detached)"$'\n'"status detached"* ]]
+  [[ "$records" == *"is_main 0"$'\n'"path $detached_path"$'\n'"branch "$'\n'"status detached"* ]]
   [[ "$records" == *"is_main 0"$'\n'"path $locked_path"$'\n'"branch records-locked"$'\n'"status locked"* ]]
 
   git -C "$TEST_REPO" worktree unlock "$TEST_WORKTREES_DIR/records-locked"
@@ -510,6 +511,7 @@ teardown() {
   }
   resolve_worktree "path:$(_tsv_escape_field "$path")" "$TEST_REPO" "$TEST_WORKTREES_DIR" ""
   [ "$_ctx_worktree_path" = "$path" ]
-  [ "$_ctx_branch" = '(detached)' ]
+  [ -z "$_ctx_branch" ]
+  [ "$_ctx_detached" -eq 1 ]
   [ ! -e should-not-exist ]
 }

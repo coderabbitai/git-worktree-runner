@@ -35,9 +35,9 @@ cmd_ai() {
 
   worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
 
-  log_step "Starting $ai_tool for: $branch"
+  log_step "Starting $ai_tool for: ${branch:-(detached)}"
   log_info "Directory: $worktree_path"
-  log_info "Branch: $branch"
+  log_info "Branch: ${branch:-(detached)}"
 
   # Run postCd hooks + AI in a subshell so hook env vars propagate to AI
   (

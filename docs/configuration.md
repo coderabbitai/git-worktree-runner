@@ -472,6 +472,11 @@ git gtr config add gtr.hook.postCd "source ./vars.sh"
 - `WORKTREE_PATH` - Worktree path
 - `BRANCH` - Branch name
 
+For `rm` hooks and `ai` postCd hooks, `BRANCH` is empty when the target has
+detached HEAD. The `(detached)` label shown by `list` is display text, not a
+branch identity. Shell integration's `gtr cd` hooks retain Git's `HEAD` label
+for detached HEAD.
+
 **Examples for different build tools:**
 
 ```bash

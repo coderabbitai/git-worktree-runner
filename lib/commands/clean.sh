@@ -46,7 +46,7 @@ _clean_should_skip() {
     return 0
   fi
 
-  if [ -z "$branch" ] || [ "$branch" = "(detached)" ]; then
+  if [ -z "$branch" ]; then
     log_warn "Skipping $dir (detached HEAD)"
     return 0
   fi
@@ -228,7 +228,10 @@ _clean_prs() {
 
   local removed=0 skipped=0
   local main_branch
-  main_branch=$(current_branch "$repo_root")
+  # Older Git cannot resolve an unborn HEAD. This optional skip hint must not
+  # prevent cleanup of linked worktrees, or retain output from a failed lookup.
+  main_branch=$(get_current_branch "$repo_root") || main_branch=""
+  [ "$main_branch" = "HEAD" ] && main_branch=""
   local records
   records=$(list_worktree_records "$repo_root")
 
@@ -238,7 +241,7 @@ _clean_prs() {
       "")
         if [ -n "$dir" ] && [ "$is_main" != "1" ]; then
           # Skip main repo branch silently (not counted)
-          [ "$branch" = "$main_branch" ] && continue
+          [ -n "$main_branch" ] && [ "$branch" = "$main_branch" ] && continue
 
           if _clean_should_skip "$dir" "$branch" "$force" "$active_worktree_path"; then
             skipped=$((skipped + 1))

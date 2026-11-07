@@ -6,9 +6,9 @@
 # Callers should copy into locals immediately after calling the resolver.
 #
 # resolve_repo_context() -> _ctx_repo_root  _ctx_base_dir  _ctx_prefix
-# resolve_worktree()     -> _ctx_is_main    _ctx_worktree_path  _ctx_branch
+# resolve_worktree()     -> _ctx_is_main    _ctx_worktree_path  _ctx_branch  _ctx_detached
 declare _ctx_repo_root _ctx_base_dir _ctx_prefix
-declare _ctx_is_main _ctx_worktree_path _ctx_branch
+declare _ctx_is_main _ctx_worktree_path _ctx_branch _ctx_detached
 
 # Discover the root of the main git repository
 # Works correctly from both the main repo and from inside worktrees.
@@ -191,7 +191,7 @@ get_current_branch() {
   fi
 }
 
-# Get the current branch of a worktree (with detached HEAD normalization)
+# Get the current branch label for display only (never use as branch identity).
 # Usage: current_branch worktree_path
 current_branch() {
   local worktree_path="$1"
@@ -240,7 +240,8 @@ _emit_worktree_record() {
   if [ "$wt_path" = "$repo_root" ] || [ "$wt_path_canonical" = "$repo_root" ]; then
     is_main=1
   fi
-  [ -z "$branch" ] && branch="(detached)"
+  # An empty branch means no attached branch, even when status is locked or
+  # prunable. Display labels such as '(detached)' are valid Git branch names.
   status=$(_worktree_record_status "$wt_detached" "$wt_locked" "$wt_prunable")
 
   printf "is_main %s\n" "$is_main"
@@ -298,7 +299,8 @@ _parse_worktree_records() {
 
 # List registered git worktrees for a repository.
 # Usage: list_worktree_records repo_root
-# Output: blank-line-delimited records with is_main/path/branch/status fields
+# Output: blank-line-delimited records with is_main/path/branch/status fields.
+# The branch field is empty for detached worktrees; status may also be locked.
 list_worktree_records() {
   local repo_root="$1"
   local repo_root_canonical
@@ -480,6 +482,7 @@ EOF
 # Resolve a registered path identity, branch, literal folder alias, or main ID '1'.
 # Usage: resolve_target identifier repo_root base_dir prefix
 # Returns: tab-separated "is_main\tpath\tbranch" with escaped fields on success (is_main: 1 for main repo, 0 for worktrees)
+# An empty final field represents detached HEAD, never a display label.
 # Exit code: 0 on success, 1 if not found
 resolve_target() {
   local identifier="$1"
@@ -509,6 +512,8 @@ resolve_target() {
   # Special case: ID 1 is always the repo root
   if [ "$identifier" = "1" ]; then
     branch=$(get_current_branch "$repo_root") || return 1
+    # Older Git's rev-parse fallback reports HEAD instead of an empty branch.
+    [ "$branch" = "HEAD" ] && branch=""
     _print_resolved_target "1" "$repo_root" "$branch"
     return 0
   fi
@@ -582,7 +587,7 @@ EOF
 }
 
 # Unpack TSV output from resolve_target into globals.
-# Sets: _ctx_is_main, _ctx_worktree_path, _ctx_branch
+# Sets: _ctx_is_main, _ctx_worktree_path, _ctx_branch, _ctx_detached (0 or 1)
 # Usage: unpack_target "$target_string"
 unpack_target() {
   local escaped_path escaped_branch
@@ -592,11 +597,15 @@ unpack_target() {
   _ctx_worktree_path=$(_tsv_unescape_field "$escaped_path" && printf '.') || return 1
   _ctx_worktree_path="${_ctx_worktree_path%.}"
   _ctx_branch=$(_tsv_unescape_field "$escaped_branch")
+  _ctx_detached=0
+  if [ -z "$_ctx_branch" ]; then
+    _ctx_detached=1
+  fi
 }
 
 # Resolve an identifier to a worktree and set _ctx_* variables in one step
 # Usage: resolve_worktree <identifier> <repo_root> <base_dir> <prefix>
-# Sets: _ctx_is_main, _ctx_worktree_path, _ctx_branch
+# Sets: _ctx_is_main, _ctx_worktree_path, _ctx_branch, _ctx_detached
 resolve_worktree() {
   local target
   # Guard the subshell too: a handled miss must not fire Bash 3.2's ERR trap.
@@ -1111,7 +1120,7 @@ list_worktree_branches() {
   while IFS= read -r line; do
     case "$line" in
       "")
-        if [ "$is_main" != "1" ] && [ -n "$branch" ] && [ "$branch" != "(detached)" ]; then
+        if [ "$is_main" != "1" ] && [ -n "$branch" ]; then
           printf "%s\n" "$branch"
         fi
         is_main=""
@@ -1133,7 +1142,7 @@ list_worktree_branches() {
 $records
 EOF
 
-  if [ "$is_main" != "1" ] && [ -n "$branch" ] && [ "$branch" != "(detached)" ]; then
+  if [ "$is_main" != "1" ] && [ -n "$branch" ]; then
     printf "%s\n" "$branch"
   fi
 }

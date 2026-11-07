@@ -15,7 +15,7 @@ cmd_go() {
   local is_main worktree_path branch
   resolve_worktree "$identifier" "$repo_root" "$base_dir" "$prefix" || exit 1
 
-  is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch="$_ctx_branch"
+  is_main="$_ctx_is_main" worktree_path="$_ctx_worktree_path" branch="${_ctx_branch:-(detached)}"
 
   # Human messages to stderr so stdout can be used in command substitution
   if [ "$is_main" = "1" ]; then

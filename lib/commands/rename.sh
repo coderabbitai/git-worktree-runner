@@ -31,6 +31,11 @@ cmd_rename() {
     exit 1
   fi
 
+  if [ "$_ctx_detached" -eq 1 ]; then
+    log_error "Cannot rename a detached worktree; check out a branch first"
+    exit 1
+  fi
+
   # Sanitize new name and construct new path
   local new_sanitized new_path
   new_sanitized=$(sanitize_branch_name "$new_name")

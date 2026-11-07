@@ -45,7 +45,7 @@ cmd_remove() {
       WORKTREE_PATH="$worktree_path" \
       BRANCH="$branch_name"; then
       if [ "$force" -eq 0 ]; then
-        log_error "Pre-remove hook failed for $branch_name. Use --force to skip hooks."
+        log_error "Pre-remove hook failed for ${branch_name:-(detached)}. Use --force to skip hooks."
         had_failure=1
         continue
       else
@@ -59,7 +59,7 @@ cmd_remove() {
       continue
     fi
 
-    # Handle branch deletion
+    # Detached targets have no branch identity; never delete a display label.
     if [ -n "$branch_name" ]; then
       if [ "$delete_branch" -eq 1 ]; then
         if [ "$yes_mode" -eq 1 ] || prompt_yes_no "Also delete branch '$branch_name'?"; then
@@ -77,7 +77,7 @@ cmd_remove() {
       REPO_ROOT="$repo_root" \
       WORKTREE_PATH="$worktree_path" \
       BRANCH="$branch_name"; then
-      log_warn "Post-remove hook failed for $branch_name"
+      log_warn "Post-remove hook failed for ${branch_name:-(detached)}"
     fi
   done
 
