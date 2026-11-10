@@ -145,8 +145,8 @@ cmd_init() {
   case "$cache_dir" in /*) ;; *) cache_dir="$(pwd -P)/$cache_dir" ;; esac
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 15 preserves literal backslashes in quoted Bash completion targets.
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-15}"
+  # Schema 16 preserves sticky permission bits in BSD trust-storage checks.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-16}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # A matching public stamp alone does not make executable cache data trusted.
@@ -230,8 +230,9 @@ _init_emit_trust_storage_helpers() {
 # Read ownership and permission bits on both GNU and BSD systems.
 _hooks_storage_stat() {
   local metadata
+  # BSD %Lp drops special bits such as sticky; callers mask the full mode.
   metadata=$(stat -c '%u:%a' "$1" 2>/dev/null) ||
-    metadata=$(stat -f '%u:%Lp' "$1" 2>/dev/null) || return 1
+    metadata=$(stat -f '%u:%p' "$1" 2>/dev/null) || return 1
   case "$metadata" in
     *[!0-9:]*|:*|*:) return 1 ;;
   esac
