@@ -108,7 +108,13 @@ Create a `.gtrconfig` file in your repository root to share configuration across
 > [!IMPORTANT]
 > Hooks and editor/AI defaults from `.gtrconfig` are executable command entries. They are ignored until you review them with `git gtr trust`; changing those entries requires re-approval.
 
-Approval is bound to the repository path and the filesystem identity of its common Git directory. A replacement or fresh clone at the same path needs new approval, as do approvals created by older versions that only used the path. Normal commits and linked worktrees retain approval. This is command-definition trust: scripts, dependencies, and tools invoked by approved commands are not hashed or pinned, so their contents can change within the trusted repository. Review delegated code and trust its contributors before approving.
+Approval is bound to the repository path and the filesystem identity of its common Git directory. Replacing that directory, for example with a fresh clone at the same path, needs new approval, as do approvals created by older versions that only used the path. Normal commits and linked worktrees retain approval. This is command-definition trust: scripts, dependencies, and tools invoked by approved commands are not hashed or pinned, so their contents can change within the trusted repository. Review delegated code and trust its contributors before approving.
+
+Preserving the common Git directory while replacing its contents preserves its
+identity and approval when the command definitions are unchanged. This check
+does not attest repository contents, history, or provenance. Do not reuse an
+approved Git directory to import a repository whose contributors you do not
+trust; use a separate clone and review its commands and delegated code.
 
 Command definitions are captured once for trust verification and consumption, with NUL-delimited records preserving multiline values. The version 3 trust format invalidates older approvals; review commands again with `git gtr trust` after upgrading.
 
