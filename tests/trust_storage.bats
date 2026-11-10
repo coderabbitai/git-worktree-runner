@@ -61,6 +61,71 @@ assert_storage_rejected() {
   _hooks_are_trusted "$TEST_REPO/.gtrconfig"
 }
 
+# Use an owned sticky parent without relying on the host's /tmp layout.
+setup_sticky_storage() {
+  STICKY_PARENT="$TEST_REPO/sticky parent"
+  mkdir "$STICKY_PARENT"
+  chmod 1777 "$STICKY_PARENT"
+  export XDG_CONFIG_HOME="$STICKY_PARENT/private config"
+  _GTR_TRUST_DIR="$XDG_CONFIG_HOME/gtr/trusted"
+  TRUST_MARKER=$(_hooks_current_trust_path "$TEST_REPO/.gtrconfig")
+}
+
+@test "CLI trust permits private storage beneath sticky ancestors" {
+  setup_sticky_storage
+
+  run bash -c 'printf "y\n" | "$1" trust' -- "$PROJECT_ROOT/bin/gtr"
+  [ "$status" -eq 0 ]
+  [ "$(file_mode "$_GTR_TRUST_DIR")" = 700 ]
+  [ "$(file_mode "$TRUST_MARKER")" = 600 ]
+  run "$PROJECT_ROOT/bin/gtr" ai 1 --ai true
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_REPO/result")" = approved ]
+
+  # Removing the sticky protection must invalidate the existing approval.
+  chmod 777 "$STICKY_PARENT"
+  assert_storage_rejected
+  rm "$TEST_REPO/result"
+  run "$PROJECT_ROOT/bin/gtr" ai 1 --ai true
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_REPO/result" ]
+}
+
+# Approve before making the parent sticky, so this independently tests the
+# generated consumer even when CLI approval beneath sticky parents is broken.
+exercise_generated_sticky_storage() {
+  local shell_name="$1"
+  setup_sticky_storage
+  chmod 700 "$STICKY_PARENT"
+  _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  export INIT_FIXTURE="$TEST_REPO/init.$shell_name" REPO_FIXTURE="$TEST_REPO"
+  cmd_init "$shell_name" --as safe_gtr > "$INIT_FIXTURE"
+  chmod 1777 "$STICKY_PARENT"
+
+  run "$shell_name" -c 'source "$INIT_FIXTURE"; safe_gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_REPO/result")" = approved ]
+  rm "$TEST_REPO/result"
+  chmod 777 "$STICKY_PARENT"
+  run "$shell_name" -c 'source "$INIT_FIXTURE"; safe_gtr_run_post_cd_hooks "$REPO_FIXTURE"'
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_REPO/result" ]
+}
+
+@test "generated Bash helpers permit private storage beneath sticky ancestors" {
+  exercise_generated_sticky_storage bash
+}
+
+@test "generated Zsh helpers permit private storage beneath sticky ancestors" {
+  command -v zsh >/dev/null || skip 'zsh is not installed'
+  exercise_generated_sticky_storage zsh
+}
+
+@test "generated Fish helpers permit private storage beneath sticky ancestors" {
+  command -v fish >/dev/null || skip 'fish is not installed'
+  exercise_generated_sticky_storage fish
+}
+
 @test "trust refuses writable existing directories and ancestors without repairing permissions" {
   _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
   local directory mode

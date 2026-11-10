@@ -22,8 +22,9 @@ _GTR_TRUST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"
 # Read ownership and permission bits on both GNU and BSD systems.
 _hooks_storage_stat() {
   local metadata
+  # BSD %Lp drops special bits such as sticky; callers mask the full mode.
   metadata=$(stat -c '%u:%a' "$1" 2>/dev/null) ||
-    metadata=$(stat -f '%u:%Lp' "$1" 2>/dev/null) || return 1
+    metadata=$(stat -f '%u:%p' "$1" 2>/dev/null) || return 1
   case "$metadata" in
     *[!0-9:]*|:*|*:) return 1 ;;
   esac
