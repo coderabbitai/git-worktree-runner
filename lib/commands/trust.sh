@@ -11,9 +11,10 @@ cmd_trust() {
   fi
 
   # Bind the definitions to the repository present before they are read.
-  local repo_root repo_identity
+  local repo_root repo_identity approved_commit
   repo_root=$(_hooks_repo_root "$config_file") || return 1
   repo_identity=$(_hooks_repo_identity "$repo_root") || return 1
+  approved_commit=$(git -C "$repo_root" rev-parse --verify 'HEAD^{commit}' 2>/dev/null) || true
 
   # Show all trusted command entries from .gtrconfig
   local hook_content
@@ -22,6 +23,10 @@ cmd_trust() {
   if [ -z "$hook_content" ]; then
     log_info "No hooks or executable defaults defined in $config_file"
     return 0
+  fi
+  if [ -z "$approved_commit" ]; then
+    log_error "Commit the initial repository history before approving commands"
+    return 1
   fi
 
   if _hooks_snapshot_is_trusted "$config_file" "$hook_content"; then
@@ -45,10 +50,11 @@ cmd_trust() {
   log_warn "Approval includes scripts and programs they invoke; their contents are not pinned."
 
   if prompt_yes_no "Trust these commands?"; then
-    if _hooks_write_trust_marker "$trust_path" "$config_file"; then
+    if _hooks_write_trust_marker "$trust_path" "$config_file" "$approved_commit"; then
       local current_trust_path
       current_trust_path=$(_hooks_current_trust_path "$config_file") || true
-      if [ "$current_trust_path" != "$trust_path" ]; then
+      if [ "$current_trust_path" != "$trust_path" ] ||
+        ! _hooks_marker_matches_config "$trust_path" "$config_file"; then
         log_warn "Executable commands or repository identity changed during review; current commands remain untrusted"
         return 1
       fi

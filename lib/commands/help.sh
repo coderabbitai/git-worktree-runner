@@ -439,7 +439,7 @@ New cache directories and files are private. Ownership and write permissions
 are checked through the parent path; unsafe or unavailable caches are bypassed.
 Replace older setup snippets that source a cache directly or check a hard-coded
 'init=' value, then restart your shell or run the matching setup command below.
-Upgrades to the v3 trust format require reviewing commands with 'git gtr trust'.
+Upgrades to the v4 trust format require reviewing commands with 'git gtr trust'.
 
 Supported shells: bash, zsh, fish
 
@@ -491,17 +491,20 @@ used until explicitly trusted.
 
 This prevents malicious contributors from injecting arbitrary shell
 commands via shared .gtrconfig files. Trust is stored per repository
-path, common Git directory filesystem identity, and executable command
-definitions in ~/.config/gtr/trusted/. Replacing a repository at the same
-path or changing those commands requires new approval. Older path-only
-approvals require renewal.
+path, Git and object database directory identities, executable command
+definitions, and approved commit history in ~/.config/gtr/trusted/.
+Replacing either directory, switching to unrelated history, or changing
+those commands requires new approval. Older approvals require renewal.
+Normal commits and related branches retain approval. Create an initial
+commit before approving commands; missing history is not fetched.
 
 Approval includes scripts and programs invoked by these commands. Their
 contents are not hashed or pinned; review delegated code and trust its
 contributors before approving.
 
-Trust requires a known filesystem birth time for the Git directory.
-Without it, .gtrconfig executable commands remain untrusted.
+Trust requires known filesystem birth times for both the common Git
+directory and the object database directory. If either is unavailable,
+.gtrconfig executable commands remain untrusted.
 
 Hooks and defaults from your local git config (.git/config, ~/.gitconfig)
 are always trusted since you control those files directly.

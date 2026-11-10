@@ -225,6 +225,8 @@ run_generated_replacement_repo_hooks() (
   export XDG_CONFIG_HOME="$fixture/config"
   mkdir -p "$REPO_FIXTURE"
   git -C "$REPO_FIXTURE" init --quiet
+  git -C "$REPO_FIXTURE" -c user.name=Fixture -c user.email=fixture@example.test \
+    -c commit.gpgsign=false commit --allow-empty --quiet -m initial
   git config -f "$REPO_FIXTURE/.gtrconfig" hooks.postCd 'sh "$REPO_ROOT/bootstrap.sh"'
   printf 'echo original > "$REPO_ROOT/hook-result"\n' > "$REPO_FIXTURE/bootstrap.sh"
   source "$PROJECT_ROOT/lib/hooks.sh"
@@ -318,20 +320,20 @@ run_generated_v2_trust_upgrade() (
   [ ! -f "$REPO_FIXTURE/hook-result" ]
 )
 
-@test "fresh bash helpers reject v2 approval and accept explicit v3 approval" {
+@test "fresh bash helpers reject v2 approval and accept current approval" {
   run run_generated_v2_trust_upgrade bash
   [ "$status" -eq 0 ]
   [[ "$output" == *"Untrusted .gtrconfig hooks skipped"* ]]
 }
 
-@test "fresh zsh helpers reject v2 approval and accept explicit v3 approval" {
+@test "fresh zsh helpers reject v2 approval and accept current approval" {
   require_runtime_shell zsh
   run run_generated_v2_trust_upgrade zsh
   [ "$status" -eq 0 ]
   [[ "$output" == *"Untrusted .gtrconfig hooks skipped"* ]]
 }
 
-@test "fresh fish helpers reject v2 approval and accept explicit v3 approval" {
+@test "fresh fish helpers reject v2 approval and accept current approval" {
   require_runtime_shell fish
   run run_generated_v2_trust_upgrade fish
   [ "$status" -eq 0 ]
@@ -1167,14 +1169,14 @@ run_generated_v2_trust_upgrade() (
   mkdir -p "$XDG_CACHE_HOME/gtr"
   for shell_name in bash zsh fish; do
     for func_name in gtr gwtr; do
-      for schema in 15 14 13 12 11 10 9 8 7 6; do
+      for schema in 16 15 14 13 12 11 10 9 8 7 6; do
         cache_file="$XDG_CACHE_HOME/gtr/init-$func_name.$shell_name"
         printf '# gtr-cache: version=test init=%s func=%s shell=%s\nold-cache\n' \
           "$schema" "$func_name" "$shell_name" > "$cache_file"
         run cmd_init "$shell_name" --as "$func_name"
         [ "$status" -eq 0 ]
         [[ "$output" != *old-cache* ]]
-        [[ "$(head -1 "$cache_file")" == *"init=16"* ]]
+        [[ "$(head -1 "$cache_file")" == *"init=17"* ]]
       done
     done
   done
@@ -1203,15 +1205,15 @@ run_documented_init_upgrade() (
     if [ "$shell_name" = zsh ]; then
       snippet='compdef() { :; }'$'\n'"$snippet"
     fi
-    for schema in 6 7 8 9 10 11 12 13 14 15 16; do
+    for schema in 6 7 8 9 10 11 12 13 14 15 16 17; do
       version="$cli_version"
-      [ "$schema" != 16 ] || version=old-version
+      [ "$schema" != 17 ] || version=old-version
       printf '# gtr-cache: version=%s init=%s func=gtr shell=%s\n' \
         "$version" "$schema" "$shell_name" > "$cache_file"
       printf '%s\n' 'echo stale > "$STALE_CACHE_MARKER"' >> "$cache_file"
       "$shell_name" -c "$snippet"
       [ ! -f "$STALE_CACHE_MARKER" ]
-      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=16 "* ]]
+      [[ "$(head -1 "$cache_file")" == *"version=$cli_version init=17 "* ]]
     done
   done
 )
@@ -1260,6 +1262,8 @@ run_generated_snapshot_replacement_hooks() (
   REAL_GIT=$(command -v git)
   mkdir -p "$REPO_FIXTURE" "$fixture/bin"
   git -C "$REPO_FIXTURE" init --quiet
+  git -C "$REPO_FIXTURE" -c user.name=Fixture -c user.email=fixture@example.test \
+    -c commit.gpgsign=false commit --allow-empty --quiet -m initial
   git config -f "$REPO_FIXTURE/.gtrconfig" hooks.postCd 'echo approved > "$REPO_ROOT/result"'
   source "$PROJECT_ROOT/lib/hooks.sh"
   _hooks_mark_trusted "$REPO_FIXTURE/.gtrconfig"

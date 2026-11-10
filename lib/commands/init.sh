@@ -11,6 +11,16 @@ if ! command -v _gtr_config_check >/dev/null 2>&1; then
   fi
 fi
 
+if ! command -v _hooks_history_matches >/dev/null 2>&1; then
+  if [ -n "${ZSH_VERSION:-}" ]; then
+    # shellcheck disable=SC2296,SC2298,SC1091
+    . "${${(%):-%x}:h}/../trust_history.sh"
+  else
+    # shellcheck source=lib/trust_history.sh
+    . "${BASH_SOURCE[0]%/*}/../trust_history.sh"
+  fi
+fi
+
 # Cache contents are executable code. Reuse the config validator's component
 # walk so safe XDG symlinks work without hiding writable link parents/targets.
 _init_cache_path_is_safe() {
@@ -145,8 +155,8 @@ cmd_init() {
   case "$cache_dir" in /*) ;; *) cache_dir="$(pwd -P)/$cache_dir" ;; esac
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 16 preserves sticky permission bits in BSD trust-storage checks.
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-16}"
+  # Schema 17 checks continuity with approved repository history (trust v4).
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-17}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # A matching public stamp alone does not make executable cache data trusted.
@@ -337,6 +347,8 @@ _init_emit_posix_trust_helpers() {
 
   # Keep the snapshot encoding and extraction identical to the CLI.
   _init_emit_snapshot_helpers
+  typeset -f _hooks_repo_identity | sed 's/_hooks_repo_identity/__FUNC___hooks_repo_identity/g'
+  typeset -f _hooks_history_matches | sed 's/_hooks_history_matches/__FUNC___hooks_history_matches/g'
   _init_emit_trust_storage_helpers |
     sed -e 's/_hooks_/__FUNC___hooks_/g' -e 's/_config_safety_acl_check/__FUNC___check_storage_acl/g'
 
@@ -381,22 +393,6 @@ __SHELL_PRELUDE__
   printf '%s/%s\n' "$_gtr_repo_root" "$(basename "$_gtr_config_file")"
 }
 
-__FUNC___hooks_repo_identity() {
-__SHELL_PRELUDE__
-  local _gtr_repo_root="$1"
-  local _gtr_common_dir _gtr_identity _gtr_birth_time
-  _gtr_common_dir="$(git -C "$_gtr_repo_root" rev-parse --git-common-dir 2>/dev/null)" || return 1
-  _gtr_common_dir="$(cd "$_gtr_repo_root" && cd "$_gtr_common_dir" && pwd -P)" || return 1
-  _gtr_identity="$(LC_ALL=C TZ=UTC stat -c '%d:%i:%W:%w' "$_gtr_common_dir" 2>/dev/null)" ||
-    _gtr_identity="$(LC_ALL=C stat -f '%d:%i:%.9FB' "$_gtr_common_dir" 2>/dev/null)" || return 1
-  _gtr_birth_time="${_gtr_identity#*:*:}"
-  _gtr_birth_time="${_gtr_birth_time%%:*}"
-  case "$_gtr_birth_time" in
-    (''|0|0.*|*[!0-9.]*) return 1 ;;
-  esac
-  printf '%s\n%s\n' "$_gtr_common_dir" "$_gtr_identity"
-}
-
 __FUNC___hooks_current_trust_key() {
 __SHELL_PRELUDE__
   local _gtr_config_file="$1"
@@ -408,18 +404,20 @@ __SHELL_PRELUDE__
   _gtr_hook_hash="$(__FUNC___hooks_current_content_hash "$_gtr_config_file" "$_gtr_definitions" 2>/dev/null)" || return 1
   _gtr_repo_root="$(__FUNC___hooks_repo_root "$_gtr_config_file" 2>/dev/null)" || return 1
   _gtr_repo_identity="$(__FUNC___hooks_repo_identity "$_gtr_repo_root" 2>/dev/null)" || return 1
-  printf 'v3\n%s\n%s\n%s\n' "$_gtr_repo_root" "$_gtr_repo_identity" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
+  printf 'v4\n%s\n%s\n%s\n' "$_gtr_repo_root" "$_gtr_repo_identity" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
 }
 
 __FUNC___hooks_marker_matches_config() {
 __SHELL_PRELUDE__
   local _gtr_trust_path="$1"
   local _gtr_config_file="$2"
-  local _gtr_marker _gtr_canonical_config
+  local _gtr_marker _gtr_canonical_config _gtr_approved_commit
   _gtr_trust_path="$(__FUNC___hooks_safe_trust_path "$_gtr_trust_path")" || return 1
   _gtr_marker="$(cat "$_gtr_trust_path" 2>/dev/null)" || return 1
   _gtr_canonical_config="$(__FUNC___hooks_canonical_config_path "$_gtr_config_file" 2>/dev/null)" || return 1
-  [ "$_gtr_marker" = "$_gtr_canonical_config" ]
+  _gtr_approved_commit="${_gtr_marker%%$'\n'*}"
+  [ "${_gtr_marker#*$'\n'}" = "$_gtr_canonical_config" ] || return 1
+  __FUNC___hooks_history_matches "${_gtr_canonical_config%/*}" "$_gtr_approved_commit"
 }
 
 __FUNC___hooks_are_trusted() {
@@ -440,7 +438,7 @@ EOF
 # Usage: _init_emit_fish_trust_helpers
 # Prints self-contained definitions with __FUNC__ placeholders; runs no hooks.
 _init_emit_fish_trust_helpers() {
-  local snapshot_helpers storage_helpers
+  local snapshot_helpers storage_helpers history_helper identity_helper
   # Quote for a Fish single-quoted string. Bash 3.2's parameter substitution
   # over-escapes single quotes here, so use sed for consistent generated code.
   snapshot_helpers=$(_init_emit_snapshot_helpers |
@@ -450,6 +448,12 @@ _init_emit_fish_trust_helpers() {
   storage_helpers=$(_init_emit_trust_storage_helpers |
     sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g")
   printf "function __FUNC___hooks_safe_trust_path\n  command bash -c '%s\n_hooks_safe_trust_path \"\$1\"' bash \"\$argv[1]\"\nend\n" "$storage_helpers"
+  history_helper=$(typeset -f _hooks_history_matches |
+    sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g")
+  printf "function __FUNC___hooks_history_matches\n  command bash -c '%s\n_hooks_history_matches \"\$1\" \"\$2\"' bash \"\$argv[1]\" \"\$argv[2]\"\nend\n" "$history_helper"
+  identity_helper=$(typeset -f _hooks_repo_identity |
+    sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g")
+  printf "function __FUNC___hooks_repo_identity\n  command bash -c '%s\n_hooks_repo_identity \"\$1\"' bash \"\$argv[1]\"\nend\n" "$identity_helper"
   cat <<'FISH'
 function __FUNC___gtrconfig_path
   set -l _gtr_git_common_dir (git rev-parse --git-common-dir 2>/dev/null)
@@ -486,22 +490,6 @@ function __FUNC___hooks_canonical_config_path
   printf '%s/%s\n' "$_gtr_repo_root" (basename "$_gtr_config_file")
 end
 
-function __FUNC___hooks_repo_identity
-  # Keep the identity algorithm identical to the CLI and POSIX wrappers.
-  command sh -c '
-    common_dir=$(git -C "$1" rev-parse --git-common-dir 2>/dev/null) || exit 1
-    common_dir=$(cd "$1" && cd "$common_dir" && pwd -P) || exit 1
-    identity=$(LC_ALL=C TZ=UTC stat -c "%d:%i:%W:%w" "$common_dir" 2>/dev/null) ||
-      identity=$(LC_ALL=C stat -f "%d:%i:%.9FB" "$common_dir" 2>/dev/null) || exit 1
-    birth_time="${identity#*:*:}"
-    birth_time="${birth_time%%:*}"
-    case "$birth_time" in
-      ""|0|0.*|*[!0-9.]*) exit 1 ;;
-    esac
-    printf "%s\\n%s\\n" "$common_dir" "$identity"
-  ' sh "$argv[1]"
-end
-
 function __FUNC___hooks_current_trust_key
   set -l _gtr_config_file "$argv[1]"
   set -l _gtr_definitions "$argv[2]"
@@ -515,7 +503,7 @@ function __FUNC___hooks_current_trust_key
   set -l _gtr_repo_identity (__FUNC___hooks_repo_identity "$_gtr_repo_root" 2>/dev/null | string collect)
   test $pipestatus[1] -eq 0; or return 1
   test -n "$_gtr_repo_identity"; or return 1
-  printf 'v3\n%s\n%s\n%s\n' "$_gtr_repo_root" "$_gtr_repo_identity" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
+  printf 'v4\n%s\n%s\n%s\n' "$_gtr_repo_root" "$_gtr_repo_identity" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
 end
 
 function __FUNC___hooks_marker_matches_config
@@ -524,8 +512,10 @@ function __FUNC___hooks_marker_matches_config
   set _gtr_trust_path (__FUNC___hooks_safe_trust_path "$_gtr_trust_path")
   or return 1
   set -l _gtr_marker (cat "$_gtr_trust_path" 2>/dev/null)
+  test (count $_gtr_marker) -eq 2; or return 1
   set -l _gtr_canonical_config (__FUNC___hooks_canonical_config_path "$_gtr_config_file" 2>/dev/null)
-  test "$_gtr_marker" = "$_gtr_canonical_config"
+  test "$_gtr_marker[2]" = "$_gtr_canonical_config"; or return 1
+  __FUNC___hooks_history_matches (dirname "$_gtr_canonical_config") "$_gtr_marker[1]"
 end
 
 function __FUNC___hooks_are_trusted

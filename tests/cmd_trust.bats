@@ -133,6 +133,20 @@ EOF
   ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
 }
 
+@test "cmd_trust rejects unrelated history introduced during confirmation" {
+  git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'echo harmless'
+  prompt_yes_no() {
+    git checkout --quiet --orphan replacement
+    git -c user.name=Fixture -c user.email=fixture@example.test \
+      commit --allow-empty --quiet -m unrelated
+    return 0
+  }
+  run cmd_trust
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"repository identity changed during review"* ]]
+  ! _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+}
+
 @test "cmd_trust snapshots identity before reading definitions" {
   git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'sh ./bootstrap.sh'
   printf 'echo original\n' > "$TEST_REPO/bootstrap.sh"
