@@ -334,7 +334,37 @@ git gtr rm feature-a feature-b                     # Remove multiple
 git gtr rm my-feature --delete-branch --force      # Delete branch and force
 ```
 
-**Options:** `--delete-branch`, `--force`, `--yes`
+**Options:** `--delete-branch`, `--force`, `--yes`, `--dry-run` / `-n`
+
+```bash
+git gtr rm feature/auth -n
+git gtr rm feature/auth feature/api --dry-run --delete-branch --force
+```
+
+`rm --dry-run` (`-n`) reports resolved paths, branches (including detached HEAD),
+tracked changes, untracked files and locks without deleting anything, running
+preRemove/postRemove hooks, or changing hook trust state. Invalid targets produce
+a non-zero exit status while other valid targets are still reported. A preview
+is advisory: hooks and other Git removal restrictions are not evaluated. The status
+check disables fsmonitor and optional index writes, but configured clean/process
+filters can still run and write their own state.
+
+Without `--force`, modified tracked files block removal. Protection for untracked
+files depends on Git status settings: for example, `status.showUntrackedFiles=no`
+can allow actual removal to delete them. The preview explicitly includes untracked
+files even when that setting hides them; its report is advisory. `--force` can
+discard modified and untracked files. Ignored files do not block removal and are
+also removed with the worktree. Locked worktrees remain blocked even with the
+existing single `--force`.
+
+With `--delete-branch`, the preview counts branch commits not reachable from a
+verified base: the default remote/branch selected by `new`, preferring its local
+remote-tracking ref, then the corresponding local branch. It reports an unknown
+count if a tip is missing or shallow history affects either tip.
+It never fetches. Remote-tracking refs may be stale. Reachability is **not** a
+merged/unmerged judgment: squash merges and rebases can leave different commit
+identities even when the changes were integrated. Actual branch deletion still
+uses the existing `git branch -D` behavior.
 
 ### `git gtr mv <old> <new> [--force] [--yes]`
 

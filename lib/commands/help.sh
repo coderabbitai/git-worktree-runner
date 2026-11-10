@@ -222,15 +222,23 @@ Removes one or more worktrees by branch name. Runs pre-remove and
 post-remove hooks unless --force is used to override hook failures.
 
 Options:
+  --dry-run, -n       Preview paths, changes, locks and branch reachability; run no hooks
   --delete-branch     Also delete the git branch after removing the worktree
   --force             Force removal even if worktree has uncommitted changes
   --yes               Skip confirmation prompts
 
 Examples:
+  git gtr rm my-feature -n --delete-branch       # Preview without removal
   git gtr rm my-feature                         # Remove worktree
   git gtr rm my-feature --delete-branch         # Remove worktree + branch
   git gtr rm feat-1 feat-2 feat-3               # Remove multiple
   git gtr rm my-feature --force --yes           # Force, no prompts
+
+Dry-run uses locally verified default remote/branch refs (same selection as new),
+falling back to the selected local branch or reporting unknown. Reachability
+counts are not merge verdicts: squash/rebase can mislead; remote refs may be stale.
+--force can discard uncommitted/untracked files; locked worktrees remain blocked.
+Dry-run never runs hooks or changes trust. Other Git restrictions are not checked.
 EOF
 }
 
@@ -637,6 +645,7 @@ CORE COMMANDS (daily workflow):
 
   rm <branch> [<branch>...] [options]
          Remove worktree(s) by branch name
+         --dry-run, -n: preview without removal or hooks
          --delete-branch: also delete the branch
          --force: force removal (dirty worktree)
          --yes: skip confirmation

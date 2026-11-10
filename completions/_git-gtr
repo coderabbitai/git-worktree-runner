@@ -125,13 +125,29 @@ _git-gtr() {
     return
   fi
 
+  # Handle rm options and targets at every argument position.
+  if (( CURRENT >= 4 )) && [[ $words[3] == rm ]]; then
+    local state
+    _arguments \
+      '--dry-run[Preview without removing worktrees]' \
+      '-n[Preview without removing worktrees]' \
+      '--delete-branch[Delete branch]' \
+      '--force[Force removal even if worktree has uncommitted changes or untracked files]' \
+      '--yes[Non-interactive mode]' \
+      '*:target:->worktrees'
+    case "$state" in
+      worktrees) _describe 'branch names' all_options ;;
+    esac
+    return
+  fi
+
   # Complete the gtr subcommand (new, go, editor, etc.)
   if (( CURRENT == 3 )); then
     _describe 'commands' commands
   # Complete arguments to the subcommand
   elif (( CURRENT == 4 )); then
     case "$words[3]" in
-      go|run|rm|mv|rename|copy)
+      go|run|mv|rename|copy)
         _describe 'branch names' all_options
         ;;
       editor)
@@ -161,12 +177,6 @@ _git-gtr() {
         ;;
       ai)
         _arguments '--ai[AI tool to use]:tool:(aider antigravity auggie claude codex continue copilot cursor gemini none opencode)'
-        ;;
-      rm)
-        _arguments \
-          '--delete-branch[Delete branch]' \
-          '--force[Force removal even if worktree has uncommitted changes or untracked files]' \
-          '--yes[Non-interactive mode]'
         ;;
       mv|rename)
         _arguments \
