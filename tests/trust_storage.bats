@@ -160,11 +160,13 @@ exercise_generated_sticky_storage() {
 
 @test "trust rejects marker symlinks, dangling links, directories and FIFOs" {
   _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  local original_marker
+  original_marker=$(cat "$TRUST_MARKER")
   mv "$TRUST_MARKER" "$TEST_REPO/original-marker"
   ln -s "$TEST_REPO/original-marker" "$TRUST_MARKER"
   assert_storage_rejected
   [ -L "$TRUST_MARKER" ]
-  [ "$(cat "$TEST_REPO/original-marker")" = "$TEST_REPO/.gtrconfig" ]
+  [ "$(cat "$TEST_REPO/original-marker")" = "$original_marker" ]
   rm "$TRUST_MARKER"
   ln -s "$TEST_REPO/missing-marker" "$TRUST_MARKER"
   assert_storage_rejected
@@ -180,11 +182,13 @@ exercise_generated_sticky_storage() {
 
 @test "trust rejects a symlinked trust directory without modifying its target" {
   _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+  local original_marker
+  original_marker=$(cat "$TRUST_MARKER")
   mv "$_GTR_TRUST_DIR" "$TEST_REPO/original-store"
   ln -s "$TEST_REPO/original-store" "$_GTR_TRUST_DIR"
   assert_storage_rejected
   [ -L "$_GTR_TRUST_DIR" ]
-  [ "$(cat "$TRUST_MARKER")" = "$TEST_REPO/.gtrconfig" ]
+  [ "$(cat "$TRUST_MARKER")" = "$original_marker" ]
 }
 
 @test "safe config-home symlinks and relative paths remain supported" {
@@ -441,13 +445,14 @@ SH
 # user-owned approval to the key for unreviewed definitions. Its contents and
 # mode remain valid, so storage ACLs must block both reads and hook execution.
 replay_marker_for_changed_definitions() {
-  local original_marker="$TRUST_MARKER"
+  local original_marker="$TRUST_MARKER" original_content
+  original_content=$(cat "$original_marker")
   git config -f "$TEST_REPO/.gtrconfig" hooks.postCd 'echo unreviewed > "$REPO_ROOT/result"'
   TRUST_MARKER=$(_hooks_current_trust_path "$TEST_REPO/.gtrconfig")
   [ "$TRUST_MARKER" != "$original_marker" ]
   chmod +a 'everyone allow search,add_file,delete_child' "$_GTR_TRUST_DIR"
   mv "$original_marker" "$TRUST_MARKER"
-  [ "$(cat "$TRUST_MARKER")" = "$TEST_REPO/.gtrconfig" ]
+  [ "$(cat "$TRUST_MARKER")" = "$original_content" ]
 }
 
 @test "macOS ACL-renamed approvals cannot execute unreviewed CLI hooks" {

@@ -223,10 +223,11 @@ EOF
   _hooks_are_trusted "$TEST_REPO/.gtrconfig"
 }
 
-@test "repository identity stays stable across commits and linked worktrees" {
+@test "repository identity stays stable across commits, garbage collection and linked worktrees" {
   git config -f "$TEST_REPO/.gtrconfig" hooks.postCreate 'echo harmless'
   _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
   git -C "$TEST_REPO" commit --allow-empty -m second --quiet
+  git -C "$TEST_REPO" gc --quiet
   create_test_worktree identity-test
   (cd "$TEST_WT_PATH" && _hooks_are_trusted "$TEST_REPO/.gtrconfig")
 }

@@ -298,7 +298,7 @@ gtr cd my-feature
 gtr cd 1
 ```
 
-`git gtr init <shell>` reuses cached output only when both the installed version and shell integration schema match. Keep the invocation in your shell configuration so upgrades refresh the helpers automatically. If your existing setup sources a cache file directly or checks a hard-coded `init=` value, replace it with the setup above, then restart your shell or run the matching setup command in the current shell. Upgrades to the v3 trust format require reviewing commands again with `git gtr trust`.
+`git gtr init <shell>` reuses cached output only when both the installed version and shell integration schema match. Keep the invocation in your shell configuration so upgrades refresh the helpers automatically. If your existing setup sources a cache file directly or checks a hard-coded `init=` value, replace it with the setup above, then restart your shell or run the matching setup command in the current shell. Upgrades to the v4 trust format require reviewing commands again with `git gtr trust`.
 
 The cache lives under `${XDG_CACHE_HOME:-$HOME/.cache}/gtr/`. New cache directories and files are private to your user. Each invocation checks ownership and write permissions, including parent directories and any XDG symlink targets. If the location is unsafe or unavailable, `git gtr init` returns fresh shell integration without reading or updating that cache.
 
@@ -425,7 +425,7 @@ Review and approve executable commands defined in the repository's `.gtrconfig` 
 git gtr trust                              # Review and approve .gtrconfig commands
 ```
 
-Trust is bound to the repository path, the filesystem identity of its common Git directory, and executable command definitions. Replacing or recloning a repository at the same path, or changing hooks or editor/AI defaults, requires approval again. Older path-only approvals also require renewal.
+Trust is bound to the repository path, the filesystem identities of its common Git directory and object database, executable command definitions, and shared history with an approved commit. Replacing either directory, introducing unrelated history, or changing hooks or editor/AI defaults requires approval again. Normal commits, garbage collection, and related branches retain approval. Older approvals also require renewal. See the [configuration guide](docs/configuration.md) for the full boundary.
 
 Hooks and defaults from Git configuration do not require `.gtrconfig` approval,
 but GTR first checks configuration ownership and write permissions. It refuses

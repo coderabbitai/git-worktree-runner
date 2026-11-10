@@ -108,15 +108,11 @@ Create a `.gtrconfig` file in your repository root to share configuration across
 > [!IMPORTANT]
 > Hooks and editor/AI defaults from `.gtrconfig` are executable command entries. They are ignored until you review them with `git gtr trust`; changing those entries requires re-approval.
 
-Approval is bound to the repository path and the filesystem identity of its common Git directory. Replacing that directory, for example with a fresh clone at the same path, needs new approval, as do approvals created by older versions that only used the path. Normal commits and linked worktrees retain approval. This is command-definition trust: scripts, dependencies, and tools invoked by approved commands are not hashed or pinned, so their contents can change within the trusted repository. Review delegated code and trust its contributors before approving.
+Approval is bound to the repository path, the filesystem identities of its common Git directory and object database, and a commit recorded outside the repository in the approval marker. Replacing the object database requires new approval even if `.git` itself and shared history are retained. Current history must also share an ancestor with the approved commit; retaining old objects, replace refs, grafts, or a forged commit-graph cache does not establish shared history. This check uses local commit objects and never fetches missing history. Normal commits, garbage collection, related branches, and linked worktrees retain approval. Orphan histories and shallow or rewritten histories with no available common ancestor need new approval. Create an initial commit before approving commands.
 
-Preserving the common Git directory while replacing its contents preserves its
-identity and approval when the command definitions are unchanged. This check
-does not attest repository contents, history, or provenance. Do not reuse an
-approved Git directory to import a repository whose contributors you do not
-trust; use a separate clone and review its commands and delegated code.
+This is command-definition trust: scripts, dependencies, and tools invoked by approved commands are not hashed or pinned, so their contents can change within the trusted repository. Rewriting files while deliberately retaining both directory instances and shared history is indistinguishable from an update to that repository. Review delegated code and trust its contributors before approving.
 
-Command definitions are captured once for trust verification and consumption, with NUL-delimited records preserving multiline values. The version 3 trust format invalidates older approvals; review commands again with `git gtr trust` after upgrading.
+Command definitions are captured once for trust verification and consumption, with NUL-delimited records preserving multiline values. The version 4 trust format invalidates older approvals; review commands again with `git gtr trust` after upgrading.
 
 The identity includes device, inode, and birth time with nanosecond precision. If the filesystem or `stat` implementation cannot provide a known birth time, approval fails closed and `.gtrconfig` executable commands remain disabled.
 

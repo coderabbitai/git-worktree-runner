@@ -1,5 +1,15 @@
 # VULN-566 follow-up validation
 
+> [!IMPORTANT]
+> The findings below record the pre-v4 behavior at `fc8afc0` and v3.0.0.
+> Trust v4 now rejects object-database replacement and unrelated history, even
+> when the common Git directory is preserved. The four former permissive
+> replacement tests are superseded by the rejection and recovery regressions in
+> `tests/trust_history.bats`; the three legacy-cache tests remain in
+> `tests/trust_followup.bats`. Updates that preserve both directory instances and
+> shared history still retain command-definition approval. This change is not
+> evidence of a published release or researcher acceptance.
+
 Retested on November 10, 2026 against main `fc8afc0` and the published
 `v3.0.0` tag (`2d4852d`). All execution fixtures write harmless marker files
 inside disposable repositories. No real shell startup files are modified.

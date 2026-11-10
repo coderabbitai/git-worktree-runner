@@ -4,6 +4,8 @@
 # Hook dispatch can enter a different linked worktree after CLI startup.
 # shellcheck source=lib/config_safety.sh
 . "${BASH_SOURCE[0]%/*}/config_safety.sh"
+# shellcheck source=lib/trust_history.sh
+. "${BASH_SOURCE[0]%/*}/trust_history.sh"
 
 # ── Hook trust model ────────────────────────────────────────────────────
 # Hooks and executable defaults from .gtrconfig files (committed to
@@ -12,8 +14,9 @@
 # files.
 #
 # Trust state is stored in ~/.config/gtr/trusted/<key>
-# where <key> binds the canonical repo root, Git directory identity and trusted
-# content hash. Replacing a repository at the same path requires new approval.
+# where <key> binds the canonical repo root, Git/object directory identities and trusted
+# content hash. The marker also records an approved commit: unrelated history
+# requires new approval even if the common Git directory itself is preserved.
 # Trust approves command definitions, including any code they delegate to; it
 # does not pin script contents, dependencies or repository snapshot state.
 
@@ -202,27 +205,6 @@ _hooks_repo_root() {
   )
 }
 
-# Identify this repository instance, rather than just its reusable path.
-# Use the common Git directory so normal commits and linked worktrees do not
-# invalidate approval. Require a known birth time and preserve nanoseconds to
-# distinguish rapid inode reuse. Filesystems without birth times fail closed.
-# GNU %W is whole seconds even with precision; %w retains birth nanoseconds.
-# Do not use a repository-controlled config value or file as an identity token.
-_hooks_repo_identity() {
-  local repo_root="$1"
-  local common_dir identity birth_time
-  common_dir=$(git -C "$repo_root" rev-parse --git-common-dir 2>/dev/null) || return 1
-  common_dir=$(cd "$repo_root" && cd "$common_dir" && pwd -P) || return 1
-  identity=$(LC_ALL=C TZ=UTC stat -c '%d:%i:%W:%w' "$common_dir" 2>/dev/null) ||
-    identity=$(LC_ALL=C stat -f '%d:%i:%.9FB' "$common_dir" 2>/dev/null) || return 1
-  birth_time="${identity#*:*:}"
-  birth_time="${birth_time%%:*}"
-  case "$birth_time" in
-    ''|0|0.*|*[!0-9.]*) return 1 ;;
-  esac
-  printf '%s\n%s\n' "$common_dir" "$identity"
-}
-
 # Resolve the canonical path for a .gtrconfig file
 # Usage: _hooks_canonical_config_path <config_file>
 _hooks_canonical_config_path() {
@@ -244,7 +226,7 @@ _hooks_reviewed_trust_key() {
   if [ -z "$repo_identity" ]; then
     repo_identity=$(_hooks_repo_identity "$repo_root") || return 1
   fi
-  printf 'v3\n%s\n%s\n%s\n' "$repo_root" "$repo_identity" "$hash" | shasum -a 256 | cut -d' ' -f1
+  printf 'v4\n%s\n%s\n%s\n' "$repo_root" "$repo_identity" "$hash" | shasum -a 256 | cut -d' ' -f1
 }
 
 # Compute the repo-scoped trust key for the current trusted command content
@@ -290,17 +272,19 @@ _hooks_trust_path_for_content() {
   _hooks_reviewed_trust_path "$1" "$2"
 }
 
-# Check whether a trust marker matches the canonical config path.
+# Check the canonical config path and continuity with the approved history.
 # Usage: _hooks_marker_matches_config <trust_path> <config_file>
 _hooks_marker_matches_config() {
   local trust_path="$1"
   local config_file="$2"
-  local marker_content canonical_config_file
+  local marker_content canonical_config_file approved_commit
 
   trust_path=$(_hooks_safe_trust_path "$trust_path") || return 1
   marker_content="$(cat "$trust_path" 2>/dev/null)" || return 1
   canonical_config_file=$(_hooks_canonical_config_path "$config_file") || return 1
-  [ "$marker_content" = "$canonical_config_file" ]
+  approved_commit="${marker_content%%$'\n'*}"
+  [ "${marker_content#*$'\n'}" = "$canonical_config_file" ] || return 1
+  _hooks_history_matches "${canonical_config_file%/*}" "$approved_commit"
 }
 
 # Check if .gtrconfig command definitions are trusted for the current repository
@@ -316,10 +300,11 @@ _hooks_are_trusted() {
 }
 
 # Write a trust marker that matches the reviewed command definitions
-# Usage: _hooks_write_trust_marker <trust_path> [config_file]
+# Usage: _hooks_write_trust_marker <trust_path> <config_file> [approved_commit]
 _hooks_write_trust_marker() {
   local trust_path="$1"
   local config_file="${2:-}"
+  local approved_commit="${3:-}"
   local temp_path=""
   local canonical_config_file=""
 
@@ -330,9 +315,12 @@ _hooks_write_trust_marker() {
     return 1
   }
   canonical_config_file=$(_hooks_canonical_config_path "$config_file") || return 1
+  if [ -z "$approved_commit" ]; then
+    approved_commit=$(git -C "${canonical_config_file%/*}" rev-parse --verify 'HEAD^{commit}' 2>/dev/null) || return 1
+  fi
   temp_path="$(umask 077; mktemp "${trust_path%/*}/.trust.XXXXXX")" || return 1
 
-  if ! printf '%s\n' "$canonical_config_file" > "$temp_path"; then
+  if ! printf '%s\n%s\n' "$approved_commit" "$canonical_config_file" > "$temp_path"; then
     rm -f "$temp_path"
     return 1
   fi
@@ -347,11 +335,14 @@ _hooks_write_trust_marker() {
 # Usage: _hooks_mark_trusted <config_file>
 _hooks_mark_trusted() {
   local config_file="$1"
-  local hook_content trust_path
+  local hook_content trust_path repo_root approved_commit
+  repo_root=$(_hooks_repo_root "$config_file") || return 1
+  approved_commit=$(git -C "$repo_root" rev-parse --verify 'HEAD^{commit}' 2>/dev/null) || true
   hook_content=$(_hooks_read_definitions "$config_file") || return 0
+  [ -n "$approved_commit" ] || return 1
   trust_path=$(_hooks_reviewed_trust_path "$config_file" "$hook_content") || return 1
 
-  _hooks_write_trust_marker "$trust_path" "$config_file"
+  _hooks_write_trust_marker "$trust_path" "$config_file" "$approved_commit"
 }
 
 # Get hooks, filtering out untrusted .gtrconfig hooks with a warning
