@@ -114,7 +114,7 @@ This is command-definition trust: scripts, dependencies, and tools invoked by ap
 
 Command definitions are captured once for trust verification and consumption, with NUL-delimited records preserving multiline values. The version 4 trust format invalidates older approvals; review commands again with `git gtr trust` after upgrading.
 
-The identity includes device, inode, and birth time with nanosecond precision. If the filesystem or `stat` implementation cannot provide a known birth time, approval fails closed and `.gtrconfig` executable commands remain disabled.
+Each directory's identity includes device, inode, and birth time with nanosecond precision. Both the common Git directory and the object database directory require a known birth time. If the filesystem or `stat` implementation cannot provide either one, approval fails closed and `.gtrconfig` executable commands remain disabled.
 
 ---
 

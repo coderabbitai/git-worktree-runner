@@ -440,7 +440,7 @@ Trust markers must be regular files. Both the markers and their directory must b
 
 New trust directories are created with mode `0700` and markers with mode `0600`, regardless of your umask. Unsafe existing storage is rejected without changing its permissions. For an existing trust directory you own and have verified is not a symlink, `chmod 700 "${XDG_CONFIG_HOME:-$HOME/.config}/gtr/trusted"` repairs only that directory's permissions, not its markers or parent directories. Secure writable parent directories as well. If the store contains non-regular markers (such as directories or FIFOs), or other users could have modified it, move it aside before reviewing commands again with `git gtr trust` to create fresh approvals; changing permissions alone does not validate the old markers.
 
-Trust requires a known filesystem birth time for the Git directory. If `stat` cannot provide it, `.gtrconfig` executable commands remain untrusted.
+Trust requires known filesystem birth times for both the common Git directory and the object database directory. If `stat` cannot provide either one, `.gtrconfig` executable commands remain untrusted.
 
 ### Other Commands
 
