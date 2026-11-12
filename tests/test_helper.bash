@@ -139,6 +139,7 @@ path_without_command() {
       [ -e "$entry" ] || continue
       name="${entry##*/}"
       [ "$name" = "$omitted" ] && continue
+      case "$entry" in /*) ;; *) entry="$PWD/$entry" ;; esac
       [ -e "$bin_dir/$name" ] || ln -s "$entry" "$bin_dir/$name"
     done
   done

@@ -93,6 +93,29 @@ EOF
   )
 }
 
+@test "trust markers work when shasum is installed but cannot run" {
+  command -v sha256sum >/dev/null 2>&1 || skip "sha256sum is not installed"
+  cat > "$TEST_REPO/.gtrconfig" <<'EOF'
+[hooks]
+  postCd = echo hi
+EOF
+
+  local expected
+  expected="$(_hooks_file_hash "$TEST_REPO/.gtrconfig")"
+
+  local broken_shasum_path
+  broken_shasum_path="$(path_without_command "$BATS_TMPDIR/no-shasum-bin-$$" shasum)"
+  printf '#!/bin/sh\nexit 127\n' > "$broken_shasum_path/shasum"
+  chmod +x "$broken_shasum_path/shasum"
+
+  (
+    PATH="$broken_shasum_path"
+    [ "$(_hooks_file_hash "$TEST_REPO/.gtrconfig")" = "$expected" ]
+    _hooks_mark_trusted "$TEST_REPO/.gtrconfig"
+    _hooks_are_trusted "$TEST_REPO/.gtrconfig"
+  )
+}
+
 @test "_hooks_mark_trusted creates a marker recognized by _hooks_are_trusted" {
   cat > "$TEST_REPO/.gtrconfig" <<'EOF'
 [hooks]

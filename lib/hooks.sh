@@ -174,17 +174,23 @@ _hooks_snapshot_is_trusted() {
 }
 
 # Print the SHA-256 hex digest of stdin.
-# Falls back to sha256sum where Perl's shasum is not installed
+# Falls back to sha256sum where Perl's shasum is not installed or cannot run
 # (for example Alpine or minimal Fedora/RHEL images).
 # Usage: printf '%s' "$data" | _hooks_sha256
 _hooks_sha256() {
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 | cut -d' ' -f1
-  elif command -v sha256sum >/dev/null 2>&1; then
-    sha256sum | cut -d' ' -f1
-  else
-    return 1
+  local input digest
+  input=$(cat; printf '.')
+  input=${input%.}
+  if command -v shasum >/dev/null 2>&1 &&
+    digest=$(printf '%s' "$input" | shasum -a 256 2>/dev/null) &&
+    [ -n "$digest" ]; then
+    printf '%s\n' "${digest%% *}"
+    return 0
   fi
+  command -v sha256sum >/dev/null 2>&1 || return 1
+  digest=$(printf '%s' "$input" | sha256sum) || return 1
+  [ -n "$digest" ] || return 1
+  printf '%s\n' "${digest%% *}"
 }
 
 # Compute a content hash for trusted command definitions.

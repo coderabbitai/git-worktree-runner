@@ -564,6 +564,9 @@ run_generated_v2_trust_upgrade() (
   xdg="$root/xdg"
 
   git init --quiet "$repo"
+  git -C "$repo" config user.name "Test User"
+  git -C "$repo" config user.email "test@example.com"
+  git -C "$repo" -c commit.gpgsign=false commit --allow-empty -m "init" --quiet
   cat > "$repo/.gtrconfig" <<'CFG'
 [hooks]
   postCd = echo hi
@@ -578,6 +581,39 @@ CFG
 
   no_shasum_path=$(path_without_command "$root/bin" shasum)
   run env PATH="$no_shasum_path" bash -c 'eval "$1" && gtr_hooks_are_trusted "$2" "$3" "$(gtr_hooks_read_definitions "$2")"' \
+    _ "$(cmd_init bash)" "$repo/.gtrconfig" "$xdg/gtr/trusted"
+  rm -rf "$root"
+
+  [ "$status" -eq 0 ]
+}
+
+@test "generated bash wrapper recognizes trust markers when shasum cannot run" {
+  local root repo xdg broken_shasum_path
+  command -v sha256sum >/dev/null 2>&1 || skip "sha256sum is not installed"
+  root=$(mktemp -d)
+  repo="$root/repo"
+  xdg="$root/xdg"
+
+  git init --quiet "$repo"
+  git -C "$repo" config user.name "Test User"
+  git -C "$repo" config user.email "test@example.com"
+  git -C "$repo" -c commit.gpgsign=false commit --allow-empty -m "init" --quiet
+  cat > "$repo/.gtrconfig" <<'CFG'
+[hooks]
+  postCd = echo hi
+CFG
+
+  (
+    export XDG_CONFIG_HOME="$xdg"
+    # shellcheck disable=SC1091
+    . "$PROJECT_ROOT/lib/hooks.sh"
+    _hooks_mark_trusted "$repo/.gtrconfig"
+  )
+
+  broken_shasum_path=$(path_without_command "$root/bin" shasum)
+  printf '#!/bin/sh\nexit 127\n' > "$broken_shasum_path/shasum"
+  chmod +x "$broken_shasum_path/shasum"
+  run env PATH="$broken_shasum_path" bash -c 'eval "$1" && gtr_hooks_are_trusted "$2" "$3" "$(gtr_hooks_read_definitions "$2")"' \
     _ "$(cmd_init bash)" "$repo/.gtrconfig" "$xdg/gtr/trusted"
   rm -rf "$root"
 

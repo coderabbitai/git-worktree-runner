@@ -356,13 +356,19 @@ _init_emit_posix_trust_helpers() {
   template=$(cat <<'EOF'
 __FUNC___sha256() {
 __SHELL_PRELUDE__
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 | cut -d' ' -f1
-  elif command -v sha256sum >/dev/null 2>&1; then
-    sha256sum | cut -d' ' -f1
-  else
-    return 1
+  local _gtr_input _gtr_digest
+  _gtr_input="$(cat; printf '.')"
+  _gtr_input="${_gtr_input%.}"
+  if command -v shasum >/dev/null 2>&1 &&
+    _gtr_digest="$(printf '%s' "$_gtr_input" | shasum -a 256 2>/dev/null)" &&
+    [ -n "$_gtr_digest" ]; then
+    printf '%s\n' "${_gtr_digest%% *}"
+    return 0
   fi
+  command -v sha256sum >/dev/null 2>&1 || return 1
+  _gtr_digest="$(printf '%s' "$_gtr_input" | sha256sum)" || return 1
+  [ -n "$_gtr_digest" ] || return 1
+  printf '%s\n' "${_gtr_digest%% *}"
 }
 
 __FUNC___gtrconfig_path() {
@@ -467,13 +473,19 @@ _init_emit_fish_trust_helpers() {
   printf "function __FUNC___hooks_repo_identity\n  command bash -c '%s\n_hooks_repo_identity \"\$1\"' bash \"\$argv[1]\"\nend\n" "$identity_helper"
   cat <<'FISH'
 function __FUNC___sha256
+  set -l _gtr_input (string collect -N)
   if command -q shasum
-    shasum -a 256 | cut -d' ' -f1
-  else if command -q sha256sum
-    sha256sum | cut -d' ' -f1
-  else
-    return 1
+    set -l _gtr_digest (printf '%s' "$_gtr_input" | shasum -a 256 2>/dev/null | cut -d' ' -f1)
+    if test $pipestatus[2] -eq 0; and test -n "$_gtr_digest"
+      printf '%s\n' $_gtr_digest
+      return 0
+    end
   end
+  command -q sha256sum; or return 1
+  set -l _gtr_digest (printf '%s' "$_gtr_input" | sha256sum | cut -d' ' -f1)
+  test $pipestatus[2] -eq 0; or return 1
+  test -n "$_gtr_digest"; or return 1
+  printf '%s\n' $_gtr_digest
 end
 
 function __FUNC___gtrconfig_path
