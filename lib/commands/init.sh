@@ -155,8 +155,8 @@ cmd_init() {
   case "$cache_dir" in /*) ;; *) cache_dir="$(pwd -P)/$cache_dir" ;; esac
   local cache_file="$cache_dir/init-${func_name}.${shell}"
   # Bump when generated helpers change, even if GTR_VERSION is unchanged.
-  # Schema 17 checks continuity with approved repository history (trust v4).
-  local cache_schema="${GTR_INIT_CACHE_VERSION:-17}"
+  # Schema 18 hashes trusted hooks with sha256sum when shasum is not installed.
+  local cache_schema="${GTR_INIT_CACHE_VERSION:-18}"
   local cache_stamp="# gtr-cache: version=${GTR_VERSION:-unknown} init=${cache_schema} func=$func_name shell=$shell"
 
   # A matching public stamp alone does not make executable cache data trusted.
@@ -354,6 +354,23 @@ _init_emit_posix_trust_helpers() {
 
   # Keep case patterns balanced inside this substitution for Bash 3.2's parser.
   template=$(cat <<'EOF'
+__FUNC___sha256() {
+__SHELL_PRELUDE__
+  local _gtr_input _gtr_digest
+  _gtr_input="$(cat; printf '.')"
+  _gtr_input="${_gtr_input%.}"
+  if command -v shasum >/dev/null 2>&1 &&
+    _gtr_digest="$(printf '%s' "$_gtr_input" | shasum -a 256 2>/dev/null)" &&
+    [ -n "$_gtr_digest" ]; then
+    printf '%s\n' "${_gtr_digest%% *}"
+    return 0
+  fi
+  command -v sha256sum >/dev/null 2>&1 || return 1
+  _gtr_digest="$(printf '%s' "$_gtr_input" | sha256sum)" || return 1
+  [ -n "$_gtr_digest" ] || return 1
+  printf '%s\n' "${_gtr_digest%% *}"
+}
+
 __FUNC___gtrconfig_path() {
 __SHELL_PRELUDE__
   local _gtr_git_common_dir _gtr_repo_root
@@ -376,7 +393,7 @@ __SHELL_PRELUDE__
     _gtr_hook_defs="$(__FUNC___hooks_read_definitions "$_gtr_config_file")" || return 1
   fi
   [ -n "$_gtr_hook_defs" ] || return 1
-  printf '%s\n' "$_gtr_hook_defs" | shasum -a 256 | cut -d' ' -f1
+  printf '%s\n' "$_gtr_hook_defs" | __FUNC___sha256
 }
 
 __FUNC___hooks_repo_root() {
@@ -404,7 +421,7 @@ __SHELL_PRELUDE__
   _gtr_hook_hash="$(__FUNC___hooks_current_content_hash "$_gtr_config_file" "$_gtr_definitions" 2>/dev/null)" || return 1
   _gtr_repo_root="$(__FUNC___hooks_repo_root "$_gtr_config_file" 2>/dev/null)" || return 1
   _gtr_repo_identity="$(__FUNC___hooks_repo_identity "$_gtr_repo_root" 2>/dev/null)" || return 1
-  printf 'v4\n%s\n%s\n%s\n' "$_gtr_repo_root" "$_gtr_repo_identity" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
+  printf 'v4\n%s\n%s\n%s\n' "$_gtr_repo_root" "$_gtr_repo_identity" "$_gtr_hook_hash" | __FUNC___sha256
 }
 
 __FUNC___hooks_marker_matches_config() {
@@ -455,6 +472,22 @@ _init_emit_fish_trust_helpers() {
     sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g")
   printf "function __FUNC___hooks_repo_identity\n  command bash -c '%s\n_hooks_repo_identity \"\$1\"' bash \"\$argv[1]\"\nend\n" "$identity_helper"
   cat <<'FISH'
+function __FUNC___sha256
+  set -l _gtr_input (string collect -N)
+  if command -q shasum
+    set -l _gtr_digest (printf '%s' "$_gtr_input" | shasum -a 256 2>/dev/null | cut -d' ' -f1)
+    if test $pipestatus[2] -eq 0; and test -n "$_gtr_digest"
+      printf '%s\n' $_gtr_digest
+      return 0
+    end
+  end
+  command -q sha256sum; or return 1
+  set -l _gtr_digest (printf '%s' "$_gtr_input" | sha256sum | cut -d' ' -f1)
+  test $pipestatus[2] -eq 0; or return 1
+  test -n "$_gtr_digest"; or return 1
+  printf '%s\n' $_gtr_digest
+end
+
 function __FUNC___gtrconfig_path
   set -l _gtr_git_common_dir (git rev-parse --git-common-dir 2>/dev/null)
   test -n "$_gtr_git_common_dir"; or return 1
@@ -475,7 +508,7 @@ function __FUNC___hooks_current_content_hash
     set _gtr_hook_defs (__FUNC___hooks_read_definitions "$_gtr_config_file")
   end
   test -n "$_gtr_hook_defs"; or return 1
-  printf '%s\n' "$_gtr_hook_defs" | shasum -a 256 | cut -d' ' -f1
+  printf '%s\n' "$_gtr_hook_defs" | __FUNC___sha256
 end
 
 function __FUNC___hooks_repo_root
@@ -503,7 +536,7 @@ function __FUNC___hooks_current_trust_key
   set -l _gtr_repo_identity (__FUNC___hooks_repo_identity "$_gtr_repo_root" 2>/dev/null | string collect)
   test $pipestatus[1] -eq 0; or return 1
   test -n "$_gtr_repo_identity"; or return 1
-  printf 'v4\n%s\n%s\n%s\n' "$_gtr_repo_root" "$_gtr_repo_identity" "$_gtr_hook_hash" | shasum -a 256 | cut -d' ' -f1
+  printf 'v4\n%s\n%s\n%s\n' "$_gtr_repo_root" "$_gtr_repo_identity" "$_gtr_hook_hash" | __FUNC___sha256
 end
 
 function __FUNC___hooks_marker_matches_config
