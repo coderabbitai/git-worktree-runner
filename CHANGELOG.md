@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
-## [3.0.1] - 2026-11-17
+## [3.1.0] - 2026-11-17
 
 ### Security
 
@@ -38,7 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 - Input prompts and their colors stay on stderr instead of becoming part of captured answers. Bash 3.2 quoting and debug traps work with the macOS system shell.
 - Windows Git Bash installation instructions retain the full checkout on `PATH` rather than copying an entrypoint without its libraries.
 - Homebrew formula updates repair an incorrect checksum even when the release URL already matches.
-- The CLI reports `3.0.1`, correcting the stale `2.11.1` version string carried by the `v3.0.0` release.
+- The CLI reports `3.1.0`, correcting the stale `2.11.1` version string carried by the `v3.0.0` release.
 
 ## [3.0.0] - 2026-10-28
 
