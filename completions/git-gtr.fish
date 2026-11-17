@@ -91,6 +91,7 @@ complete -c git -n '__fish_git_gtr_using_command pr' -s e -l editor -d 'Open in 
 complete -c git -n '__fish_git_gtr_using_command pr' -s a -l ai -d 'Start AI tool after creation'
 
 # Remove command options
+complete -c git -n '__fish_git_gtr_using_command rm' -l dry-run -s n -d 'Preview without removing worktrees'
 complete -c git -n '__fish_git_gtr_using_command rm' -l delete-branch -d 'Delete branch'
 complete -c git -n '__fish_git_gtr_using_command rm' -l force -d 'Force removal even if worktree has uncommitted changes or untracked files'
 complete -c git -n '__fish_git_gtr_using_command rm' -l yes -d 'Non-interactive mode'

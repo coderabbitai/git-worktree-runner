@@ -135,15 +135,19 @@ _git_gtr() {
 
   # Commands that take branch names or '1' for main repo
   case "$cmd" in
-    go|run|rm|mv|rename)
+    rm)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--delete-branch --force --yes --dry-run -n" -- "$cur"))
+      else
+        _git_gtr_complete_targets "$cur"
+      fi
+      ;;
+    go|run|mv|rename)
       if [ "$cword" -eq 3 ]; then
         # Complete with branch names and special ID '1' for main repo
         _git_gtr_complete_targets "$cur"
       elif [[ "$cur" == -* ]]; then
         case "$cmd" in
-          rm)
-            COMPREPLY=($(compgen -W "--delete-branch --force --yes" -- "$cur"))
-            ;;
           mv|rename)
             COMPREPLY=($(compgen -W "--force --yes" -- "$cur"))
             ;;

@@ -263,6 +263,61 @@ assert_literal_branch_completions() {
   [[ "$output" == *"interactive completion checks passed"* ]]
 }
 
+@test "Bash rm completes branch names literally after a preview flag" {
+  setup_bash_completion_repo
+  run_bash_completion rm -n 'literal'
+  [ "$output" = "$DOLLAR_BRANCH"$'\n'"$BACKTICK_BRANCH" ]
+}
+
+@test "Bash rm completion handles preview flags before and after targets" {
+  run bash -c '
+    source "$1/completions/gtr.bash"
+    _init_completion() {
+      words=(git gtr rm "${test_args[@]}")
+      cword=$((${#words[@]} - 1))
+      cur=${words[$cword]}
+      prev=${words[$((cword - 1))]}
+    }
+    git() { printf "%s\n" topic; }
+    test_args=(--dry)
+    _git_gtr
+    [ "${COMPREPLY[*]}" = --dry-run ] || exit 1
+    test_args=(-n "")
+    _git_gtr
+    [ "${COMPREPLY[*]}" = "1 topic" ] || exit 1
+    test_args=(topic --dry)
+    _git_gtr
+    [ "${COMPREPLY[*]}" = --dry-run ] || exit 1
+    test_args=(to)
+    _git_gtr
+    [ "${COMPREPLY[*]}" = topic ]
+  ' _ "$PROJECT_ROOT"
+  [ "$status" -eq 0 ]
+}
+
+@test "Zsh rm completion offers targets after preview options" {
+  command -v zsh >/dev/null || skip "zsh is not installed"
+  run zsh -c '
+    _arguments() {
+      [[ " $* " == *" *:target:->worktrees "* ]] || exit 1
+      [[ " $* " == *" --dry-run["* ]] || exit 1
+      state=worktrees
+    }
+    _describe() { [[ "$1" == "branch names" ]] || exit 1; described=yes; }
+    git() { print topic; }
+    words=(git gtr rm -n "")
+    CURRENT=5
+    source "$1/completions/_git-gtr"
+    [[ "$described" == yes ]] || exit 1
+    described=no
+    words=(git gtr rm --dry)
+    CURRENT=4
+    _git-gtr
+    [[ "$described" == yes ]]
+  ' _ "$PROJECT_ROOT"
+  [ "$status" -eq 0 ]
+}
+
 @test "bash Readline accepts cd targets without standalone completion loaded" {
   command -v python3 >/dev/null || skip "python3 is required for the Readline PTY test"
   setup_bash_completion_repo
