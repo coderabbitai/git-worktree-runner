@@ -6,9 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-11-17
+
+### Security
+
+- Command approval now binds to the common Git directory, object database directory, and shared commit history. Replacing the object database or switching to unrelated history requires new approval; replace refs, grafts, and commit-graph caches cannot establish trusted history ([#266](https://github.com/coderabbitai/git-worktree-runner/pull/266)).
+- Git configuration, hook trust storage, and executable shell integration caches are checked for unsafe ownership, permissions, symlinks, and macOS ACLs before use. Unsafe configuration stops execution; unsafe caches are bypassed in favor of freshly generated integration.
+- File and directory copying enforces worktree boundaries, checks for replaced symlink destinations, applies file exclusions inside included directories, and preserves directory permissions. Copy discovery or publication failures stop post-create hooks and automatic tool launches.
+- Worktree targets resolve through Git's registry rather than sanitized directory names. Unregistered directories and `.`/`..` targets are rejected; configured worktree prefixes cannot contain path separators.
+- Editor workspace files must resolve inside the selected worktree. Invalid or outside-worktree paths open the worktree folder instead.
+- Shell completion treats branch names literally, and suggested creation and rename commands quote shell arguments.
+
+### Added
+
+- `git gtr list --ids` exposes escaped `path:` identities for selecting exact registered worktrees, including duplicate branches and detached checkouts. Interactive picker actions use these identities ([#244](https://github.com/coderabbitai/git-worktree-runner/pull/244)).
+
+### Changed
+
+- **Upgrade:** The v4 trust format invalidates older command approvals. Review commands again with `git gtr trust`; both Git directories must expose known filesystem birth times, and the repository must have an initial commit.
+- **Shell setup:** Replace direct-cache or hard-coded `init=` startup snippets with the current [shell integration setup](README.md#git-gtr-go-branch), then restart or reload your shell. Use `eval "$(git gtr init bash)"` for Bash, `eval "$(git gtr init zsh)"` for Zsh, or `git gtr init fish | source` for Fish. Already-loaded functions require reloading.
+- `git gtr clean --merged` and `--closed` retain local branches, reflogs, and branch configuration, including with `--force`, to avoid deleting a branch concurrently checked out by another Git process ([#261](https://github.com/coderabbitai/git-worktree-runner/pull/261)).
+- `git gtr new --track remote` requires an existing local branch to match the selected remote tip and sets that remote as its upstream. Ahead, behind, or diverged local branches are rejected without moving them; use `--track local` to keep the local tip.
+
 ### Fixed
 
-- Command approval now binds to the object database directory and shared commit history, so replacing Git contents while preserving `.git` requires new approval. CLI and Bash/Zsh/Fish helpers ignore replace refs, grafts, and commit-graph caches when checking history. Upgrading requires fresh `git gtr trust` approval and reloading shell integration.
+- PR checkout validates existing branches and fetched PR identity, including concurrent fetches, and handles native `gh pr checkout --worktree` failures without silently continuing.
+- PR/MR cleanup validates commit tips and GitLab MR state and parses GitLab SHAs structurally even when `jq` is unavailable.
+- Multiline hooks preserve record boundaries in CLI and Bash/Zsh/Fish integration; failed hook dispatch stops automatic AI launch.
+- Registered worktree paths preserve trailing newlines, detached HEAD is kept separate from branch identity, and `git gtr copy --all` visits every registered destination.
+- Bare repositories use their own Git directory for configuration and copy sources. Separate-Git-directory checkouts resolve the main checkout using `core.worktree` where needed.
+- Input prompts and their colors stay on stderr instead of becoming part of captured answers. Bash 3.2 quoting and debug traps work with the macOS system shell.
+- Windows Git Bash installation instructions retain the full checkout on `PATH` rather than copying an entrypoint without its libraries.
+- Homebrew formula updates repair an incorrect checksum even when the release URL already matches.
+- The CLI reports `3.0.1`, correcting the stale `2.11.1` version string carried by the `v3.0.0` release.
+
+## [3.0.0] - 2026-10-28
+
+### Security
+
+- Configured remotes cannot inject fetch options, directory exclusions do not traverse symlink targets, and configured copies stay within worktree paths.
+- Command approval is bound to repository identity and unambiguous command snapshots; macOS terminal directory commands quote their paths.
+
+### Fixed
+
+- Restored startup compatibility with macOS Bash 3.2.
 - The integration test helper now canonicalizes its temporary repository path. On macOS `mktemp -d` returns a `/var` path while git records the resolved `/private/var` one, so `cmd_clean --merged uses nested registered worktree path` compared two spellings of the same directory and failed locally while passing in CI.
 
 ## [2.11.1] - 2026-09-14
