@@ -29,6 +29,19 @@ _cmd_create_capture_stdout() {
   [ -d "$TEST_WORKTREES_DIR/new-feature" ]
 }
 
+@test "new CLI rejects a prompted branch that Git would read as an option" {
+  git update-ref refs/remotes/origin/--detach HEAD
+  local before
+  before=$(git worktree list --porcelain)
+
+  run bash -c 'printf "%s\n" --detach | "$1" new --from HEAD --no-fetch --no-copy --no-hooks --no-sparse' _ "$PROJECT_ROOT/bin/gtr"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Branch name cannot start with a dash"* ]]
+  [ "$(git worktree list --porcelain)" = "$before" ]
+  [ ! -e "$TEST_WORKTREES_DIR" ]
+}
+
 @test "new CLI keeps ordinary next steps readable" {
   run "$PROJECT_ROOT/bin/gtr" new feature/ordinary --from HEAD --no-fetch --no-copy --no-hooks --yes
   [ "$status" -eq 0 ]

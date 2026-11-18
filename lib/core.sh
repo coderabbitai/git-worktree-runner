@@ -633,11 +633,18 @@ _try_worktree_add() {
   return 0
 }
 
-# Build and validate folder name from branch/custom/override.
+# Validate the branch operand and build the folder name.
 # Prints sanitized folder name on success; returns 1 on validation failure.
 # Usage: _resolve_folder_name <branch_name> [custom_name] [folder_override]
 _resolve_folder_name() {
   local branch_name="$1" custom_name="${2:-}" folder_override="${3:-}"
+
+  # Interactive input and provider branch names bypass the CLI flag parser.
+  if [[ "$branch_name" == -* ]]; then
+    log_error "Branch name cannot start with a dash"
+    return 1
+  fi
+
   local sanitized_name
 
   if [ -n "$folder_override" ]; then
